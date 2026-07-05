@@ -49,6 +49,14 @@ function richText(target, text) {
   return target;
 }
 
+/**
+ * Speech / audio playback is disabled for now: the browser speechSynthesis
+ * voice is too low-quality to ship, and dedicated audio exercises are out of
+ * scope until a high-quality browser TTS lands. Flip this to re-enable every
+ * 🔊 button at once. See EnsinoLibre/core#2.
+ */
+const AUDIO_ENABLED = false;
+
 /** Built-in TTS. Returns a play button; no-ops gracefully if unsupported. */
 function ttsButton(text, { label = '🔊 Play', lang, pitch = 1 } = {}) {
   const btn = el('button', 'oc-btn oc-btn--check oc-tts', label);
@@ -412,8 +420,10 @@ R['dialogue'] = (a, index) => {
     chat.appendChild(bubble);
   });
   card.appendChild(chat);
-  const script = a.lines.map((l) => l.text).join('\n');
-  card.appendChild(ttsButton(script, { label: '🔊 Play dialogue' }));
+  if (AUDIO_ENABLED) {
+    const script = a.lines.map((l) => l.text).join('\n');
+    card.appendChild(ttsButton(script, { label: '🔊 Play dialogue' }));
+  }
   return card;
 };
 
@@ -476,19 +486,21 @@ function formsTabs(card, entries, headline) {
   card.appendChild(stage);
   card.appendChild(glossEl);
 
-  const listen = ttsButton('', { label: '🔊 Read aloud' });
-  listen.onclick = () => {
-    const sentence = entries[currentIndex].sentence.replace(/\*\*/g, '');
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(sentence);
-      u.lang = 'en-GB';
-      u.rate = 0.9;
-      window.speechSynthesis.speak(u);
-    }
-    pulseWave(currentTiles);
-  };
-  card.appendChild(listen);
+  if (AUDIO_ENABLED) {
+    const listen = ttsButton('', { label: '🔊 Read aloud' });
+    listen.onclick = () => {
+      const sentence = entries[currentIndex].sentence.replace(/\*\*/g, '');
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(sentence);
+        u.lang = 'en-GB';
+        u.rate = 0.9;
+        window.speechSynthesis.speak(u);
+      }
+      pulseWave(currentTiles);
+    };
+    card.appendChild(listen);
+  }
 
   // Initial paint + entrance animation.
   buttons[0].classList.add('oc-tab--active');
@@ -654,16 +666,17 @@ R['flashdeck'] = (a, index) => {
   const next = el('button', 'oc-btn oc-btn--check', '→');
   next.type = 'button';
   next.addEventListener('click', () => { current = (current + 1) % a.cards.length; showBack = false; draw(); });
-  const say = ttsButton('', { label: '🔊 Word' });
-  say.addEventListener('click', () => {}, true);
-  say.onclick = () => {
-    if (!('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(new SpeechSynthesisUtterance(a.cards[current].front));
-  };
   row.appendChild(prev);
   row.appendChild(counter);
-  row.appendChild(say);
+  if (AUDIO_ENABLED) {
+    const say = ttsButton('', { label: '🔊 Word' });
+    say.onclick = () => {
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(new SpeechSynthesisUtterance(a.cards[current].front));
+    };
+    row.appendChild(say);
+  }
   row.appendChild(next);
   card.appendChild(row);
   draw();
@@ -673,8 +686,8 @@ R['flashdeck'] = (a, index) => {
 R['memory-game'] = (a, index) => {
   const card = activityCard(a, index);
   const faces = shuffled(a.pairs.flatMap((p) => [
-    { key: p.left + ' ' + p.right, text: p.left },
-    { key: p.left + ' ' + p.right, text: p.right },
+    { key: p.left + ' ' + p.right, text: p.left },
+    { key: p.left + ' ' + p.right, text: p.right },
   ]));
   const grid = el('div', 'oc-memory');
   const moves = el('p', 'oc-word-count', 'Moves: 0');
@@ -817,46 +830,8 @@ R['word-search'] = (a, index) => {
   return card;
 };
 
-/* --- listening --- */
-
-R['dictation'] = (a, index) => {
-  const card = activityCard(a, index);
-  a.items.forEach((item, i) => {
-    const block = el('div', 'oc-qblock');
-    block.appendChild(el('p', 'oc-activity-prompt', `Sentence ${i + 1}`));
-    block.appendChild(ttsButton(item.text, { label: '🔊 Listen' }));
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.className = 'oc-open-input';
-    input.setAttribute('aria-label', `dictation sentence ${i + 1}`);
-    block.appendChild(input);
-    const fb = makeFeedback(block, item, () => item.text);
-    block.appendChild(checkButton(() => {
-      if (!input.value.trim()) return fb.neutral('Type what you hear first.');
-      normLoose(input.value) === normLoose(item.text) ? fb.correct() : fb.wrong();
-    }));
-    card.appendChild(block);
-  });
-  return card;
-};
-
-R['listen-mcq'] = (a, index) => {
-  const card = activityCard(a, index);
-  card.appendChild(ttsButton(a.transcript, { label: '🔊 Play the recording' }));
-  let resolved = 0;
-  const reveal = () => {
-    resolved += 1;
-    if (a.showTranscriptAfter && resolved === a.questions.length) {
-      const details = el('details', 'oc-sample');
-      details.open = true;
-      details.appendChild(el('summary', null, 'Transcript'));
-      details.appendChild(el('p', null, a.transcript));
-      card.appendChild(details);
-    }
-  };
-  a.questions.forEach((q) => card.appendChild(qMcq(q, { onResolve: reveal })));
-  return card;
-};
+/* Audio exercises (dictation, listen-mcq) are out of scope until a
+   high-quality browser TTS lands — see EnsinoLibre/core#2. */
 
 /* --- practice sets --- */
 

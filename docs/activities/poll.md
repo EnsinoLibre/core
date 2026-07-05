@@ -24,7 +24,7 @@ A single preference question with **no wrong answer**. Each option can carry a `
   "options": [
     { "text": "Talking about the past", "followUp": "Good choice — start with the tense-shift section of the next worksheet." },
     { "text": "Food and restaurants", "followUp": "Tasty! The dialogue and scenario activities will suit you." },
-    { "text": "Numbers and prices", "followUp": "Practical — the dictation exercises will help most." }
+    { "text": "Numbers and prices", "followUp": "Practical — the gap-fill and quiz exercises will help most." }
   ]
 }
 ```

@@ -24,9 +24,6 @@ The EnsinoLibre renderer is a small, dependency-free ES module. Everything on th
 
 The four visual-grammar types ([[activities/grammar-forms|grammar-forms]], [[activities/tense-shift|tense-shift]], [[activities/word-transform|word-transform]], [[activities/translation-compare|translation-compare]]) are animated with **Anime.js v4**, vendored locally at `assets/vendor/anime.esm.min.js` (no CDN). `anim.js` loads it lazily and every helper is a graceful no-op under `prefers-reduced-motion` or if the library fails to load — so animation is never required for correctness. A `setTimeout` safety net always settles tiles to their visible resting state even if `requestAnimationFrame` is throttled (e.g. a background tab). Word tiles stagger in with an `outBack` ease, morphemes fly in from their affix side, and translation links draw in as SVG curves.
 
-## Audio without files
-
-Dictation, listening comprehension, dialogues and flashcards speak via the browser's built-in `speechSynthesis` — there are no audio files to host. On paper these become teacher read-aloud scripts (see [[activities/dictation]] and the analog emitter).
 
 ## Minimal embed
 

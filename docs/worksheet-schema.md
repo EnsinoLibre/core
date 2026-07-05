@@ -36,7 +36,7 @@ Each section groups related activities:
 
 ## Activities
 
-Every activity object has a `type` field that selects its shape. Schema **v2** covers the full EnsinoLibre component catalogue — 32 types. Each has its own doc page with a live example; find them all in the sidebar. Every type also defines an **analog strategy**: how it translates to paper/Markdown (`direct`, `transform`, or `teacher-audio` — see [[rendering-and-embedding]]).
+Every activity object has a `type` field that selects its shape. Schema **v2** covers a broad component catalogue — 30 types. Each has its own doc page with a live example; find them all in the sidebar. Every type also defines an **analog strategy**: how it translates to paper/Markdown (`direct` or `transform` — see [[rendering-and-embedding]]).
 
 The six **core** types:
 
@@ -53,7 +53,6 @@ The extended catalogue, by group:
 
 - **Input** — [[activities/content\|content]], [[activities/course-presentation\|course-presentation]], [[activities/timeline\|timeline]], [[activities/dialogue\|dialogue]], [[activities/grammar-forms\|grammar-forms]], [[activities/tense-shift\|tense-shift]], [[activities/word-transform\|word-transform]], [[activities/translation-compare\|translation-compare]]
 - **Vocabulary** — [[activities/flashdeck\|flashdeck]], [[activities/memory-game\|memory-game]], [[activities/word-search\|word-search]]
-- **Listening** — [[activities/dictation\|dictation]], [[activities/listen-mcq\|listen-mcq]] (browser read-aloud digitally; teacher scripts on paper)
 - **Practice sets** — [[activities/quiz\|quiz]], [[activities/single-choice-set\|single-choice-set]], [[activities/question-set\|question-set]], [[activities/mark-words\|mark-words]]
 - **Contextualised** — [[activities/reading-comp\|reading-comp]], [[activities/translation\|translation]], [[activities/scenario\|scenario]], [[activities/lesson\|lesson]], [[activities/crossword\|crossword]], [[activities/image-hotspot\|image-hotspot]]
 - **Checks & forms** — [[activities/summary\|summary]], [[activities/survey\|survey]], [[activities/poll\|poll]]

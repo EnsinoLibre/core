@@ -1,8 +1,8 @@
 /**
  * EnsinoLibre — worksheet validator (schema v2).
  *
- * v2 extends the original six types to the full EnsinoLibre block
- * catalogue (see EnsinoLibre/blocks). Each type has a
+ * v2 extends the original six types to the full EnsinoLibre component
+ * catalogue (see context/ in the repo). Each type has a
  * validate function returning human-readable problems. The authoritative
  * contract remains schema/worksheet.schema.json; the Node test suite
  * checks both agree on every example.
@@ -171,18 +171,8 @@ const V = {
     });
   },
 
-  /* --- listening (teacher-audio analog) --- */
-  'dictation': (a, at, e) => {
-    if (!arr(a.items, 1, 8)) { e.push(`${at} (dictation): "items" must be 1–8 sentences.`); return; }
-    a.items.forEach((it, i) => {
-      if (!it || !str(it.text)) e.push(`${at} (dictation): item ${i + 1} needs "text".`);
-    });
-  },
-  'listen-mcq': (a, at, e) => {
-    if (!str(a.transcript)) e.push(`${at} (listen-mcq): "transcript" is required (it becomes the teacher script on paper).`);
-    if (!arr(a.questions, 1, 8)) { e.push(`${at} (listen-mcq): "questions" must be 1–8 items.`); return; }
-    a.questions.forEach((q, i) => vMcqCore(q, `${at} (listen-mcq): question ${i + 1}`, e));
-  },
+  /* Audio exercises (dictation, listen-mcq) are out of scope until a
+     high-quality browser TTS lands — see EnsinoLibre/core#2. */
 
   /* --- practice sets --- */
   'quiz': (a, at, e) => {

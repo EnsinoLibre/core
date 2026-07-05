@@ -56,12 +56,12 @@ core/
 ## How it relates to the other repos
 
 - **[design-system](https://github.com/EnsinoLibre/design-system)** and **[assets](https://github.com/EnsinoLibre/assets)** are the source of truth for branding. `core` vendors `tokens.css` and the wordmark/favicon, and its `--oc-*` style variables bridge onto the design-system's semantic tokens (`--color-primary`, `--space-*`, the Newsreader / Atkinson Hyperlegible / IBM Plex Mono fonts). Add `data-theme="dark"` to `<html>` for dark mode.
-- **[blocks](https://github.com/EnsinoLibre/blocks)** is the canonical library of the 32 activity types (contracts, digital + analog behaviour). The modules in `site/assets/js/` are the reference implementation that library documents; `core` bundles them so it stays a self-contained static site.
+- **[blocks](https://github.com/EnsinoLibre/blocks)** is the canonical library of the 30 activity types (contracts, digital + analog behaviour). The modules in `site/assets/js/` are the reference implementation that library documents; `core` bundles them so it stays a self-contained static site.
 - **[docs](https://github.com/EnsinoLibre/docs)** is the canonical documentation vault. `core/docs/` is a bundled copy so the in-app viewer works offline.
 
 ## The worksheet format
 
-A worksheet is one JSON object: metadata plus titled sections of activities. Thirty-two activity types are supported, from multiple choice and gap-fill to flashcards, crosswords, branching scenarios and animated grammar visualisers — every one with a defined **analog** translation so it also works on paper. See [`schema/worksheet.schema.json`](schema/worksheet.schema.json) and the [docs](https://github.com/EnsinoLibre/docs).
+A worksheet is one JSON object: metadata plus titled sections of activities. Thirty activity types are supported, from multiple choice and gap-fill to flashcards, crosswords, branching scenarios and animated grammar visualisers — every one with a defined **analog** translation so it also works on paper. See [`schema/worksheet.schema.json`](schema/worksheet.schema.json) and the [docs](https://github.com/EnsinoLibre/docs).
 
 ## Contributing
 

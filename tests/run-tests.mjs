@@ -375,10 +375,6 @@ const analogWs = {
         { front: 'sun', back: 'sol', pronunciation: 'sʌn', example: 'The sun is hot.' },
         { front: 'moon', back: 'lua' }, { front: 'star', back: 'estrela' },
       ] },
-      { type: 'dictation', items: [{ text: 'The moon orbits the Earth.' }] },
-      { type: 'listen-mcq', transcript: 'The sun is a star at the centre of our solar system.', questions: [
-        { question: 'What is the sun?', options: ['A planet', 'A star'], answer: 1 },
-      ] },
       { type: 'scenario', startNode: 's1', nodes: [
         { id: 's1', speaker: 'Guide', text: 'Shall we look at the moon or the sun?', choices: [
           { text: 'The moon', nextNode: 's2', isCorrect: true },
@@ -402,11 +398,8 @@ test('flashdeck emits a Markdown vocabulary table', () => {
   assert.ok(md.includes('| # | Word | Pronunciation | Meaning | Example |'));
   assert.ok(md.includes('| 1 | sun | /sʌn/ | sol | The sun is hot. |'));
 });
-test('audio types emit teacher scripts, not audio references', () => {
+test('analog output references no audio files', () => {
   const md = emitAnalog(analogWs);
-  assert.ok(md.includes('Teacher script (dictation'));
-  assert.ok(md.includes('> 1. The moon orbits the Earth.'));
-  assert.ok(md.includes('Teacher script (listening'));
   assert.ok(!md.toLowerCase().includes('audiofile'));
 });
 test('scenario emits choose-your-path boxes with a best path', () => {

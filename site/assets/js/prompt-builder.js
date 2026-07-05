@@ -31,9 +31,7 @@ export const ACTIVITY_TYPES = [
   { id: 'flashdeck', group: 'Vocabulary', label: 'Flashcards', blurb: 'flip cards: word on the front, meaning on the back' },
   { id: 'memory-game', group: 'Vocabulary', label: 'Memory game', blurb: 'matching pairs played as a memory game' },
   { id: 'word-search', group: 'Vocabulary', label: 'Word search', blurb: 'a letter grid hiding themed words' },
-  /* listening */
-  { id: 'dictation', group: 'Listening', label: 'Dictation', blurb: 'sentences the learner hears and writes down' },
-  { id: 'listen-mcq', group: 'Listening', label: 'Listening comprehension', blurb: 'a spoken text with questions about it' },
+  /* listening (dictation, listen-mcq) is out of scope until browser TTS lands — see EnsinoLibre/core#2 */
   /* practice sets */
   { id: 'quiz', group: 'Practice sets', label: 'Quiz (scored)', blurb: 'a scored set of multiple-choice questions with a pass mark' },
   { id: 'single-choice-set', group: 'Practice sets', label: 'Rapid-fire set', blurb: 'quick one-answer questions for fluency' },
@@ -71,8 +69,6 @@ export const CONTRACTS = {
   'flashdeck': `{ "type": "flashdeck", "cards": [ { "front": "<target word>", "back": "<meaning/translation>", "pronunciation": "optional", "example": "optional sentence", "emoji": "optional" } ] } — 3–20 cards, one concept each.`,
   'memory-game': `{ "type": "memory-game", "pairs": [ { "left": "...", "right": "..." } ] } — 3–8 pairs; texts 1–3 words; every "right" unique.`,
   'word-search': `{ "type": "word-search", "words": ["...", "..."], "gridSize": 12 } — 4–14 themed words, letters only, each shorter than gridSize.`,
-  'dictation': `{ "type": "dictation", "items": [ { "text": "<the sentence to dictate>", "hint": "optional" } ] } — 1–8 sentences of 5–12 words.`,
-  'listen-mcq': `{ "type": "listen-mcq", "transcript": "<the spoken text, ≤120 words, generic role speakers>", "showTranscriptAfter": true, "questions": [ { "question": "...", "options": [...], "answer": <index>, "hint": "...", "explanation": "..." } ] } — every question answerable from the transcript alone.`,
   'quiz': `{ "type": "quiz", "questions": [ { "question": "...", "options": [...], "answer": <index>, "hint": "...", "explanation": "..." } ], "passMark": <integer ≈ 70% of questions> } — 2–12 questions.`,
   'single-choice-set': `{ "type": "single-choice-set", "questions": [ { "question": "...", "options": [...], "answer": <index> } ] } — 3–12 short questions drilling ONE narrow pattern; 2–3 options each.`,
   'question-set': `{ "type": "question-set", "questions": [ { "subtype": "mcq", "question": "...", "options": [...], "answer": <index> }, { "subtype": "true-false", "statement": "...", "answer": false }, { "subtype": "gap-fill", "text": "... {{answer}} ..." } ], "passMark": <integer> } — every item MUST carry "subtype"; alternate the subtypes.`,

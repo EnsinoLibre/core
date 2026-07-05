@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://open-curriculum.dev/schema/worksheet.schema.json",
-  "title": "Open Curriculum Worksheet (v2 — full activity catalogue)",
-  "description": "A self-contained digital worksheet. v2 covers the full course-factory component catalogue; every type has a defined analog (print/Markdown) translation. See components/context/ in the course-factory repo.",
+  "$id": "https://ensinolibre.dev/schema/worksheet.schema.json",
+  "title": "EnsinoLibre Worksheet (v2 — full activity catalogue)",
+  "description": "A self-contained digital worksheet. v2 covers the full EnsinoLibre component catalogue; every type has a defined analog (print/Markdown) translation. See context/ in the EnsinoLibre repo.",
   "type": "object",
   "required": ["title", "subject", "audience", "language", "sections"],
   "additionalProperties": false,
@@ -84,7 +84,7 @@
           "enum": ["mcq", "true-false", "gap-fill", "matching", "ordering", "open-response",
             "content", "course-presentation", "timeline", "dialogue", "grammar-forms", "tense-shift",
             "word-transform", "translation-compare", "flashdeck", "memory-game", "word-search",
-            "dictation", "listen-mcq", "quiz", "single-choice-set", "question-set", "mark-words",
+            "quiz", "single-choice-set", "question-set", "mark-words",
             "reading-comp", "translation", "scenario", "lesson", "crossword", "image-hotspot",
             "summary", "survey", "poll"]
         },
@@ -218,20 +218,6 @@
           "properties": {
             "words": { "type": "array", "minItems": 4, "maxItems": 14, "items": { "type": "string", "pattern": "^\\p{L}+$" } },
             "gridSize": { "type": "integer", "minimum": 6, "maximum": 16 }
-          } } },
-        { "if": { "properties": { "type": { "const": "dictation" } } }, "then": {
-          "required": ["items"],
-          "properties": {
-            "items": { "type": "array", "minItems": 1, "maxItems": 8, "items": {
-              "type": "object", "required": ["text"],
-              "properties": { "text": { "$ref": "#/$defs/nonEmpty" }, "hint": { "$ref": "#/$defs/hint" } } } }
-          } } },
-        { "if": { "properties": { "type": { "const": "listen-mcq" } } }, "then": {
-          "required": ["transcript", "questions"],
-          "properties": {
-            "transcript": { "$ref": "#/$defs/nonEmpty" },
-            "showTranscriptAfter": { "type": "boolean" },
-            "questions": { "type": "array", "minItems": 1, "maxItems": 8, "items": { "$ref": "#/$defs/mcqCore" } }
           } } },
         { "if": { "properties": { "type": { "const": "quiz" } } }, "then": {
           "required": ["questions"],

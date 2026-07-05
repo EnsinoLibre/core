@@ -19,7 +19,7 @@ status: stable
 
 ## Activity types at a glance
 
-Schema v2 covers **32 activity types** — the full component catalogue of the [EnsinoLibre](https://github.com/EnsinoLibre) PWA, generalised for any subject. The six **core** types cover most worksheets:
+Schema v2 covers **30 activity types** — a broad teaching-block catalogue generalised for any subject. The six **core** types cover most worksheets:
 
 | Type | Doc page | Best for |
 |------|----------|----------|
@@ -30,9 +30,9 @@ Schema v2 covers **32 activity types** — the full component catalogue of the [
 | `ordering` | [[activities/ordering\|Put in order]] | Processes and timelines |
 | `open-response` | [[activities/open-response\|Open writing]] | Free production and reflection |
 
-Beyond the core: slides, timelines, dialogues and grammar visualisers for **input**; flashcards, memory games and word searches for **vocabulary**; dictation and listening comprehension (browser read-aloud — no audio files); scored quizzes and mixed sets for **practice**; reading comprehension, translation drills, branching scenarios, adaptive lessons, crosswords and picture labelling for **context**; and summaries, surveys and polls for **checks**. The full list is in [[worksheet-schema]] and the sidebar.
+Beyond the core: slides, timelines, dialogues and grammar visualisers for **input**; flashcards, memory games and word searches for **vocabulary**; scored quizzes and mixed sets for **practice**; reading comprehension, translation drills, branching scenarios, adaptive lessons, crosswords and picture labelling for **context**; and summaries, surveys and polls for **checks**. The full list is in [[worksheet-schema]] and the sidebar.
 
-**Every type degrades to paper.** Each defines an analog translation — flashcards become a Markdown vocabulary table, a memory game becomes a cut-out card sheet, listening activities become boxed teacher read-aloud scripts, a branching scenario becomes numbered choose-your-path boxes. The *Download analog version* button on the [creator page](index.html) emits the whole worksheet as an Obsidian-ready Markdown file with an answer key.
+**Every type degrades to paper.** Each defines an analog translation — flashcards become a Markdown vocabulary table, a memory game becomes a cut-out card sheet, a branching scenario becomes numbered choose-your-path boxes. The *Download analog version* button on the [creator page](index.html) emits the whole worksheet as an Obsidian-ready Markdown file with an answer key.
 
 Here is a complete micro-worksheet, rendered live by the same component that powers the [creator page](index.html):
 

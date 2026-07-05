@@ -39,10 +39,6 @@ export const DOC_PAGES = [
     { slug: 'activities/memory-game', title: 'Memory game' },
     { slug: 'activities/word-search', title: 'Word search' },
   ]},
-  { group: 'Listening', pages: [
-    { slug: 'activities/dictation', title: 'Dictation' },
-    { slug: 'activities/listen-mcq', title: 'Listening comprehension' },
-  ]},
   { group: 'Practice sets', pages: [
     { slug: 'activities/quiz', title: 'Quiz (scored)' },
     { slug: 'activities/single-choice-set', title: 'Rapid-fire set' },

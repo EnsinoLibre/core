@@ -29,4 +29,4 @@ A passage followed by mixed questions — the workhorse of text-based worksheets
 }
 ```
 
-Related: [[activities/listen-mcq|Listening comprehension]] · [[worksheet-schema]]
+Related: [[activities/question-set|Mixed question set]] · [[worksheet-schema]]
