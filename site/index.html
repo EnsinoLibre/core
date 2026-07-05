@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EnsinoLibre — digital worksheets from a simple form</title>
+  <meta name="description" content="EnsinoLibre is a free, open-source worksheet builder. Describe your lesson, generate a prompt for any AI assistant, and get an interactive worksheet you can use on screen or print — no technical skills required." />
+  <link rel="stylesheet" href="assets/styles.css" />
+  <link rel="icon" href="assets/brand/favicon-light.svg" />
+</head>
+<body>
+  <nav class="oc-nav">
+    <a class="oc-nav-brand" href="index.html"><img src="assets/brand/wordmark-primary-light.svg" alt="EnsinoLibre" height="26" /></a>
+    <div class="oc-nav-links">
+      <a href="index.html" class="active">Create</a>
+      <a href="docs.html">Docs</a>
+      <a href="docs.html?page=prompt-template">Prompt template</a>
+      <a href="https://github.com/EnsinoLibre" rel="noopener">GitHub</a>
+    </div>
+  </nav>
+
+  <header class="oc-hero">
+    <div class="oc-badges">
+      <span class="oc-badge">Free &amp; open source</span>
+      <span class="oc-badge">32 activity types</span>
+      <span class="oc-badge">No account needed</span>
+      <span class="oc-badge">Works with any AI assistant</span>
+    </div>
+    <h1>Turn any topic into an <em>interactive worksheet</em></h1>
+    <p>EnsinoLibre is a free, open worksheet builder. Describe your lesson in the form below, copy the generated prompt into your favourite AI assistant, paste the result back — and get a digital worksheet you can use on screen or print on paper.</p>
+    <div class="oc-hero-actions">
+      <a class="oc-btn" href="#create">Create a worksheet</a>
+      <a class="oc-btn oc-btn--ghost" href="docs.html">Read the docs</a>
+    </div>
+  </header>
+
+  <main class="oc-container">
+    <section class="oc-features">
+      <div class="oc-feature">
+        <h3>📝 32 activity types</h3>
+        <p>From multiple choice and gap-fill to flashcards, crosswords, branching scenarios and animated grammar — a full teaching-block library.</p>
+      </div>
+      <div class="oc-feature">
+        <h3>🤖 Bring your own AI</h3>
+        <p>The generated prompt works with any capable assistant — Claude, ChatGPT, Gemini or a local model. No API keys, no lock-in.</p>
+      </div>
+      <div class="oc-feature">
+        <h3>📖 Obsidian-ready docs</h3>
+        <p>The whole documentation set is plain Markdown with wikilinks and callouts — drop it straight into your Obsidian vault.</p>
+      </div>
+      <div class="oc-feature">
+        <h3>🖨️ Screen or paper</h3>
+        <p>Worksheets are interactive in the browser with tiered hints, and print cleanly as classic paper handouts.</p>
+      </div>
+    </section>
+
+    <section class="oc-panel" id="create">
+      <span class="oc-step-label">Step 1 — Describe your worksheet</span>
+      <h2>What are you teaching?</h2>
+      <form id="oc-spec-form" class="oc-form-grid">
+        <div class="oc-field">
+          <label for="f-subject">Subject</label>
+          <input id="f-subject" name="subject" type="text" placeholder="e.g. History" required />
+        </div>
+        <div class="oc-field">
+          <label for="f-topic">Topic</label>
+          <input id="f-topic" name="topic" type="text" placeholder="e.g. The Roman Empire" required />
+        </div>
+        <div class="oc-field">
+          <label for="f-audience">Who is it for?</label>
+          <input id="f-audience" name="audience" type="text" placeholder="e.g. Year 7 pupils" required />
+        </div>
+        <div class="oc-field">
+          <label for="f-language">Language</label>
+          <input id="f-language" name="language" type="text" value="English (UK)" />
+        </div>
+        <div class="oc-field">
+          <label for="f-difficulty">Difficulty</label>
+          <select id="f-difficulty" name="difficulty">
+            <option value="introductory">Introductory</option>
+            <option value="intermediate">Intermediate</option>
+            <option value="advanced">Advanced</option>
+          </select>
+        </div>
+        <div class="oc-field">
+          <label for="f-count">How many activities?</label>
+          <input id="f-count" name="activityCount" type="number" min="1" max="30" value="8" />
+        </div>
+        <div class="oc-field oc-field--full">
+          <label>Activity types</label>
+          <span class="oc-help">Tick the kinds of exercise you want. Leave all ticked for a good mix.</span>
+          <div class="oc-checks" id="f-types"></div>
+        </div>
+        <div class="oc-field oc-field--full">
+          <label for="f-extras">Anything else? <span class="oc-help">(optional)</span></label>
+          <textarea id="f-extras" name="extras" rows="2" placeholder="e.g. focus on daily life rather than battles; include one short reading passage"></textarea>
+        </div>
+        <div class="oc-field oc-field--full">
+          <button type="submit" class="oc-btn">Generate my prompt →</button>
+        </div>
+      </form>
+      <div id="oc-spec-errors" class="oc-errors oc-hidden"></div>
+    </section>
+
+    <section class="oc-panel oc-hidden" id="oc-prompt-panel">
+      <span class="oc-step-label">Step 2 — Copy the prompt to your AI assistant</span>
+      <h2>Your worksheet prompt</h2>
+      <p>Copy everything below and paste it into Claude, ChatGPT or any other AI assistant. It will reply with your worksheet as a block of JSON.</p>
+      <textarea id="oc-prompt-output" class="oc-prompt-output" readonly></textarea>
+      <div class="oc-actions-row">
+        <button type="button" class="oc-btn" id="oc-copy-btn">Copy prompt</button>
+        <span id="oc-copy-done" class="oc-copy-done oc-hidden">Copied ✓</span>
+      </div>
+    </section>
+
+    <section class="oc-panel" id="oc-paste-panel">
+      <span class="oc-step-label">Step 3 — Paste the AI's answer here</span>
+      <h2>Render your worksheet</h2>
+      <p>Paste the JSON the assistant gave you (a block of text starting with <code>{</code>). We check it and turn it into an interactive worksheet. Or <button type="button" class="oc-btn oc-btn--ghost" id="oc-demo-btn" style="padding:0.25rem 0.8rem;">try the demo worksheet</button></p>
+      <textarea id="oc-json-input" class="oc-json-input" placeholder='{ "title": "…", "sections": [ … ] }'></textarea>
+      <div class="oc-actions-row">
+        <button type="button" class="oc-btn" id="oc-render-btn">Render worksheet</button>
+      </div>
+      <div id="oc-json-errors" class="oc-errors oc-hidden"></div>
+    </section>
+
+    <section class="oc-panel oc-hidden" id="oc-render-panel">
+      <div class="oc-actions-row oc-no-print" style="justify-content: flex-end; margin: 0 0 1rem;">
+        <button type="button" class="oc-btn oc-btn--ghost" id="oc-analog-btn">📄 Download analog version (Markdown)</button>
+        <button type="button" class="oc-btn oc-btn--ghost" id="oc-print-btn">🖨️ Print / save as PDF</button>
+      </div>
+      <div id="oc-worksheet-host"></div>
+    </section>
+  </main>
+
+  <footer class="oc-footer">
+    <strong>EnsinoLibre</strong> · Free tools for teachers, made in the open · Code under MIT, shared worksheets under CC BY-SA · <a href="https://github.com/EnsinoLibre" rel="noopener">GitHub</a> · <a href="docs.html">Documentation</a>
+  </footer>
+
+  <script type="module" src="assets/js/app.js"></script>
+</body>
+</html>

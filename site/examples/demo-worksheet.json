@@ -1,0 +1,75 @@
+{
+  "$schemaVersion": "1.0",
+  "title": "The Solar System",
+  "subject": "Science",
+  "topic": "Planets and space",
+  "audience": "Year 6 pupils",
+  "language": "en-GB",
+  "estimatedMinutes": 15,
+  "instructions": "Work through the activities below. Use the Check button after each one — if you get stuck, a hint will help you.",
+  "sections": [
+    {
+      "title": "Warm-up: planet facts",
+      "instructions": "Quick questions to get you thinking about space.",
+      "activities": [
+        {
+          "type": "mcq",
+          "question": "Which planet is closest to the Sun?",
+          "options": ["Venus", "Mercury", "Mars", "Earth"],
+          "answer": 1,
+          "hint": "It is also the smallest planet in the solar system.",
+          "explanation": "Mercury orbits closest to the Sun, at about 58 million kilometres."
+        },
+        {
+          "type": "true-false",
+          "statement": "The Sun is a planet.",
+          "answer": false,
+          "hint": "Think about what the Sun is made of and what it gives out.",
+          "explanation": "False — the Sun is a star: a huge ball of burning gas that produces its own light."
+        },
+        {
+          "type": "gap-fill",
+          "text": "There are {{8|eight}} planets in our solar system, and they all orbit the {{Sun|sun}}.",
+          "hint": "Pluto was reclassified as a dwarf planet in 2006.",
+          "explanation": "Since 2006 the solar system officially has eight planets orbiting the Sun."
+        }
+      ]
+    },
+    {
+      "title": "Digging deeper",
+      "activities": [
+        {
+          "type": "matching",
+          "prompt": "Match each planet to its famous feature.",
+          "pairs": [
+            { "left": "Saturn", "right": "spectacular rings" },
+            { "left": "Mars", "right": "the red planet" },
+            { "left": "Jupiter", "right": "the Great Red Spot storm" },
+            { "left": "Earth", "right": "liquid water oceans" }
+          ],
+          "hint": "One of these features is a storm bigger than an entire planet.",
+          "explanation": "Saturn has the rings, Mars is red from iron oxide, Jupiter hosts the Great Red Spot, and Earth is the only one with liquid oceans."
+        },
+        {
+          "type": "ordering",
+          "prompt": "Put these four planets in order of distance from the Sun, nearest first.",
+          "items": ["Mercury", "Earth", "Jupiter", "Neptune"],
+          "hint": "The rocky planets are all nearer than the gas giants.",
+          "explanation": "Mercury (1st), Earth (3rd), Jupiter (5th) and Neptune (8th) from the Sun."
+        }
+      ]
+    },
+    {
+      "title": "Your turn to write",
+      "activities": [
+        {
+          "type": "open-response",
+          "prompt": "If you could visit any planet, which one would you choose and why? Write two or three sentences.",
+          "minWords": 20,
+          "sampleAnswer": "I would visit Saturn because I want to see its rings up close. Scientists say the rings are made of billions of pieces of ice and rock. I think flying over them would be the most beautiful view in the solar system.",
+          "hint": "Pick the planet first, then give two reasons — one fact you know, one thing you would love to see."
+        }
+      ]
+    }
+  ]
+}

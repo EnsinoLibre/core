@@ -1,49 +1,72 @@
-# core
+<div align="center">
 
-This is the EnsinoLibre worksheet builder, the flagship app in the EnsinoLibre project. Teachers drag blocks onto a canvas to build, customize, and share worksheets.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/EnsinoLibre/assets/main/wordmark-primary-dark.svg">
+  <img src="https://raw.githubusercontent.com/EnsinoLibre/assets/main/wordmark-primary-light.svg" alt="EnsinoLibre" width="360">
+</picture>
 
-Full guides live in [ensinolibre/docs](https://github.com/ensinolibre/docs). This README covers the basics of running and understanding this repo.
+# core — the worksheet builder
 
-## Screenshots
+**Free tools for teachers, made in the open.**
 
-<!-- add a screenshot to docs/screenshots/ and reference it here -->
+</div>
 
-There's no visual design to show yet. This repo is still a skeleton (see Quick start below), so screenshots will land here once the builder actually has a UI worth looking at.
+---
+
+`core` is the EnsinoLibre worksheet builder. A teacher describes a lesson in a simple form; the app produces a ready-to-paste prompt for any AI assistant; the assistant replies with worksheet JSON; the app renders it as an **interactive** worksheet (with tiered hints and instant feedback) or exports it as an **analog** paper/Markdown handout with an answer key.
+
+It ships as a dependency-free static site — plain HTML, CSS and ES modules — so it runs anywhere and has nothing to build.
 
 ## Quick start
 
 ```
-git clone https://github.com/ensinolibre/core.git
+git clone https://github.com/EnsinoLibre/core.git
 cd core
-npm install
-npm run dev
+npm install        # installs ajv, used only by the test suite
+npm run dev        # serves the app at http://localhost:3210/site/index.html
+npm test           # runs the full test suite
 ```
 
-The app opens at `http://localhost:5173`.
+## What's inside
 
-Note: this is currently a skeleton. The Palette, Canvas, and Inspector panes render placeholder content, not the real drag-and-drop builder. The project is in early bootstrapping, and this scaffold is the starting point for building out those features.
+```
+core/
+├── site/                     ← the app (static; deploy this)
+│   ├── index.html            ← creator: form → prompt → paste JSON → render
+│   ├── docs.html             ← in-app documentation viewer
+│   └── assets/
+│       ├── styles.css        ← app styling, bridged onto the design system
+│       ├── brand/            ← wordmark + favicon (from EnsinoLibre/assets)
+│       ├── vendor/           ← tokens.css (design-system), marked, anime.js
+│       └── js/
+│           ├── prompt-builder.js   ← builds the AI prompt from a form spec
+│           ├── validator.js        ← worksheet + per-block validation (pure)
+│           ├── renderer.js         ← interactive DOM renderers for every block
+│           ├── anim.js             ← Anime.js v4 animation layer (visual grammar)
+│           ├── analog.js           ← Markdown/print emitter (pure)
+│           ├── md.js / docs.js     ← Obsidian-flavoured docs viewer
+│           └── app.js              ← page wiring
+├── docs/                     ← documentation content (synced from EnsinoLibre/docs)
+├── schema/worksheet.schema.json    ← the worksheet format (JSON Schema 2020-12)
+├── tests/run-tests.mjs       ← 125 tests, zero-framework
+├── server.mjs                ← tiny static dev server
+└── netlify.toml              ← deploy config
+```
 
-## Architecture overview
+## How it relates to the other repos
 
-The stack is Vite, React, and TypeScript.
+- **[design-system](https://github.com/EnsinoLibre/design-system)** and **[assets](https://github.com/EnsinoLibre/assets)** are the source of truth for branding. `core` vendors `tokens.css` and the wordmark/favicon, and its `--oc-*` style variables bridge onto the design-system's semantic tokens (`--color-primary`, `--space-*`, the Newsreader / Atkinson Hyperlegible / IBM Plex Mono fonts). Add `data-theme="dark"` to `<html>` for dark mode.
+- **[blocks](https://github.com/EnsinoLibre/blocks)** is the canonical library of the 32 activity types (contracts, digital + analog behaviour). The modules in `site/assets/js/` are the reference implementation that library documents; `core` bundles them so it stays a self-contained static site.
+- **[docs](https://github.com/EnsinoLibre/docs)** is the canonical documentation vault. `core/docs/` is a bundled copy so the in-app viewer works offline.
 
-The intended data flow, once the placeholders become real:
+## The worksheet format
 
-- **Palette** (`src/components/Palette`) lists the block types available to drag onto a worksheet. It reads this list from the `blocks` package.
-- **Canvas** (`src/components/Canvas`) holds the worksheet currently being built. Its state is a `Worksheet`, the type defined in `src/lib/worksheet-model.ts`, and it's where drag-and-drop lands new blocks and reorders existing ones.
-- **Inspector** (`src/components/Inspector`) edits whatever block is selected on the Canvas, by rendering that block's own `Editor` component from the `blocks` package.
-- **Share and grade** (`src/lib/share.ts` and `src/lib/grading.ts`) turn a finished worksheet into something a teacher can hand out and later grade. Both are stubs right now.
-
-## The block library
-
-Worksheet blocks, things like multiple choice questions, fill-in-the-blank, and short answer, live in a separate package so they can be developed and versioned independently of the builder UI. See [ensinolibre/blocks](https://github.com/ensinolibre/blocks).
-
-Design tokens and shared UI foundations (colors, spacing, base components) live in [ensinolibre/design-system](https://github.com/ensinolibre/design-system). This repo's `package.json` lists both `@ensinolibre/blocks` and `@ensinolibre/design-system` as dependencies. Those point at the versions published from their respective repos, so `npm install` won't resolve them until those packages are published.
+A worksheet is one JSON object: metadata plus titled sections of activities. Thirty-two activity types are supported, from multiple choice and gap-fill to flashcards, crosswords, branching scenarios and animated grammar visualisers — every one with a defined **analog** translation so it also works on paper. See [`schema/worksheet.schema.json`](schema/worksheet.schema.json) and the [docs](https://github.com/EnsinoLibre/docs).
 
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for dev setup and code style. Good first issues are labeled [`good first issue`](https://github.com/ensinolibre/core/labels/good%20first%20issue).
+See [CONTRIBUTING.md](./CONTRIBUTING.md). Code is MIT; worksheets shared to [examples](https://github.com/EnsinoLibre/examples) are CC BY-SA.
 
-## Get help
-
-Questions, ideas, or just want to say hello? Head to [EnsinoLibre discussions](https://github.com/orgs/ensinolibre/discussions).
+<div align="center">
+<sub>Made in the open by teachers, for teachers.</sub>
+</div>

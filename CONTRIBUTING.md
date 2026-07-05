@@ -1,38 +1,30 @@
 # Contributing to core
 
-Thanks for taking a look. This repo is the EnsinoLibre worksheet builder, and it's still early: most of the UI is placeholder scaffolding waiting to become real. That makes it a good place to make a meaningful first contribution.
-
-For org-wide contribution norms (code of conduct, PR etiquette, how EnsinoLibre repos generally work), see the [org-wide CONTRIBUTING guide](https://github.com/ensinolibre/.github/blob/main/CONTRIBUTING.md). This file covers what's specific to `core`.
+Thanks for helping build the EnsinoLibre worksheet builder. For org-wide norms (code of conduct, PR etiquette), see the [org-wide guide](https://github.com/EnsinoLibre/.github/blob/main/CONTRIBUTING.md). This file covers what's specific to `core`.
 
 ## Dev setup
 
 ```
-git clone https://github.com/ensinolibre/core.git
+git clone https://github.com/EnsinoLibre/core.git
 cd core
 npm install
-npm run dev
+npm run dev      # http://localhost:3210/site/index.html
 ```
 
-The app opens at `http://localhost:5173`. There's no backend to run alongside it yet.
+There's no build step — the app is plain HTML, CSS and ES modules. There's no backend.
 
 ## Code style
 
-- TypeScript, in strict mode. Please don't loosen `tsconfig.json`'s strict settings to work around a type error, fix the type instead.
-- Components are functional components with hooks, no class components.
-- Styling is plain CSS per component (each component folder has its own `.css` file), or CSS modules if a component's styles start colliding with others. There's no CSS-in-JS setup here.
-- Keep placeholder components' TODO comments up to date. If you start implementing something a TODO describes, update or remove the comment as part of your PR.
-
-## Turning a placeholder into something real
-
-A lot of the highest-value work here is picking up one of the placeholder components and building it out. For example:
-
-- **Canvas drag-and-drop.** `src/components/Canvas/Canvas.tsx` currently just renders an empty state. The real version needs to hold a `Worksheet` (see `src/lib/worksheet-model.ts`) as state, accept blocks dragged from the Palette, and let a teacher reorder them. `dnd-kit` is a reasonable library to reach for here, but it's not a hard requirement, if you have a good reason to use something else, open an issue first to discuss it.
-- **Inspector editing.** Once a block can be selected on the Canvas, `src/components/Inspector/Inspector.tsx` needs to render that block's `Editor` component from `@ensinolibre/blocks` and wire up changes back into the worksheet.
-- **Palette wiring.** `src/components/Palette/Palette.tsx` has a hardcoded list of block type names. Once `@ensinolibre/blocks` is installed, swap that for the real `blockRegistry` export.
-
-If you're not sure where to start, look for issues labeled `good first issue`, or ask in [discussions](https://github.com/orgs/ensinolibre/discussions).
+- Plain ES modules, no framework. Pure logic (`validator.js`, `analog.js`, `prompt-builder.js`) must stay DOM-free so it runs under Node in the test suite.
+- All worksheet data is untrusted: render it with `textContent`, never `innerHTML`. The one audited exception is `image-hotspot`'s inline SVG, which is validated and mounted via a data URI.
+- Style against the design-system tokens (via the `--oc-*` bridge in `styles.css`), never hardcoded colours or spacing. If you need a token that doesn't exist, add it to [design-system](https://github.com/EnsinoLibre/design-system).
+- Keep the app self-contained: no CDN links, no runtime external dependencies. Third-party libraries are vendored under `site/assets/vendor/`.
 
 ## Before opening a PR
 
-- Run `npm run lint` (type-checks the project) and make sure it passes.
-- Keep PRs focused. If you find yourself touching the Canvas, Inspector, and Palette all in one PR, it's probably worth splitting up.
+- Run `npm test` and make sure all tests pass. The suite cross-checks that the validator, renderer, analog emitter, prompt contracts, JSON Schema and docs all cover the same set of activity types — so adding a type touches all of them by design.
+- Adding or changing an activity type? Update its page in [docs](https://github.com/EnsinoLibre/docs) with a live example, and mirror the contract in [blocks](https://github.com/EnsinoLibre/blocks).
+
+## Get help
+
+Post in [org discussions](https://github.com/orgs/EnsinoLibre/discussions).

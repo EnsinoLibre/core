@@ -1,0 +1,16 @@
+# EnsinoLibre core — Netlify config.
+# The repo root is published so the docs viewer (site/docs.html) can fetch
+# ../docs/*.md; the root redirects to the app entry page.
+
+[build]
+  publish = "."
+
+[[redirects]]
+  from = "/"
+  to = "/site/index.html"
+  status = 302
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"

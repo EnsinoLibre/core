@@ -1,26 +1,15 @@
 {
   "name": "@ensinolibre/core",
-  "private": true,
-  "version": "0.1.0",
-  "description": "EnsinoLibre worksheet builder - drag blocks onto a canvas to build, customize, and share worksheets.",
+  "version": "0.2.0",
+  "description": "EnsinoLibre worksheet builder — describe a lesson, generate a prompt for any AI assistant, and turn the result into an interactive or printable worksheet.",
   "type": "module",
+  "license": "MIT",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "preview": "vite preview",
-    "lint": "tsc --noEmit"
-  },
-  "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "@ensinolibre/blocks": "^0.1.0",
-    "@ensinolibre/design-system": "^0.1.0"
+    "dev": "node server.mjs",
+    "serve": "node server.mjs",
+    "test": "node tests/run-tests.mjs"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.1",
-    "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
-    "typescript": "^5.5.4",
-    "vite": "^5.4.1"
+    "ajv": "^8.17.1"
   }
 }
