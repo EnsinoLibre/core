@@ -1,0 +1,26 @@
+{
+  "name": "@ensinolibre/core",
+  "private": true,
+  "version": "0.1.0",
+  "description": "EnsinoLibre worksheet builder - drag blocks onto a canvas to build, customize, and share worksheets.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "@ensinolibre/blocks": "^0.1.0",
+    "@ensinolibre/design-system": "^0.1.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.1"
+  }
+}
