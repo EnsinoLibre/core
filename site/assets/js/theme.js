@@ -14,6 +14,7 @@ export function setTheme(theme) {
   if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
   else document.documentElement.removeAttribute('data-theme');
   try { localStorage.setItem(KEY, theme); } catch { /* ignore */ }
+  document.dispatchEvent(new CustomEvent('themechange', { detail: { theme } }));
 }
 
 export function toggleTheme() {

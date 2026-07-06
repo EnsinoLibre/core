@@ -33,10 +33,14 @@ createServer(async (req, res) => {
       res.writeHead(302, { Location: '/site/index.html' });
       return res.end();
     }
-    const filePath = normalize(join(ROOT, urlPath));
+    let filePath = normalize(join(ROOT, urlPath));
     if (!filePath.startsWith(normalize(ROOT))) {
       res.writeHead(403);
       return res.end('Forbidden');
+    }
+    // Directory index: serve index.html for "/foo/" or a bare directory.
+    if (urlPath.endsWith('/') || !extname(filePath)) {
+      try { const b = await readFile(join(filePath, 'index.html')); filePath = join(filePath, 'index.html'); res.writeHead(200, { 'Content-Type': MIME['.html'] }); return res.end(b); } catch { /* fall through to file read */ }
     }
     const body = await readFile(filePath);
     res.writeHead(200, { 'Content-Type': MIME[extname(filePath).toLowerCase()] || 'application/octet-stream' });

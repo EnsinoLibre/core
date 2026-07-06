@@ -1,0 +1,10 @@
+/* EnsinoLibre platform — global styles. Design-system tokens + primitives + app chrome. */
+@import './tokens.css';
+@import './primitives/button.css';
+@import './primitives/card.css';
+@import './primitives/input.css';
+@import './primitives/badge.css';
+@import './app.css';
+@import './graph.css';
+
+#root { min-height: 100vh; }

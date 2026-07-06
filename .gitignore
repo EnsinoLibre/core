@@ -2,3 +2,7 @@ node_modules/
 .netlify/
 .DS_Store
 Thumbs.db
+
+# Built platform (source in platform/src; build artifact deployed from disk)
+platform/dist/
+site/app/
