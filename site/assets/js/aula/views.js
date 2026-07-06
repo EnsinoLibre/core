@@ -5,6 +5,7 @@ import { navigate } from '../app/router.js';
 import { validateWorksheet } from '../validator.js';
 import { renderWorksheet } from '../renderer.js';
 import { trackWorksheet } from '../app/track.js';
+import { themeToggle } from '../theme.js';
 
 function progressBar(pct, label) {
   return el('div', { class: 'app-progress' }, [
@@ -75,6 +76,7 @@ export function homeView() {
     el('header', { class: 'app-student-top' }, [
       el('a', { class: 'app-brand', href: '#/' }, [el('img', { src: 'assets/brand/wordmark-primary-light.svg', alt: 'EnsinoLibre', height: 22 })]),
       el('span', { class: 'app-spacer' }),
+      themeToggle(),
       el('span', { class: 'app-student-chip' }, [avatar(s.name, 28), el('span', { text: s.name })]),
       el('button', { class: 'el-button el-button--ghost el-button--small', text: 'Leave', onclick: () => { studentAuth.leave(); navigate('/join'); } }),
     ]),

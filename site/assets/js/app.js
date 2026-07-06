@@ -3,9 +3,13 @@
 import { ACTIVITY_TYPES, buildPrompt, validateSpec } from './prompt-builder.js';
 import { validateWorksheet } from './validator.js';
 import { renderWorksheet } from './renderer.js';
-import { emitAnalog } from './analog.js';
+import { exportMarkdown, exportAnalogPDF, exportMoodle, exportJSON } from './exporters.js';
+import { themeToggle } from './theme.js';
 
 const $ = (sel) => document.querySelector(sel);
+
+/* light/dark toggle in the nav */
+document.querySelector('.oc-nav-links')?.appendChild(themeToggle());
 
 /* ---- activity-type checkboxes, grouped; core six ticked by default ---- */
 const typesHost = $('#f-types');
@@ -129,19 +133,11 @@ function renderFromText(raw) {
 
 $('#oc-render-btn').addEventListener('click', () => renderFromText($('#oc-json-input').value));
 
-/* ---- analog (Markdown) export: the offline translation of the worksheet ---- */
-$('#oc-analog-btn').addEventListener('click', () => {
-  if (!currentWorksheet) return;
-  const md = emitAnalog(currentWorksheet);
-  const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `${currentWorksheet.title.replace(/[^\p{L}\p{N}]+/gu, '-').toLowerCase()}.worksheet.md`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(a.href);
-});
+/* ---- exports (author-side only) ---- */
+$('#oc-export-pdf').addEventListener('click', () => currentWorksheet && exportAnalogPDF(currentWorksheet));
+$('#oc-export-moodle').addEventListener('click', () => currentWorksheet && exportMoodle(currentWorksheet));
+$('#oc-export-md').addEventListener('click', () => currentWorksheet && exportMarkdown(currentWorksheet));
+$('#oc-export-json').addEventListener('click', () => currentWorksheet && exportJSON(currentWorksheet));
 
 $('#oc-demo-btn').addEventListener('click', async () => {
   const res = await fetch('examples/demo-worksheet.json');
@@ -149,5 +145,3 @@ $('#oc-demo-btn').addEventListener('click', async () => {
   $('#oc-json-input').value = text;
   renderFromText(text);
 });
-
-$('#oc-print-btn').addEventListener('click', () => window.print());

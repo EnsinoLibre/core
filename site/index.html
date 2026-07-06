@@ -5,8 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>EnsinoLibre — digital worksheets from a simple form</title>
   <meta name="description" content="EnsinoLibre is a free, open-source worksheet builder. Describe your lesson, generate a prompt for any AI assistant, and get an interactive worksheet you can use on screen or print — no technical skills required." />
+  <script>try{if(localStorage.getItem('ensinolibre.theme')==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}</script>
   <link rel="stylesheet" href="assets/styles.css" />
   <link rel="icon" href="assets/brand/favicon-light.svg" />
+  <script src="assets/vendor/marked.min.js"></script>
 </head>
 <body>
   <nav class="oc-nav">
@@ -127,9 +129,12 @@
     </section>
 
     <section class="oc-panel oc-hidden" id="oc-render-panel">
-      <div class="oc-actions-row oc-no-print" style="justify-content: flex-end; margin: 0 0 1rem;">
-        <button type="button" class="oc-btn oc-btn--ghost" id="oc-analog-btn">📄 Download analog version (Markdown)</button>
-        <button type="button" class="oc-btn oc-btn--ghost" id="oc-print-btn">🖨️ Print / save as PDF</button>
+      <div class="oc-export-bar oc-no-print">
+        <span class="oc-export-label">Export:</span>
+        <button type="button" class="oc-btn oc-btn--ghost" id="oc-export-pdf">📄 Analog PDF</button>
+        <button type="button" class="oc-btn oc-btn--ghost" id="oc-export-moodle">🎓 Moodle XML</button>
+        <button type="button" class="oc-btn oc-btn--ghost" id="oc-export-md">⬇ Markdown</button>
+        <button type="button" class="oc-btn oc-btn--ghost" id="oc-export-json">⬇ JSON</button>
       </div>
       <div id="oc-worksheet-host"></div>
     </section>

@@ -7,6 +7,9 @@ import { navigate } from './router.js';
 import {
   el, avatar, levelBadge, fmtDate, relTime, modal, field, input, textarea, select, emptyState,
 } from './util.js';
+import { exportAnalogPDF, exportMoodle, exportMarkdown, moodleQuestionCount } from '../exporters.js';
+import { buildVault } from './vault.js';
+import { makeZip } from '../zip.js';
 
 /* ---------- shared bits ---------- */
 
@@ -637,8 +640,33 @@ export function aulaMonitorView({ id }) {
       el('span', { class: aula.status === 'live' ? 'app-live-dot' : 'el-badge el-badge--neutral', text: aula.status === 'live' ? '● Live' : 'Closed' }),
     ]),
     body,
+    deployedWorksheets(aula),
   );
   return node;
+}
+
+/** Teacher-facing export of the worksheets deployed to this class. */
+function deployedWorksheets(aula) {
+  const list = store.aulaWorksheets(aula.id).map((w) => {
+    const moodleN = moodleQuestionCount(w.doc);
+    return el('div', { class: 'el-card app-deployed-ws' }, [
+      el('div', {}, [
+        el('h3', { class: 'el-card__title', text: w.title }),
+        el('p', { class: 'app-muted', text: `${w.subject} · ${w.doc.sections.flatMap((s) => s.activities).length} activities` }),
+      ]),
+      el('span', { class: 'app-spacer' }),
+      el('div', { class: 'app-ws-exports' }, [
+        el('button', { class: 'el-button el-button--ghost el-button--small', text: '📄 PDF', onclick: () => exportAnalogPDF(w.doc) }),
+        el('button', { class: 'el-button el-button--ghost el-button--small', text: `🎓 Moodle (${moodleN})`, title: `${moodleN} auto-gradeable questions`, onclick: () => exportMoodle(w.doc) }),
+        el('button', { class: 'el-button el-button--ghost el-button--small', text: '⬇ MD', onclick: () => exportMarkdown(w.doc) }),
+      ]),
+    ]);
+  });
+  return el('section', { class: 'app-side-section' }, [
+    el('h2', { class: 'app-section-title', text: 'Deployed worksheets' }),
+    el('p', { class: 'app-muted', text: 'Export the materials for printing, Moodle import, or your records. (Students never see export options.)' }),
+    el('div', { class: 'app-list', style: 'gap:var(--space-3)' }, list),
+  ]);
 }
 
 function miniStat(value, label) {
@@ -718,6 +746,16 @@ export function profileView() {
           el('h3', { class: 'el-card__title app-profile-name', text: t.name }),
           el('p', { class: 'app-muted', text: t.school }),
           el('p', { class: 'el-card__body', text: t.subjects }),
+        ]),
+        el('div', { class: 'el-card app-vault-card' }, [
+          el('h3', { class: 'el-card__title', text: '🗂️ Obsidian vault export' }),
+          el('p', { class: 'el-card__body', text: 'Download your whole workspace — classrooms, students, worksheets, resources and live classes — as linked Markdown notes with frontmatter and [[wikilinks]]. Open it in Obsidian, or hand it to an AI agent for token-efficient access.' }),
+          el('button', { class: 'el-button', text: '⬇ Download vault (.zip)', onclick: () => {
+            const files = buildVault();
+            const blob = makeZip(files);
+            const a = el('a', { href: URL.createObjectURL(blob), download: 'ensinolibre-workspace.zip' });
+            document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
+          } }),
         ]),
         el('div', { class: 'el-card app-danger-card' }, [
           el('h3', { class: 'el-card__title', text: 'Local data' }),

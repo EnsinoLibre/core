@@ -257,6 +257,20 @@ a:hover { text-decoration: underline; }
 .app-join-code { text-transform: uppercase; letter-spacing: 0.12em; font-family: var(--font-mono); text-align: center; font-size: 1.1rem; }
 .app-join-submit { width: 100%; margin-top: var(--space-3); }
 
+/* ---------- theme toggle + exports ---------- */
+
+.oc-theme-toggle {
+  background: transparent; border: 1px solid var(--color-border-strong); border-radius: var(--radius-full);
+  cursor: pointer; font-size: 0.95rem; width: 2rem; height: 2rem; padding: 0; line-height: 1;
+  color: var(--color-text); display: inline-flex; align-items: center; justify-content: center; flex: none;
+}
+.oc-theme-toggle:hover { background: var(--color-surface-muted); }
+
+.app-deployed-ws { display: flex; align-items: center; gap: var(--space-3); }
+.app-ws-exports { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.app-vault-card { margin-bottom: var(--space-4); }
+.app-vault-card .el-button { margin-top: var(--space-2); }
+
 /* ---------- responsive ---------- */
 
 @media (max-width: 900px) {

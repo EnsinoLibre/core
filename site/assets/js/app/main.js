@@ -2,6 +2,7 @@
 import { store, auth } from './store.js';
 import { route, setNotFound, startRouter, navigate, current } from './router.js';
 import { el, avatar, clear } from './util.js';
+import { themeToggle } from '../theme.js';
 import {
   loginView, dashboardView, classroomsView, classroomView,
   studentsView, studentView, resourcesView, profileView,
@@ -59,6 +60,7 @@ function buildShell() {
     el('a', { class: 'app-brand', href: '#/' }, [el('img', { src: 'assets/brand/wordmark-primary-light.svg', alt: 'EnsinoLibre', height: 24 })]),
     el('span', { class: 'app-topbar-tag', text: 'Teacher workspace' }),
     el('span', { class: 'app-spacer' }),
+    themeToggle(),
     teacherChip,
     el('button', { class: 'el-button el-button--ghost el-button--small', text: 'Sign out', onclick: () => { auth.logout(); navigate('/login'); } }),
   ]);
