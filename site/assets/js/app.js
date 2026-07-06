@@ -5,6 +5,7 @@ import { validateWorksheet } from './validator.js';
 import { renderWorksheet } from './renderer.js';
 import { exportMarkdown, exportAnalogPDF, exportMoodle, exportJSON } from './exporters.js';
 import { initTopbar } from './nav.js';
+import { store, auth } from './app/store.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -153,6 +154,16 @@ function renderFromText(raw) {
 }
 
 $('#oc-render-btn').addEventListener('click', () => renderFromText($('#oc-json-input').value));
+
+/* ---- save to the teacher library (shared workspace localStorage) ---- */
+$('#oc-save-library').addEventListener('click', () => {
+  if (!currentWorksheet) return;
+  const w = store.addWorksheet(currentWorksheet);
+  const note = $('#oc-save-note');
+  const dest = auth.isAuthed() ? 'app/#/worksheets' : 'app/';
+  note.classList.remove('oc-hidden');
+  note.innerHTML = `✓ Saved “${w.title}” to your library. <a href="${dest}">Open the platform to deploy it →</a>`;
+});
 
 /* ---- exports (author-side only) ---- */
 $('#oc-export-pdf').addEventListener('click', () => currentWorksheet && exportAnalogPDF(currentWorksheet));

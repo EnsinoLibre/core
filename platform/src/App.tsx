@@ -8,6 +8,7 @@ import { Knowledge } from './views/Knowledge';
 import { Classrooms } from './views/Classrooms';
 import { Students } from './views/Students';
 import { Resources } from './views/Resources';
+import { Worksheets } from './views/Worksheets';
 import { Live } from './views/Live';
 import { Profile } from './views/Profile';
 
@@ -33,6 +34,7 @@ export function App() {
                   <Route path="/classrooms" element={<Classrooms />} />
                   <Route path="/students" element={<Students />} />
                   <Route path="/resources" element={<Resources />} />
+                  <Route path="/worksheets" element={<Worksheets />} />
                   <Route path="/live" element={<Live />} />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="*" element={<Navigate to="/" replace />} />

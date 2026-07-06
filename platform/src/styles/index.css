@@ -29,3 +29,8 @@
   color: var(--color-text); display: inline-flex; align-items: center; justify-content: center; flex: none;
 }
 .oc-theme-toggle:hover { background: var(--color-surface-muted); }
+
+/* worksheet library cards */
+.app-ws-lib-card { display: flex; flex-direction: column; gap: var(--space-3); }
+.app-ws-lib-actions { flex-wrap: wrap; gap: var(--space-2); margin-top: auto; }
+.app-ws-lib-card .app-tags button { cursor: pointer; border: none; font: inherit; }

@@ -304,13 +304,37 @@ export const store = {
   enrollments: (aulaId) => (state.enrollments || []).filter((e) => e.aulaId === aulaId),
   enrollment: (id) => (state.enrollments || []).find((e) => e.id === id) || null,
 
+  /** Add a worksheet document to the library (e.g. saved from the generator). */
+  addWorksheet(doc) {
+    const w = { id: uid('ws'), title: doc.title || 'Untitled worksheet', subject: doc.subject || '', doc };
+    state.worksheets = state.worksheets || [];
+    state.worksheets.unshift(w);
+    persist(); broadcast({ type: 'worksheet' });
+    return w;
+  },
+  removeWorksheet(id) {
+    state.worksheets = (state.worksheets || []).filter((w) => w.id !== id);
+    // detach from any aula
+    for (const a of state.aulas || []) a.worksheetIds = a.worksheetIds.filter((wid) => wid !== id);
+    persist(); broadcast({ type: 'worksheet' });
+  },
+
+  /** Deploy worksheets to a class as a new live aula (with a unique join code). */
   createAula(classId, title, worksheetIds) {
-    const code = 'A' + Math.random().toString(36).slice(2, 6).toUpperCase();
+    const used = new Set((state.aulas || []).map((a) => a.code));
+    let code;
+    do { code = 'A' + Math.random().toString(36).slice(2, 6).toUpperCase(); } while (used.has(code));
     const a = { id: uid('aula'), classId, title, code, status: 'live', worksheetIds: worksheetIds.slice(), createdAt: nowISO() };
     state.aulas.unshift(a); persist(); broadcast({ type: 'aula' });
     return a;
   },
   setAulaStatus(id, status) { const a = this.aula(id); if (a) { a.status = status; persist(); broadcast({ type: 'aula' }); } return a; },
+  removeAula(id) {
+    state.aulas = (state.aulas || []).filter((a) => a.id !== id);
+    state.enrollments = (state.enrollments || []).filter((e) => e.aulaId !== id);
+    for (const k of Object.keys(state.progress || {})) if (k.startsWith(id + ':')) delete state.progress[k];
+    persist(); broadcast({ type: 'aula' });
+  },
 
   /** Enrol (or re-find) a student by name in an aula. */
   enroll(aulaId, name) {

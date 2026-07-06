@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import {
   store, onLiveUpdate,
   exportAnalogPDF, exportMoodle, exportMarkdown, moodleQuestionCount, download,
 } from '../lib/api';
 import { PageHead, Avatar, Progress } from '../components/bits';
+import { DeployModal } from '../components/DeployModal';
 
 const VBADGE: Record<string, [string, string]> = {
   validated: ['el-badge', '✓ Validated'],
@@ -19,15 +21,28 @@ function toCSV(rows: any[]) {
 }
 
 export function Live() {
+  const nav = useNavigate();
   const [, force] = useState(0);
   const rerender = () => force((n) => n + 1);
   useEffect(() => onLiveUpdate(rerender), []);
   const [validating, setValidating] = useState<{ aulaId: string; enr: string; ws: string } | null>(null);
+  const [deploying, setDeploying] = useState(false);
   const aulas = store.aulas();
 
   return (
     <div>
-      <PageHead title="Live classroom" subtitle="Students join deployed worksheets; watch progress in real time, validate and export." />
+      <PageHead title="Live classroom" subtitle="Deploy worksheets to a class, then watch progress in real time, validate and export."
+        actions={<button className="el-button" onClick={() => setDeploying(true)}>◉ Deploy a class</button>} />
+
+      {aulas.length === 0 && (
+        <div className="app-empty">
+          <div className="app-empty-icon">◉</div>
+          <h3>No live classes yet</h3>
+          <p>Deploy a set of worksheets to a class. Students join with a code and their progress shows up here live.</p>
+          <button className="el-button" onClick={() => setDeploying(true)}>◉ Deploy a class</button>
+        </div>
+      )}
+
       {aulas.map((a: any) => {
         const cls = store.classroom(a.classId);
         const students = store.enrollments(a.id);
@@ -49,6 +64,7 @@ export function Live() {
               </button>
               <button className="el-button el-button--ghost el-button--small" onClick={() => download(`aula-${a.code}.csv`, toCSV(store.exportRows(a.id)), 'text/csv')}>⬇ CSV</button>
               <button className="el-button el-button--ghost el-button--small" onClick={() => download(`aula-${a.code}.json`, JSON.stringify(store.exportRows(a.id), null, 2), 'application/json')}>⬇ JSON</button>
+              <button className="el-button el-button--ghost el-button--small" title="Remove this deployment" onClick={() => { if (confirm(`Remove the live class "${a.title}"? Student progress for it will be discarded.`)) { store.removeAula(a.id); rerender(); } }}>Remove</button>
             </div>
 
             <div className="app-stats app-stats--tight">
@@ -121,6 +137,7 @@ export function Live() {
             onSet={(v) => { store.setValidation(validating.aulaId, validating.enr, validating.ws, v); setValidating(null); rerender(); }}
           />
         )}
+        {deploying && <DeployModal onClose={() => setDeploying(false)} onDeployed={() => { setDeploying(false); rerender(); }} />}
       </AnimatePresence>
     </div>
   );

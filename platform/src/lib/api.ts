@@ -35,5 +35,9 @@ export const download: (name: string, content: string, mime: string) => void = _
 export const buildVault: () => { name: string; content: string }[] = _vault;
 export const makeZip: (files: { name: string; content: string }[]) => Blob = _zip;
 
+// @ts-ignore
+import { validateWorksheet as _vw } from './validator.js';
+export const validateWorksheet: (ws: any) => string[] = _vw;
+
 export interface GraphNode { id: string; type: string; label: string; subtitle?: string; body?: string; url?: string; }
 export interface GraphEdge { source: string; target: string; kind: string; }
