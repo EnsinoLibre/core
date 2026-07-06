@@ -70,11 +70,34 @@ pre {
   z-index: 10;
   backdrop-filter: blur(6px);
 }
-.oc-nav-brand { font-weight: 700; font-size: 1.1rem; color: var(--oc-text); }
+.oc-nav-brand { font-weight: 700; font-size: 1.1rem; color: var(--oc-text); display: inline-flex; align-items: center; }
 .oc-nav-brand .oc-logo-mark { color: var(--oc-accent); }
-.oc-nav-links { display: flex; gap: 1.2rem; margin-left: auto; }
+.oc-nav-links { display: flex; gap: 1.2rem; margin-left: auto; align-items: center; }
 .oc-nav-links a { color: var(--oc-text-dim); font-weight: 500; }
 .oc-nav-links a:hover, .oc-nav-links a.active { color: var(--oc-text); text-decoration: none; }
+
+/* wordmark adapts to theme (light file = dark ink; dark file = light ink) */
+.oc-wordmark { display: block; }
+.oc-wordmark--dark { display: none; }
+:root[data-theme='dark'] .oc-wordmark--light { display: none; }
+:root[data-theme='dark'] .oc-wordmark--dark { display: block; }
+
+/* github (and future) icon links — reactive via currentColor */
+.oc-icon-link { display: inline-flex; align-items: center; color: var(--oc-text-dim); }
+.oc-icon-link:hover { color: var(--oc-text); }
+.oc-icon-link svg { display: block; }
+
+/* persistent account control */
+#oc-account { display: inline-flex; align-items: center; }
+.oc-account { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--oc-text) !important; font-weight: 600; }
+.oc-account:hover { text-decoration: none !important; }
+.oc-account-avatar {
+  width: 1.7rem; height: 1.7rem; border-radius: var(--radius-full);
+  background: var(--color-teal-100); color: var(--color-teal-900);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-weight: 700; font-size: 0.72rem;
+}
+.oc-account-name { font-size: 0.92rem; }
 
 .oc-container { max-width: 1080px; margin: 0 auto; padding: 0 2rem; }
 
@@ -115,9 +138,11 @@ pre {
 
 /* ---------- feature grid ---------- */
 
+/* Always four across on desktop/tablet; a single vertical column on mobile —
+   never an awkward 3 + 1 wrap. minmax(0,1fr) lets cards shrink evenly. */
 .oc-features {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1.2rem;
   padding: 1rem 0 3rem;
 }
@@ -126,9 +151,11 @@ pre {
   border: 1px solid var(--oc-border);
   border-radius: var(--oc-radius);
   padding: 1.4rem;
+  min-width: 0;
 }
 .oc-feature h3 { margin: 0 0 0.4rem; font-size: 1.05rem; }
 .oc-feature p { margin: 0; color: var(--oc-text-dim); font-size: 0.95rem; }
+@media (max-width: 760px) { .oc-features { grid-template-columns: 1fr; } }
 
 /* ---------- creator / forms ---------- */
 
@@ -187,6 +214,25 @@ pre {
 }
 .oc-check:has(input:checked) { border-color: var(--oc-accent); background: var(--oc-accent-soft); }
 .oc-check input { accent-color: var(--oc-accent); }
+
+/* activity-type accordions */
+.oc-acc { border: 1px solid var(--oc-border); border-radius: 8px; background: var(--oc-bg); margin-bottom: 0.5rem; }
+.oc-acc-summary {
+  display: flex; align-items: center; gap: 0.6rem; cursor: pointer; user-select: none;
+  padding: 0.6rem 0.9rem; font-weight: 600; list-style: none;
+}
+.oc-acc-summary::-webkit-details-marker { display: none; }
+.oc-acc-summary::before {
+  content: '▸'; color: var(--oc-text-dim); font-size: 0.8rem; transition: transform 0.15s ease; display: inline-block;
+}
+.oc-acc[open] > .oc-acc-summary::before { transform: rotate(90deg); }
+.oc-acc-summary:hover { color: var(--oc-accent); }
+.oc-acc-count {
+  margin-left: auto; font-size: 0.75rem; font-weight: 700; color: var(--oc-text-dim);
+  background: var(--oc-surface-2); border-radius: 999px; padding: 0.1rem 0.55rem;
+}
+.oc-acc-count--on { color: var(--oc-accent); background: var(--oc-accent-soft); }
+.oc-acc-body { padding: 0 0.9rem 0.9rem; }
 
 .oc-btn {
   display: inline-flex;

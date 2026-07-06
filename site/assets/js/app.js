@@ -4,24 +4,35 @@ import { ACTIVITY_TYPES, buildPrompt, validateSpec } from './prompt-builder.js';
 import { validateWorksheet } from './validator.js';
 import { renderWorksheet } from './renderer.js';
 import { exportMarkdown, exportAnalogPDF, exportMoodle, exportJSON } from './exporters.js';
-import { themeToggle } from './theme.js';
+import { initTopbar } from './nav.js';
 
 const $ = (sel) => document.querySelector(sel);
 
-/* light/dark toggle in the nav */
-document.querySelector('.oc-nav-links')?.appendChild(themeToggle());
+/* topbar: theme toggle + persistent account control */
+initTopbar();
 
-/* ---- activity-type checkboxes, grouped; core six ticked by default ---- */
+/* ---- activity-type groups as accordions (Core open by default) ---- */
 const typesHost = $('#f-types');
 const groups = [...new Set(ACTIVITY_TYPES.map((t) => t.group))];
 for (const group of groups) {
-  const heading = document.createElement('div');
-  heading.className = 'oc-help';
-  heading.style.width = '100%';
-  heading.style.marginTop = '0.4rem';
-  heading.textContent = group;
-  typesHost.appendChild(heading);
-  for (const t of ACTIVITY_TYPES.filter((x) => x.group === group)) {
+  const items = ACTIVITY_TYPES.filter((x) => x.group === group);
+  const details = document.createElement('details');
+  details.className = 'oc-acc';
+  details.open = group === 'Core';
+
+  const summary = document.createElement('summary');
+  summary.className = 'oc-acc-summary';
+  const title = document.createElement('span');
+  title.textContent = group;
+  const count = document.createElement('span');
+  count.className = 'oc-acc-count';
+  summary.append(title, count);
+  details.appendChild(summary);
+
+  const body = document.createElement('div');
+  body.className = 'oc-checks oc-acc-body';
+  const inputs = [];
+  for (const t of items) {
     const label = document.createElement('label');
     label.className = 'oc-check';
     label.title = t.blurb;
@@ -29,13 +40,23 @@ for (const group of groups) {
     input.type = 'checkbox';
     input.name = 'activityTypes';
     input.value = t.id;
-    input.checked = t.group === 'Core';
-    label.appendChild(input);
+    input.checked = group === 'Core';
+    inputs.push(input);
     const span = document.createElement('span');
     span.textContent = t.label;
-    label.appendChild(span);
-    typesHost.appendChild(label);
+    label.append(input, span);
+    body.appendChild(label);
   }
+  details.appendChild(body);
+  typesHost.appendChild(details);
+
+  const updateCount = () => {
+    const n = inputs.filter((i) => i.checked).length;
+    count.textContent = `${n}/${items.length}`;
+    count.classList.toggle('oc-acc-count--on', n > 0);
+  };
+  body.addEventListener('change', updateCount);
+  updateCount();
 }
 
 /* ---- step 1: build the prompt ---- */

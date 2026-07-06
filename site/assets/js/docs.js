@@ -3,9 +3,9 @@
 import { splitFrontmatter, resolveWikilinks, upgradeCallouts, extractWorksheetBlocks } from './md.js';
 import { validateWorksheet, validateActivity, KNOWN_TYPES } from './validator.js';
 import { renderWorksheet } from './renderer.js';
-import { themeToggle } from './theme.js';
+import { initTopbar } from './nav.js';
 
-document.querySelector('.oc-nav-links')?.appendChild(themeToggle());
+initTopbar();
 
 /** Sidebar structure. slug = path under ../docs/ without .md */
 export const DOC_PAGES = [
