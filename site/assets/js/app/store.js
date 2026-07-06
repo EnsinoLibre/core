@@ -8,8 +8,11 @@
  * per-student *context* that an AI agent will later read and write.
  */
 
+import { SEED_WORKSHEETS } from './seed-worksheets.js';
+
 const KEY = 'ensinolibre.workspace.v1';
 const SESSION_KEY = 'ensinolibre.session.v1';
+const STUDENT_KEY = 'ensinolibre.student.v1';
 
 const uid = (p) => `${p}_${Math.random().toString(36).slice(2, 9)}`;
 const nowISO = () => new Date().toISOString();
@@ -73,6 +76,24 @@ function seed() {
     ],
     students,
     resources,
+    aulas: [
+      { id: 'aula_demo', classId: c1, title: 'Live class — Solar System & Routines', code: 'A2LIVE',
+        status: 'live', worksheetIds: SEED_WORKSHEETS.map((w) => w.id), createdAt: nowISO() },
+    ],
+    worksheets: SEED_WORKSHEETS.map((w) => ({ ...w })),
+    enrollments: [
+      { id: 'enr_ana', aulaId: 'aula_demo', name: 'Ana Ferreira', joinedAt: nowISO() },
+      { id: 'enr_bruno', aulaId: 'aula_demo', name: 'Bruno Costa', joinedAt: nowISO() },
+      { id: 'enr_carla', aulaId: 'aula_demo', name: 'Carla Nunes', joinedAt: nowISO() },
+    ],
+    // progress keyed "aulaId:enrollmentId:worksheetId"
+    progress: {
+      'aula_demo:enr_ana:ws_solar': { total: 4, attempted: 4, correct: 4, done: true, score: 1, validated: null, updatedAt: nowISO() },
+      'aula_demo:enr_ana:ws_routines': { total: 5, attempted: 2, correct: 2, done: false, score: 0.4, validated: null, updatedAt: nowISO() },
+      'aula_demo:enr_bruno:ws_solar': { total: 4, attempted: 3, correct: 2, done: false, score: 0.5, validated: null, updatedAt: nowISO() },
+      'aula_demo:enr_carla:ws_solar': { total: 4, attempted: 4, correct: 4, done: true, score: 1, validated: 'validated', updatedAt: nowISO() },
+      'aula_demo:enr_carla:ws_routines': { total: 5, attempted: 5, correct: 4, done: true, score: 0.8, validated: 'review', updatedAt: nowISO() },
+    },
   };
 }
 
@@ -182,6 +203,114 @@ export const store = {
   },
   removeResource(id) { state.resources = state.resources.filter((r) => r.id !== id); persist(); },
 
+  /* -------------- aula (live classroom) -------------- */
+
+  aulas: () => (state.aulas || []).slice(),
+  aula: (id) => (state.aulas || []).find((a) => a.id === id) || null,
+  aulaByCode: (code) => (state.aulas || []).find((a) => a.code.toUpperCase() === String(code).toUpperCase()) || null,
+  aulasForClass: (classId) => (state.aulas || []).filter((a) => a.classId === classId),
+  worksheet: (id) => (state.worksheets || []).find((w) => w.id === id) || null,
+  worksheetsAll: () => (state.worksheets || []).slice(),
+  aulaWorksheets: (aulaId) => {
+    const a = store.aula(aulaId);
+    return a ? a.worksheetIds.map((id) => store.worksheet(id)).filter(Boolean) : [];
+  },
+  enrollments: (aulaId) => (state.enrollments || []).filter((e) => e.aulaId === aulaId),
+  enrollment: (id) => (state.enrollments || []).find((e) => e.id === id) || null,
+
+  createAula(classId, title, worksheetIds) {
+    const code = 'A' + Math.random().toString(36).slice(2, 6).toUpperCase();
+    const a = { id: uid('aula'), classId, title, code, status: 'live', worksheetIds: worksheetIds.slice(), createdAt: nowISO() };
+    state.aulas.unshift(a); persist(); broadcast({ type: 'aula' });
+    return a;
+  },
+  setAulaStatus(id, status) { const a = this.aula(id); if (a) { a.status = status; persist(); broadcast({ type: 'aula' }); } return a; },
+
+  /** Enrol (or re-find) a student by name in an aula. */
+  enroll(aulaId, name) {
+    const existing = (state.enrollments || []).find((e) => e.aulaId === aulaId && e.name.toLowerCase() === name.trim().toLowerCase());
+    if (existing) return existing;
+    const e = { id: uid('enr'), aulaId, name: name.trim(), joinedAt: nowISO() };
+    state.enrollments.push(e); persist(); broadcast({ type: 'enroll', aulaId });
+    return e;
+  },
+
+  progressKey: (aulaId, enrollmentId, worksheetId) => `${aulaId}:${enrollmentId}:${worksheetId}`,
+  getProgress(aulaId, enrollmentId, worksheetId) {
+    return (state.progress || {})[store.progressKey(aulaId, enrollmentId, worksheetId)] || null;
+  },
+  progressForAula: (aulaId) => Object.entries(state.progress || {})
+    .filter(([k]) => k.startsWith(aulaId + ':'))
+    .map(([k, v]) => { const [, enrollmentId, worksheetId] = k.split(':'); return { enrollmentId, worksheetId, ...v }; }),
+
+  setProgress(aulaId, enrollmentId, worksheetId, snap) {
+    const key = store.progressKey(aulaId, enrollmentId, worksheetId);
+    const prev = state.progress[key] || {};
+    state.progress[key] = { ...prev, ...snap, validated: prev.validated ?? null, updatedAt: nowISO() };
+    persist();
+    broadcast({ type: 'progress', aulaId, enrollmentId, worksheetId });
+    return state.progress[key];
+  },
+  setValidation(aulaId, enrollmentId, worksheetId, validated) {
+    const key = store.progressKey(aulaId, enrollmentId, worksheetId);
+    if (!state.progress[key]) state.progress[key] = { total: 0, attempted: 0, correct: 0, done: false, score: 0 };
+    state.progress[key].validated = validated;
+    state.progress[key].updatedAt = nowISO();
+    persist(); broadcast({ type: 'progress', aulaId });
+    return state.progress[key];
+  },
+
+  /** Flat rows for analytics export. */
+  exportRows(aulaId) {
+    const rows = [];
+    for (const e of store.enrollments(aulaId)) {
+      for (const w of store.aulaWorksheets(aulaId)) {
+        const p = store.getProgress(aulaId, e.id, w.id);
+        rows.push({
+          student: e.name, worksheet: w.title,
+          attempted: p?.attempted ?? 0, total: p?.total ?? 0,
+          correct: p?.correct ?? 0,
+          scorePct: p ? Math.round((p.score || 0) * 100) : 0,
+          status: p?.done ? 'complete' : (p?.attempted ? 'in progress' : 'not started'),
+          validation: p?.validated || '',
+          updated: p?.updatedAt || '',
+        });
+      }
+    }
+    return rows;
+  },
+
   /** Wipe local data (dev affordance). */
-  reset() { localStorage.removeItem(KEY); state = load(); },
+  reset() { localStorage.removeItem(KEY); localStorage.removeItem(STUDENT_KEY); state = load(); },
 };
+
+/* ---------------- student session (separate from teacher) ---------------- */
+
+export const studentAuth = {
+  current() { try { return JSON.parse(localStorage.getItem(STUDENT_KEY) || 'null'); } catch { return null; } },
+  isJoined() { return Boolean(this.current()); },
+  join(aulaId, enrollment) {
+    const s = { aulaId, enrollmentId: enrollment.id, name: enrollment.name, since: nowISO() };
+    localStorage.setItem(STUDENT_KEY, JSON.stringify(s));
+    return s;
+  },
+  leave() { localStorage.removeItem(STUDENT_KEY); },
+};
+
+/* ---------------- cross-tab live sync (no backend) ---------------- */
+
+const channel = ('BroadcastChannel' in window) ? new BroadcastChannel('ensinolibre.aula') : null;
+
+function broadcast(msg) { if (channel) channel.postMessage(msg); }
+
+/** Subscribe to live updates from other tabs. Reloads state before notifying. */
+export function onLiveUpdate(handler) {
+  const wrapped = (ev) => { state = load(); handler(ev.data); };
+  if (channel) channel.addEventListener('message', wrapped);
+  // Fallback: another tab wrote localStorage directly.
+  window.addEventListener('storage', (e) => { if (e.key === KEY) { state = load(); handler({ type: 'storage' }); } });
+  return () => { if (channel) channel.removeEventListener('message', wrapped); };
+}
+
+/** Re-read persisted state (used by student tab before rendering). */
+export function refresh() { state = load(); }

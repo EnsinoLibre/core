@@ -5,12 +5,14 @@ import { el, avatar, clear } from './util.js';
 import {
   loginView, dashboardView, classroomsView, classroomView,
   studentsView, studentView, resourcesView, profileView,
+  aulaListView, aulaMonitorView,
 } from './views.js';
 
 const root = document.getElementById('app');
 
 const NAV = [
   { to: '/', label: 'Dashboard', icon: '◱' },
+  { to: '/aula', label: 'Live classroom', icon: '◉' },
   { to: '/classrooms', label: 'Classrooms', icon: '▦' },
   { to: '/students', label: 'Students', icon: '☺' },
   { to: '/resources', label: 'Resources', icon: '❏' },
@@ -21,6 +23,7 @@ const NAV = [
 function activeNav(path) {
   if (path === '/' ) return '/';
   const seg = '/' + path.split('/').filter(Boolean)[0];
+  if (seg === '/aula') return '/aula';
   if (seg === '/classrooms') return '/classrooms';
   if (seg === '/students') return '/students';
   if (seg === '/resources') return '/resources';
@@ -92,6 +95,8 @@ function mountLogin() {
 /* routes */
 route('/login', mountLogin);
 route('/', () => mount(dashboardView));
+route('/aula', () => mount(aulaListView));
+route('/aula/:id', (p) => mount(() => aulaMonitorView(p)));
 route('/classrooms', () => mount(classroomsView));
 route('/classrooms/:id', (p) => mount(() => classroomView(p)));
 route('/students', () => mount(studentsView));

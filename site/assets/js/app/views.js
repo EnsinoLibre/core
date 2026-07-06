@@ -2,7 +2,7 @@
  * EnsinoLibre teacher workspace — views (BOILERPLATE UI, no backend).
  * Each exported function returns a DOM node for a route.
  */
-import { store, auth } from './store.js';
+import { store, auth, onLiveUpdate } from './store.js';
 import { navigate } from './router.js';
 import {
   el, avatar, levelBadge, fmtDate, relTime, modal, field, input, textarea, select, emptyState,
@@ -483,6 +483,199 @@ function newResourceModal(onDone) {
     el('div', { class: 'app-form-actions' }, [
       el('button', { type: 'button', class: 'el-button el-button--ghost', text: 'Cancel', onclick: () => m.close() }),
       el('button', { type: 'submit', class: 'el-button', text: 'Add resource' }),
+    ]),
+  ]));
+}
+
+/* ---------- aula: live classroom ---------- */
+
+function downloadFile(name, content, mime) {
+  const blob = new Blob([content], { type: mime });
+  const a = el('a', { href: URL.createObjectURL(blob), download: name });
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
+}
+
+function toCSV(rows) {
+  if (!rows.length) return '';
+  const cols = Object.keys(rows[0]);
+  const esc = (v) => `"${String(v).replace(/"/g, '""')}"`;
+  return [cols.join(','), ...rows.map((r) => cols.map((c) => esc(r[c])).join(','))].join('\n');
+}
+
+const VALIDATION_BADGE = {
+  validated: ['el-badge', '✓ Validated'],
+  review: ['el-badge el-badge--secondary', '⚑ Needs review'],
+};
+
+export function aulaListView() {
+  const node = el('div', {});
+  const grid = el('div', { class: 'app-card-grid' });
+  function paint() {
+    grid.replaceChildren();
+    const aulas = store.aulas();
+    if (!aulas.length) {
+      grid.appendChild(emptyState('🛰️', 'No live classes yet', 'Deploy a set of worksheets to a class so students can join and work through them.',
+        el('button', { class: 'el-button', text: 'Deploy a class', onclick: () => newAulaModal(paint) })));
+      return;
+    }
+    aulas.forEach((a) => {
+      const cls = store.classroom(a.classId);
+      const students = store.enrollments(a.id).length;
+      grid.appendChild(el('div', { class: 'el-card el-card--interactive app-class-card', onclick: () => navigate(`/aula/${a.id}`) }, [
+        el('div', { class: 'app-class-card-top' }, [
+          el('h3', { class: 'el-card__title', text: a.title }),
+          el('span', { class: a.status === 'live' ? 'app-live-dot' : 'el-badge el-badge--neutral', text: a.status === 'live' ? '● Live' : 'Closed' }),
+        ]),
+        el('p', { class: 'el-card__body', text: cls ? cls.name : '' }),
+        el('div', { class: 'el-card__footer' }, [
+          el('span', { class: 'el-badge el-badge--neutral', text: `Code ${a.code}` }),
+          el('span', { class: 'el-badge el-badge--neutral', text: `${students} joined` }),
+          el('span', { class: 'el-badge el-badge--neutral', text: `${a.worksheetIds.length} worksheets` }),
+        ]),
+      ]));
+    });
+  }
+  node.append(
+    pageHead('Live classroom', 'Deploy worksheets, watch students work in real time, validate and export.', [
+      el('button', { class: 'el-button', text: '+ Deploy a class', onclick: () => newAulaModal(paint) }),
+    ]),
+    grid,
+  );
+  paint();
+  return node;
+}
+
+function newAulaModal(onDone) {
+  const classSel = select(store.classrooms().map((c) => ({ value: c.id, label: c.name })));
+  const title = input({ value: 'Live class session' });
+  const wsBoxes = [];
+  const checks = store.worksheetsAll().map((w) => {
+    const cb = el('input', { type: 'checkbox', checked: true, value: w.id });
+    wsBoxes.push(cb);
+    return el('label', { class: 'app-check' }, [cb, el('span', { text: w.title })]);
+  });
+  const m = modal('Deploy worksheets to a class', el('form', { class: 'app-form', onsubmit: (e) => {
+    e.preventDefault();
+    const ids = wsBoxes.filter((c) => c.checked).map((c) => c.value);
+    if (!ids.length) { alert('Pick at least one worksheet.'); return; }
+    const a = store.createAula(classSel.value, title.value.trim() || 'Live class session', ids);
+    m.close(); navigate(`/aula/${a.id}`); onDone && onDone();
+  } }, [
+    field('Class', classSel),
+    field('Session title', title),
+    el('div', { class: 'app-field' }, [el('label', { class: 'el-label', text: 'Worksheets to deploy' }), el('div', { class: 'app-checks' }, checks)]),
+    el('div', { class: 'app-form-actions' }, [
+      el('button', { type: 'button', class: 'el-button el-button--ghost', text: 'Cancel', onclick: () => m.close() }),
+      el('button', { type: 'submit', class: 'el-button', text: 'Deploy & open' }),
+    ]),
+  ]));
+}
+
+export function aulaMonitorView({ id }) {
+  const aula = store.aula(id);
+  if (!aula) return notFoundBlock('Live class not found', '/aula');
+  const cls = store.classroom(aula.classId);
+  const node = el('div', {});
+  const body = el('div', {});
+
+  function paint() {
+    body.replaceChildren();
+    const students = store.enrollments(aula.id);
+    const worksheets = store.aulaWorksheets(aula.id);
+    const rows = store.exportRows(aula.id);
+    const complete = rows.filter((r) => r.status === 'complete').length;
+    const avg = rows.length ? Math.round(rows.reduce((s, r) => s + r.scorePct, 0) / rows.length) : 0;
+
+    // summary
+    body.appendChild(el('div', { class: 'app-stats app-stats--tight' }, [
+      miniStat(students.length, 'Students joined'),
+      miniStat(`${complete}/${rows.length}`, 'Worksheets complete'),
+      miniStat(`${avg}%`, 'Average score'),
+    ]));
+
+    if (!students.length) {
+      body.appendChild(emptyState('⏳', 'Waiting for students', `Share code ${aula.code} — the aula page is at /aula.html. Progress appears here live.`));
+      return;
+    }
+
+    // live grid: rows = students, cols = worksheets
+    const head = el('tr', {}, [el('th', { text: 'Student' }), ...worksheets.map((w) => el('th', { text: w.title })), el('th', { text: 'Overall' })]);
+    const bodyRows = students.map((st) => {
+      let attempted = 0; let total = 0; let correctSum = 0;
+      const cells = worksheets.map((w) => {
+        const p = store.getProgress(aula.id, st.id, w.id);
+        if (p) { attempted += p.attempted; total += p.total; correctSum += p.correct; }
+        return el('td', {}, progressCell(aula.id, st.id, w.id, p, paint));
+      });
+      const overallPct = total ? Math.round((attempted / total) * 100) : 0;
+      return el('tr', {}, [
+        el('td', {}, el('div', { class: 'app-cell-user' }, [avatar(st.name, 30), el('span', { text: st.name })])),
+        ...cells,
+        el('td', {}, progressBarMini(overallPct)),
+      ]);
+    });
+    body.appendChild(el('div', { class: 'app-table-wrap' }, el('table', { class: 'app-table app-monitor-table' }, [el('thead', {}, head), el('tbody', {}, bodyRows)])));
+  }
+  paint();
+
+  // live updates from student tabs
+  const off = onLiveUpdate(() => paint());
+  // detach when navigating away
+  window.addEventListener('hashchange', function once() { off(); window.removeEventListener('hashchange', once); }, { once: true });
+
+  node.append(
+    backLink('Live classroom', '/aula'),
+    pageHead(aula.title, cls ? cls.name : '', [
+      el('button', { class: 'el-button el-button--ghost el-button--small', text: aula.status === 'live' ? 'Close class' : 'Reopen',
+        onclick: () => { store.setAulaStatus(aula.id, aula.status === 'live' ? 'closed' : 'live'); navigate(`/aula/${aula.id}`); } }),
+      el('button', { class: 'el-button el-button--ghost el-button--small', text: '⬇ CSV', onclick: () => downloadFile(`aula-${aula.code}.csv`, toCSV(store.exportRows(aula.id)), 'text/csv') }),
+      el('button', { class: 'el-button el-button--ghost el-button--small', text: '⬇ JSON', onclick: () => downloadFile(`aula-${aula.code}.json`, JSON.stringify(store.exportRows(aula.id), null, 2), 'application/json') }),
+    ]),
+    el('div', { class: 'app-share-strip' }, [
+      el('span', { text: 'Join code ' }), el('strong', { class: 'app-code', text: aula.code }),
+      el('span', { class: 'app-muted', text: ' · students go to ' }), el('a', { href: 'aula.html', target: '_blank', text: 'the class page ↗' }),
+      el('span', { class: aula.status === 'live' ? 'app-live-dot' : 'el-badge el-badge--neutral', text: aula.status === 'live' ? '● Live' : 'Closed' }),
+    ]),
+    body,
+  );
+  return node;
+}
+
+function miniStat(value, label) {
+  return el('div', { class: 'el-card app-stat' }, [el('span', { class: 'app-stat-value', text: String(value) }), el('span', { class: 'app-stat-label', text: label })]);
+}
+
+function progressBarMini(pct) {
+  return el('div', { class: 'app-progress' }, [
+    el('div', { class: 'app-progress-track' }, [el('div', { class: 'app-progress-fill', style: `width:${pct}%` })]),
+    el('span', { class: 'app-progress-label', text: `${pct}%` }),
+  ]);
+}
+
+function progressCell(aulaId, enrollmentId, worksheetId, p, refresh) {
+  if (!p || (!p.attempted && !p.validated)) return el('span', { class: 'app-muted app-cell-empty', text: '–' });
+  const pct = p.total ? Math.round((p.attempted / p.total) * 100) : 0;
+  const scorePct = Math.round((p.score || 0) * 100);
+  const badge = VALIDATION_BADGE[p.validated];
+  const cell = el('button', { class: 'app-cell-prog', onclick: () => validateModal(aulaId, enrollmentId, worksheetId, refresh) }, [
+    progressBarMini(pct),
+    el('span', { class: 'app-cell-score', text: p.done ? `✓ ${scorePct}%` : `${scorePct}%` }),
+    badge ? el('span', { class: badge[0], text: badge[1] }) : null,
+  ]);
+  return cell;
+}
+
+function validateModal(aulaId, enrollmentId, worksheetId, refresh) {
+  const enr = store.enrollment(enrollmentId);
+  const w = store.worksheet(worksheetId);
+  const p = store.getProgress(aulaId, enrollmentId, worksheetId);
+  const m = modal(`${enr?.name} · ${w?.title}`, el('div', { class: 'app-form' }, [
+    el('p', { class: 'el-card__body', text: p ? `Answered ${p.attempted}/${p.total} · ${Math.round((p.score || 0) * 100)}% correct · ${p.done ? 'complete' : 'in progress'}.` : 'No attempt yet.' }),
+    el('p', { class: 'el-label', text: 'Teacher validation' }),
+    el('div', { class: 'app-form-actions' }, [
+      el('button', { class: 'el-button', text: '✓ Validate', onclick: () => { store.setValidation(aulaId, enrollmentId, worksheetId, 'validated'); m.close(); refresh(); } }),
+      el('button', { class: 'el-button el-button--secondary', text: '⚑ Needs review', onclick: () => { store.setValidation(aulaId, enrollmentId, worksheetId, 'review'); m.close(); refresh(); } }),
+      el('button', { class: 'el-button el-button--ghost', text: 'Clear', onclick: () => { store.setValidation(aulaId, enrollmentId, worksheetId, null); m.close(); refresh(); } }),
     ]),
   ]));
 }

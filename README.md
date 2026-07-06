@@ -33,7 +33,8 @@ npm test           # runs the full test suite
 core/
 ├── site/                     ← the app (static; deploy this)
 │   ├── index.html            ← generator: form → prompt → paste JSON → render (the public taster)
-│   ├── app.html              ← teacher workspace (see below)
+│   ├── app.html              ← teacher workspace + live classroom monitor (see below)
+│   ├── aula.html             ← student page: join a class by code, do the worksheets
 │   ├── docs.html             ← in-app documentation viewer
 │   └── assets/
 │       ├── styles.css        ← generator styling, bridged onto the design system
@@ -47,7 +48,8 @@ core/
 │           ├── anim.js             ← Anime.js v4 animation layer (visual grammar)
 │           ├── analog.js           ← Markdown/print emitter (pure)
 │           ├── md.js / docs.js     ← Obsidian-flavoured docs viewer
-│           └── app/                ← teacher workspace SPA (store, router, views)
+│           ├── app/                ← teacher workspace SPA (store, router, views, live monitor)
+│           └── aula/               ← student SPA (join → do deployed worksheets)
 │           └── app.js              ← page wiring
 ├── docs/                     ← documentation content (synced from EnsinoLibre/docs)
 ├── schema/worksheet.schema.json    ← the worksheet format (JSON Schema 2020-12)
@@ -56,12 +58,13 @@ core/
 └── netlify.toml              ← deploy config
 ```
 
-## Two surfaces
+## Three surfaces
 
 - **The generator** (`index.html`) is the public taster: describe a lesson, get a prompt for any AI assistant, paste the result back, render or print it. No account, nothing stored.
-- **The teacher workspace** (`app.html`) is where the product's real value lives: teachers keep **classrooms**, **students**, **resources**, and — crucially — persistent **per-class and per-student context** that an AI teaching assistant will read and write. Each classroom and student view carries an *Assistant* panel primed with that context (a UI stub today).
+- **The teacher workspace** (`app.html`) is where the product's real value lives: teachers keep **classrooms**, **students**, **resources**, and persistent **per-class and per-student context** that an AI teaching assistant will read and write. Each classroom and student view carries an *Assistant* panel primed with that context (a UI stub today).
+- **The live classroom / aula** — teachers *deploy* a set of worksheets to a class (with a join **code**); students open `aula.html`, join with the code and their name, and work through the worksheets (rendered by the same engine as the generator). The teacher's **Live classroom** dashboard (`app.html#/aula`) shows every student's progress and score **in real time**, lets the teacher **validate** each submission (validated / needs review), and **exports** the results as **CSV or JSON**.
 
-> **Status: boilerplate, front-end only.** The workspace has **no backend yet**. Auth is faked (any credentials sign you in) and all data lives in `localStorage`, seeded with demo classes and students on first run. The data layer is isolated in `assets/js/app/store.js`, so wiring a real backend later means swapping that module's read/write helpers — the views don't change. Reset the demo data from **Profile → Reset demo data**.
+> **Status: boilerplate, front-end only.** No backend yet. Teacher auth is faked (any credentials); student "auth" is just a class code + name. All data lives in `localStorage`, seeded on first run (including one live aula with two worksheets and enrolled students so the monitor looks alive immediately). "Live" updates use `BroadcastChannel`, so a student working in one tab updates the teacher's monitor in another — no server involved. The data layer is isolated in `assets/js/app/store.js`; wiring a real backend later means swapping that module's read/write helpers — the views don't change. Reset from **Profile → Reset demo data**. Demo class code: **A2LIVE**.
 
 ## How it relates to the other repos
 

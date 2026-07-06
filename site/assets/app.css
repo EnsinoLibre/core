@@ -207,6 +207,56 @@ a:hover { text-decoration: underline; }
 .app-auth-back { text-align: center; margin: var(--space-3) 0 0; font-size: 0.85rem; }
 .app-auth-back a { color: var(--color-text-muted); }
 
+/* ---------- progress bars ---------- */
+
+.app-progress { display: flex; align-items: center; gap: var(--space-2); }
+.app-progress-track { flex: 1; height: 7px; background: var(--color-surface-muted); border-radius: var(--radius-full); overflow: hidden; min-width: 48px; }
+.app-progress-fill { height: 100%; background: var(--color-primary); border-radius: var(--radius-full); transition: width 0.3s ease; }
+.app-progress-label { font-size: 0.75rem; color: var(--color-text-muted); white-space: nowrap; }
+
+/* ---------- live classroom monitor ---------- */
+
+.app-live-dot { color: var(--color-primary); font-weight: 700; font-size: 0.8rem; }
+.app-stats--tight { grid-template-columns: repeat(3, 1fr); margin-bottom: var(--space-5); }
+.app-stats--tight .app-stat { padding: var(--space-4); }
+.app-share-strip {
+  display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;
+  background: var(--color-teal-100-tint); border: 1px solid var(--color-teal-300); border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4); margin-bottom: var(--space-5); font-size: 0.9rem;
+}
+.app-code { font-family: var(--font-mono); font-size: 1.05rem; letter-spacing: 0.08em; color: var(--color-teal-900); }
+
+.app-table-wrap { overflow-x: auto; border-radius: var(--radius-lg); }
+.app-monitor-table th, .app-monitor-table td { vertical-align: middle; }
+.app-monitor-table td { min-width: 120px; }
+.app-cell-prog { display: flex; flex-direction: column; gap: 4px; align-items: stretch; width: 100%; background: none; border: none; cursor: pointer; padding: var(--space-2); border-radius: var(--radius-sm); font-family: var(--font-body); text-align: left; }
+.app-cell-prog:hover { background: var(--color-surface-muted); }
+.app-cell-score { font-size: 0.78rem; font-weight: 700; color: var(--color-text-secondary); }
+.app-cell-empty { display: block; text-align: center; }
+
+.app-checks { display: flex; flex-direction: column; gap: var(--space-2); }
+.app-check { display: flex; align-items: center; gap: var(--space-2); font-size: 0.94rem; }
+
+/* ---------- student aula ---------- */
+
+.app-student-body { background: var(--color-surface-muted); }
+.app-student-wrap { min-height: 100vh; display: flex; flex-direction: column; }
+.app-student-top {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-3) var(--space-5); background: var(--color-surface); border-bottom: 1px solid var(--color-border);
+  position: sticky; top: 0; z-index: 20;
+}
+.app-student-chip { display: inline-flex; align-items: center; gap: var(--space-2); font-weight: 600; font-size: 0.9rem; }
+.app-student-main { width: 100%; max-width: 820px; margin: 0 auto; padding: var(--space-6) var(--space-5); }
+.app-ws-list { display: flex; flex-direction: column; gap: var(--space-3); }
+.app-ws-card { display: flex; align-items: center; gap: var(--space-4); text-align: left; cursor: pointer; width: 100%; }
+.app-ws-card-main { flex: 1; }
+.app-ws-card-main .app-progress { margin-top: var(--space-2); }
+.app-worksheet-do { max-width: 760px; }
+.app-ws-foot { margin-top: var(--space-6); display: flex; justify-content: center; }
+.app-join-code { text-transform: uppercase; letter-spacing: 0.12em; font-family: var(--font-mono); text-align: center; font-size: 1.1rem; }
+.app-join-submit { width: 100%; margin-top: var(--space-3); }
+
 /* ---------- responsive ---------- */
 
 @media (max-width: 900px) {
