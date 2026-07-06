@@ -85,6 +85,13 @@ pre {
 .oc-hero h1 em { color: var(--oc-accent); font-style: normal; }
 .oc-hero p { color: var(--oc-text-dim); font-size: 1.15rem; max-width: 42rem; margin: 0 auto 2rem; }
 .oc-hero-actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+.oc-hero-note { font-size: 0.92rem !important; color: var(--oc-text-dim); max-width: 34rem !important; margin: 1.6rem auto 0 !important; }
+
+.oc-nav-cta {
+  background: var(--oc-accent); color: var(--color-text-on-primary) !important;
+  padding: 0.4rem 0.9rem; border-radius: var(--radius-md); font-weight: 700;
+}
+.oc-nav-cta:hover { background: var(--color-primary-hover); text-decoration: none !important; }
 
 .oc-badges { display: flex; gap: 0.5rem; justify-content: center; margin-bottom: 1.4rem; flex-wrap: wrap; }
 .oc-badge {

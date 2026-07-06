@@ -32,12 +32,14 @@ npm test           # runs the full test suite
 ```
 core/
 ├── site/                     ← the app (static; deploy this)
-│   ├── index.html            ← creator: form → prompt → paste JSON → render
+│   ├── index.html            ← generator: form → prompt → paste JSON → render (the public taster)
+│   ├── app.html              ← teacher workspace (see below)
 │   ├── docs.html             ← in-app documentation viewer
 │   └── assets/
-│       ├── styles.css        ← app styling, bridged onto the design system
+│       ├── styles.css        ← generator styling, bridged onto the design system
+│       ├── app.css           ← teacher-workspace styling (design-system tokens + primitives)
 │       ├── brand/            ← wordmark + favicon (from EnsinoLibre/assets)
-│       ├── vendor/           ← tokens.css (design-system), marked, anime.js
+│       ├── vendor/           ← tokens.css + primitives (design-system), marked, anime.js
 │       └── js/
 │           ├── prompt-builder.js   ← builds the AI prompt from a form spec
 │           ├── validator.js        ← worksheet + per-block validation (pure)
@@ -45,6 +47,7 @@ core/
 │           ├── anim.js             ← Anime.js v4 animation layer (visual grammar)
 │           ├── analog.js           ← Markdown/print emitter (pure)
 │           ├── md.js / docs.js     ← Obsidian-flavoured docs viewer
+│           └── app/                ← teacher workspace SPA (store, router, views)
 │           └── app.js              ← page wiring
 ├── docs/                     ← documentation content (synced from EnsinoLibre/docs)
 ├── schema/worksheet.schema.json    ← the worksheet format (JSON Schema 2020-12)
@@ -52,6 +55,13 @@ core/
 ├── server.mjs                ← tiny static dev server
 └── netlify.toml              ← deploy config
 ```
+
+## Two surfaces
+
+- **The generator** (`index.html`) is the public taster: describe a lesson, get a prompt for any AI assistant, paste the result back, render or print it. No account, nothing stored.
+- **The teacher workspace** (`app.html`) is where the product's real value lives: teachers keep **classrooms**, **students**, **resources**, and — crucially — persistent **per-class and per-student context** that an AI teaching assistant will read and write. Each classroom and student view carries an *Assistant* panel primed with that context (a UI stub today).
+
+> **Status: boilerplate, front-end only.** The workspace has **no backend yet**. Auth is faked (any credentials sign you in) and all data lives in `localStorage`, seeded with demo classes and students on first run. The data layer is isolated in `assets/js/app/store.js`, so wiring a real backend later means swapping that module's read/write helpers — the views don't change. Reset the demo data from **Profile → Reset demo data**.
 
 ## How it relates to the other repos
 

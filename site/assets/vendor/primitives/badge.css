@@ -1,0 +1,40 @@
+/**
+ * Badge primitive
+ * Usage: <span class="el-badge">Draft</span>
+ *        <span class="el-badge el-badge--secondary">Grade 3</span>
+ *        <span class="el-badge el-badge--accent">New</span>
+ *        <span class="el-badge el-badge--danger">Needs review</span>
+ */
+
+.el-badge {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  background-color: var(--color-teal-100);
+  color: var(--color-teal-900);
+}
+
+.el-badge--secondary {
+  background-color: var(--color-terracotta-100);
+  color: var(--color-terracotta-900);
+}
+
+.el-badge--accent {
+  background-color: var(--color-gold-100);
+  color: var(--color-gold-900);
+}
+
+.el-badge--neutral {
+  background-color: var(--color-surface-muted);
+  color: var(--color-text-secondary);
+}
+
+.el-badge--danger {
+  background-color: var(--color-danger-bg);
+  color: var(--color-danger-fg);
+}
