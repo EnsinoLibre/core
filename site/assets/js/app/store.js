@@ -10,7 +10,7 @@
 
 import { SEED_WORKSHEETS } from './seed-worksheets.js';
 
-const KEY = 'ensinolibre.workspace.v1';
+const KEY = 'ensinolibre.workspace.v2';
 const SESSION_KEY = 'ensinolibre.session.v1';
 const STUDENT_KEY = 'ensinolibre.student.v1';
 
@@ -19,62 +19,148 @@ const nowISO = () => new Date().toISOString();
 
 /* ---------------- seed ---------------- */
 
+/** Deterministic pseudo-random in [0,1) from a string — stable demo data. */
+function seedRand(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return ((h >>> 0) % 100000) / 100000;
+}
+
+/** Count auto-gradeable "units" in a worksheet doc (mirrors the live tracker). */
+function gradeableUnits(doc) {
+  let n = 0;
+  for (const sec of doc.sections) for (const a of sec.activities) {
+    switch (a.type) {
+      case 'mcq': case 'true-false': case 'gap-fill': case 'matching':
+      case 'ordering': case 'mark-words': case 'crossword': case 'summary': n += 1; break;
+      case 'quiz': case 'single-choice-set': case 'question-set': case 'reading-comp': n += (a.questions ? a.questions.length : 0); break;
+      case 'translation': n += (a.sentences ? a.sentences.length : 0); break;
+      default: break;
+    }
+  }
+  return n;
+}
+
 function seed() {
   const teacherId = 'teacher_demo';
-  const c1 = uid('class');
-  const c2 = uid('class');
-  const c3 = uid('class');
+
+  // ---- Classrooms (stable ids so everything else can reference them) ----
+  const classrooms = [
+    { id: 'c_a1', name: 'English A1 — Intensive', subject: 'English', level: 'A1', term: '2026 Spring',
+      description: 'Absolute beginners, intensive four-week course.',
+      context: 'Start from the alphabet, greetings, numbers. Lots of repetition and visual support; avoid metalanguage.', createdAt: nowISO() },
+    { id: 'c_a2e', name: 'English A2 — Evening', subject: 'English', level: 'A2', term: '2026 Spring',
+      description: 'Working adults, twice weekly. Everyday communication.',
+      context: 'Mixed A1–A2. Responds well to real-life scenarios (shops, travel, routines). Keep grammar light.', createdAt: nowISO() },
+    { id: 'c_a2m', name: 'English A2 — Morning', subject: 'English', level: 'A2', term: '2026 Spring',
+      description: 'Retirees and part-time learners. Relaxed pace.',
+      context: 'Confidence-building group. Enjoys pair work and vocabulary games. Directions and shopping are current topics.', createdAt: nowISO() },
+    { id: 'c_b1', name: 'English B1 — Morning', subject: 'English', level: 'B1', term: '2026 Spring',
+      description: 'Pre-intermediate adults preparing for a workplace certificate.',
+      context: 'Confident speakers; need writing structure, cohesion and past narrative. Professional contexts land best.', createdAt: nowISO() },
+    { id: 'c_b2', name: 'Business B2 — Corporate', subject: 'Business English', level: 'B2', term: '2026 Spring',
+      description: 'In-company course for a logistics firm.',
+      context: 'Goal is professional email and meeting language. Motivated but time-poor; short focused tasks work best.', createdAt: nowISO() },
+  ];
+
+  // ---- Students (distributed across classrooms) ----
+  const note = (text) => [{ id: uid('n'), at: nowISO(), text }];
   const students = [
-    { id: uid('stu'), classId: c1, name: 'Ana Ferreira', level: 'A2', pronouns: 'she/her',
-      goals: 'Build confidence speaking about daily routines; consolidate present simple.',
-      needs: 'Prefers visual support. Dyslexia-friendly fonts help.',
-      notes: [{ id: uid('n'), at: nowISO(), text: 'Strong on vocabulary, hesitant with question forms.' }] },
-    { id: uid('stu'), classId: c1, name: 'Bruno Costa', level: 'A2', pronouns: 'he/him',
-      goals: 'Accuracy with the past simple for a holiday recount.',
-      needs: 'Works best with short, timed tasks.',
-      notes: [] },
-    { id: uid('stu'), classId: c1, name: 'Carla Nunes', level: 'A1', pronouns: 'she/her',
-      goals: 'Core survival vocabulary: numbers, shops, directions.',
-      needs: 'New to the group — light scaffolding.',
-      notes: [{ id: uid('n'), at: nowISO(), text: 'Joined mid-term; catch-up pack assigned.' }] },
-    { id: uid('stu'), classId: c2, name: 'Diogo Alves', level: 'B1', pronouns: 'he/him',
-      goals: 'Extended writing: linking ideas with because/although.',
-      needs: 'Motivated by football and gaming contexts.',
-      notes: [] },
-    { id: uid('stu'), classId: c2, name: 'Eva Marques', level: 'B1', pronouns: 'she/her',
-      goals: 'Fluency in short discussions; reduce L1 fillers.',
-      needs: '', notes: [] },
+    // A1 Intensive
+    { id: 's_carla', classId: 'c_a1', name: 'Carla Nunes', level: 'A1', pronouns: 'she/her', goals: 'Survival vocabulary: numbers, shops, directions.', needs: 'New to the group — light scaffolding.', notes: note('Joined mid-term; catch-up pack assigned.') },
+    { id: 's_hugo', classId: 'c_a1', name: 'Hugo Batista', level: 'A1', pronouns: 'he/him', goals: 'Recognise and say the alphabet and greetings.', needs: 'Anxious about speaking — build up gently.', notes: [] },
+    { id: 's_ines', classId: 'c_a1', name: 'Inês Rocha', level: 'A1', pronouns: 'she/her', goals: 'Basic classroom language and numbers.', needs: 'Fast learner; give extension tasks.', notes: note('Ready to move up to A2 next term.') },
+    { id: 's_joao', classId: 'c_a1', name: 'João Pereira', level: 'A1', pronouns: 'he/him', goals: 'Talk about family and home.', needs: 'Irregular attendance — keep tasks self-contained.', notes: [] },
+    // A2 Evening
+    { id: 's_ana', classId: 'c_a2e', name: 'Ana Ferreira', level: 'A2', pronouns: 'she/her', goals: 'Confidence with daily routines; consolidate present simple.', needs: 'Prefers visual support. Dyslexia-friendly fonts help.', notes: note('Strong vocabulary, hesitant with question forms.') },
+    { id: 's_bruno', classId: 'c_a2e', name: 'Bruno Costa', level: 'A2', pronouns: 'he/him', goals: 'Accuracy with everyday transactions (shops, prices).', needs: 'Works best with short, timed tasks.', notes: [] },
+    { id: 's_lara', classId: 'c_a2e', name: 'Lara Simões', level: 'A2', pronouns: 'she/her', goals: 'Speak about her week without long pauses.', needs: 'Motivated by cooking and travel topics.', notes: [] },
+    { id: 's_marco', classId: 'c_a2e', name: 'Marco Dias', level: 'A1', pronouns: 'he/him', goals: 'Catch up to the group on present simple.', needs: 'Lower than the class average — pair with a stronger student.', notes: note('Border A1/A2; monitor for frustration.') },
+    { id: 's_nadia', classId: 'c_a2e', name: 'Nádia Lopes', level: 'A2', pronouns: 'she/her', goals: 'Prepositions of place; giving directions.', needs: '', notes: [] },
+    { id: 's_paulo', classId: 'c_a2e', name: 'Paulo Reis', level: 'A2', pronouns: 'he/him', goals: 'Fluency in short conversations.', needs: 'Confident but inaccurate — focus on -s endings.', notes: [] },
+    // A2 Morning
+    { id: 's_rita', classId: 'c_a2m', name: 'Rita Gomes', level: 'A2', pronouns: 'she/her', goals: 'Shopping and money language.', needs: 'Enjoys role-play.', notes: [] },
+    { id: 's_sofia', classId: 'c_a2m', name: 'Sofia Melo', level: 'A2', pronouns: 'she/her', goals: 'Directions around town.', needs: 'Hearing support — face the class when modelling.', notes: note('Benefits from written back-up of instructions.') },
+    { id: 's_tiago', classId: 'c_a2m', name: 'Tiago Fonseca', level: 'A2', pronouns: 'he/him', goals: 'Confidence asking questions.', needs: '', notes: [] },
+    { id: 's_vera', classId: 'c_a2m', name: 'Vera Antunes', level: 'A2', pronouns: 'she/her', goals: 'Consolidate present simple; start past simple.', needs: 'Ready for a challenge.', notes: [] },
+    { id: 's_yara', classId: 'c_a2m', name: 'Yara Cunha', level: 'A1', pronouns: 'she/her', goals: 'Numbers and prices for shopping.', needs: 'New arrival; still building basics.', notes: [] },
+    // B1 Morning
+    { id: 's_diogo', classId: 'c_b1', name: 'Diogo Alves', level: 'B1', pronouns: 'he/him', goals: 'Extended writing: linking with because/although.', needs: 'Motivated by football and gaming contexts.', notes: note('Great past narrative; watch comma splices.') },
+    { id: 's_eva', classId: 'c_b1', name: 'Eva Marques', level: 'B1', pronouns: 'she/her', goals: 'Fluency in short discussions; reduce L1 fillers.', needs: '', notes: [] },
+    { id: 's_filipe', classId: 'c_b1', name: 'Filipe Tavares', level: 'B1', pronouns: 'he/him', goals: 'Comparatives and superlatives for describing.', needs: 'Perfectionist — encourage risk-taking.', notes: [] },
+    { id: 's_gabriela', classId: 'c_b1', name: 'Gabriela Pinto', level: 'B2', pronouns: 'she/her', goals: 'Stretch tasks; considering C1 later.', needs: 'Ahead of the class — give leadership roles.', notes: note('Candidate to move to the B2 group.') },
+    { id: 's_kevin', classId: 'c_b1', name: 'Kevin Sousa', level: 'B1', pronouns: 'he/him', goals: 'Accuracy in past questions and negatives.', needs: 'Confident speaker, weaker writer.', notes: [] },
+    // B2 Business
+    { id: 's_luisa', classId: 'c_b2', name: 'Luísa Cardoso', level: 'B2', pronouns: 'she/her', goals: 'Formal email register and tone.', needs: 'Very time-poor — bite-size homework.', notes: [] },
+    { id: 's_manuel', classId: 'c_b2', name: 'Manuel Freitas', level: 'B2', pronouns: 'he/him', goals: 'Chairing meetings in English.', needs: 'Needs pronunciation work on stress.', notes: [] },
+    { id: 's_olga', classId: 'c_b2', name: 'Olga Ramos', level: 'B2', pronouns: 'she/her', goals: 'Negotiation language.', needs: '', notes: [] },
+    { id: 's_ricardo', classId: 'c_b2', name: 'Ricardo Matos', level: 'B1', pronouns: 'he/him', goals: 'Bridge B1→B2 for report writing.', needs: 'Slightly below the group; extra scaffolding on cohesion.', notes: note('Struggles with linkers; assigned the feedback rubric.') },
   ];
-  const anaId = students[0].id;
-  // A wiki-style knowledge repository: worksheets, teaching materials,
-  // guidelines, external resources and captured context — cross-linked.
+
+  // ---- Aulas (live classes): deploy worksheets to classrooms; some worksheets shared ----
+  const aulas = [
+    { id: 'aula_a2e', classId: 'c_a2e', title: 'A2 Evening — Routines, Shopping & Space', code: 'A2LIVE', status: 'live', worksheetIds: ['ws_routines', 'ws_shopping', 'ws_solar'], createdAt: nowISO() },
+    { id: 'aula_a2m', classId: 'c_a2m', title: 'A2 Morning — Routines & Directions', code: 'A2MORN', status: 'live', worksheetIds: ['ws_routines', 'ws_directions'], createdAt: nowISO() },
+    { id: 'aula_b1', classId: 'c_b1', title: 'B1 — Past Holiday & Comparatives', code: 'B1LIVE', status: 'live', worksheetIds: ['ws_past_holiday', 'ws_comparatives'], createdAt: nowISO() },
+    { id: 'aula_a1', classId: 'c_a1', title: 'A1 — Animals & Directions (session 3)', code: 'A1JOIN', status: 'closed', worksheetIds: ['ws_animals', 'ws_directions'], createdAt: nowISO() },
+  ];
+
+  // ---- Generated enrolments + progress (consistent, varied, deterministic) ----
+  const wsUnits = {};
+  for (const w of SEED_WORKSHEETS) wsUnits[w.id] = gradeableUnits(w.doc);
+  const enrollments = [];
+  const progress = {};
+  for (const a of aulas) {
+    const roster = students.filter((s) => s.classId === a.classId);
+    roster.forEach((s) => {
+      // most students have joined; a couple of live-class stragglers have not
+      const joined = a.status === 'closed' || seedRand(a.id + s.id) > 0.16;
+      if (!joined) return;
+      const enrId = `enr_${a.id.slice(5)}_${s.id.slice(2)}`;
+      enrollments.push({ id: enrId, aulaId: a.id, name: s.name, joinedAt: nowISO() });
+      for (const wid of a.worksheetIds) {
+        const total = wsUnits[wid] || 4;
+        const r = seedRand(enrId + wid);
+        const acc = seedRand(wid + enrId + 'acc');
+        const attempted = a.status === 'closed' ? total : Math.round(r * total);
+        const done = attempted >= total;
+        if (attempted === 0 && !done) continue; // not started yet — leave unstored
+        const correct = attempted ? Math.max(0, Math.min(attempted, Math.round(attempted * (0.55 + acc * 0.45)))) : 0;
+        const score = total ? correct / total : 1;
+        let validated = null;
+        if (done) validated = acc > 0.7 ? 'validated' : (acc < 0.12 ? 'review' : null);
+        progress[`${a.id}:${enrId}:${wid}`] = { total, attempted, correct, done, score, validated, updatedAt: nowISO() };
+      }
+    });
+  }
+
+  // ---- Knowledge repository: guidelines, materials, external, context, saved worksheets ----
+  const R = (o) => ({ createdAt: nowISO(), type: 'other', tags: [], links: [], ...o });
   const resources = [
-    { id: 'r_routines', title: 'Daily routines — A2 mixed practice', kind: 'worksheet', type: 'worksheet', subject: 'English',
-      classId: c1, createdAt: nowISO(), tags: ['present-simple', 'vocabulary'], note: 'Generated from the worksheet builder.',
-      links: ['worksheet:ws_routines', 'class:' + c1, 'resource:r_guideline_a2'] },
-    { id: 'r_flash', title: 'Numbers & shops flashcards', kind: 'material', type: 'flashdeck', subject: 'English',
-      classId: c1, createdAt: nowISO(), tags: ['A1', 'vocabulary'], note: '',
-      links: ['class:' + c1, 'resource:r_material_shops'] },
-    { id: 'r_holiday', title: 'Holiday recount — writing scaffold', kind: 'worksheet', type: 'worksheet', subject: 'English',
-      classId: c2, createdAt: nowISO(), tags: ['past-simple', 'writing'], note: '',
-      links: ['class:' + c2, 'resource:r_guideline_a2'] },
-    { id: 'r_guideline_a2', title: 'Guideline — CEFR A2 speaking descriptors', kind: 'guideline', type: 'other', subject: 'English',
-      classId: null, createdAt: nowISO(), tags: ['cefr', 'assessment'],
-      note: 'Can-do statements for A2. Use for validating speaking tasks and giving feedback.',
-      links: ['class:' + c1, 'class:' + c2] },
-    { id: 'r_material_shops', title: 'Teaching material — In the shops (role-plays)', kind: 'material', type: 'other', subject: 'English',
-      classId: c1, createdAt: nowISO(), tags: ['speaking', 'vocabulary'],
-      note: 'Printable role-play cards for shopping dialogues.',
-      links: ['resource:r_flash', 'class:' + c1] },
-    { id: 'r_ext_bbc', title: 'BBC Learning English', kind: 'external', type: 'other', subject: 'English',
-      classId: c1, createdAt: nowISO(), tags: ['listening', 'external'], url: 'https://www.bbc.co.uk/learningenglish',
-      note: 'External resource — short clips and quizzes for homework.',
-      links: ['class:' + c1, 'resource:r_guideline_a2'] },
-    { id: 'r_ctx_ana', title: 'Context — Ana Ferreira learning profile', kind: 'context', type: 'other', subject: 'English',
-      classId: c1, studentId: anaId, createdAt: nowISO(), tags: ['context', 'differentiation'],
-      note: 'Prefers visual support; confident vocabulary, hesitant with question forms. Dyslexia-friendly fonts help.',
-      links: ['student:' + anaId, 'class:' + c1, 'resource:r_guideline_a2'] },
+    // guidelines (apply across classrooms)
+    R({ id: 'r_g_a1', title: 'Guideline — CEFR A1 can-do statements', kind: 'guideline', subject: 'English', classId: null, tags: ['cefr', 'assessment'], note: 'A1 descriptors for planning and validating beginner tasks.', links: ['class:c_a1'] }),
+    R({ id: 'r_g_a2', title: 'Guideline — CEFR A2 descriptors', kind: 'guideline', subject: 'English', classId: null, tags: ['cefr', 'assessment'], note: 'Can-do statements for A2 speaking and writing.', links: ['class:c_a2e', 'class:c_a2m'] }),
+    R({ id: 'r_g_b1', title: 'Guideline — CEFR B1 descriptors', kind: 'guideline', subject: 'English', classId: null, tags: ['cefr', 'assessment'], note: 'B1 descriptors: narrative, opinion, cohesion.', links: ['class:c_b1'] }),
+    R({ id: 'r_g_b2', title: 'Guideline — B2 workplace writing criteria', kind: 'guideline', subject: 'Business English', classId: null, tags: ['cefr', 'writing'], note: 'Register, tone and structure for professional writing.', links: ['class:c_b2'] }),
+    R({ id: 'r_g_feedback', title: 'Guideline — Written-feedback rubric', kind: 'guideline', subject: 'English', classId: null, tags: ['assessment', 'feedback'], note: 'Shared rubric for marking and validating written work across levels.', links: ['class:c_a2e', 'class:c_b1', 'class:c_b2'] }),
+    // materials (tied to worksheets + classes)
+    R({ id: 'r_m_shops', title: 'Material — In the shops role-play cards', kind: 'material', subject: 'English', classId: 'c_a2e', tags: ['speaking', 'vocabulary'], note: 'Printable role-play cards for shopping dialogues.', links: ['worksheet:ws_shopping', 'class:c_a2e', 'class:c_a2m', 'resource:r_g_a2'] }),
+    R({ id: 'r_m_map', title: 'Material — Town map handout', kind: 'material', subject: 'English', classId: 'c_a2m', tags: ['directions'], note: 'A4 town map for directions practice.', links: ['worksheet:ws_directions', 'class:c_a1', 'class:c_a2m'] }),
+    R({ id: 'r_m_animals', title: 'Material — Animal picture flashcards', kind: 'material', subject: 'English', classId: 'c_a1', tags: ['vocabulary', 'A1'], note: 'Printable animal flashcards.', links: ['worksheet:ws_animals', 'class:c_a1'] }),
+    R({ id: 'r_m_emails', title: 'Material — Business email templates', kind: 'material', subject: 'Business English', classId: 'c_b2', tags: ['writing', 'email'], note: 'Model formal/neutral email openings and closings.', links: ['worksheet:ws_jobs_email', 'class:c_b2', 'resource:r_g_b2'] }),
+    // external
+    R({ id: 'r_x_bbc', title: 'BBC Learning English', kind: 'external', subject: 'English', classId: 'c_a2e', tags: ['listening', 'external'], url: 'https://www.bbc.co.uk/learningenglish', note: 'Short clips and quizzes for homework.', links: ['class:c_a2e', 'class:c_b1', 'resource:r_g_a2'] }),
+    R({ id: 'r_x_ted', title: 'TED-Ed talks', kind: 'external', subject: 'English', classId: 'c_b1', tags: ['listening', 'external'], url: 'https://ed.ted.com', note: 'Short talks for B1/B2 listening and discussion.', links: ['class:c_b1', 'class:c_b2'] }),
+    // per-student context (link a student, their class, and a relevant guideline)
+    R({ id: 'r_ctx_ana', title: 'Context — Ana Ferreira learning profile', kind: 'context', subject: 'English', classId: 'c_a2e', studentId: 's_ana', tags: ['context', 'differentiation'], note: 'Visual learner; confident vocabulary, hesitant with question forms; dyslexia-friendly fonts help.', links: ['student:s_ana', 'class:c_a2e', 'resource:r_g_a2'] }),
+    R({ id: 'r_ctx_carla', title: 'Context — Carla Nunes catch-up plan', kind: 'context', subject: 'English', classId: 'c_a1', studentId: 's_carla', tags: ['context', 'onboarding'], note: 'Joined mid-term; needs numbers, shops and directions before rejoining the main sequence.', links: ['student:s_carla', 'class:c_a1', 'resource:r_g_a1'] }),
+    R({ id: 'r_ctx_diogo', title: 'Context — Diogo Alves writing profile', kind: 'context', subject: 'English', classId: 'c_b1', studentId: 's_diogo', tags: ['context', 'writing'], note: 'Strong narrative; target comma splices and paragraph cohesion.', links: ['student:s_diogo', 'class:c_b1', 'resource:r_g_feedback'] }),
+    R({ id: 'r_ctx_ricardo', title: 'Context — Ricardo Matos bridge plan (B1→B2)', kind: 'context', subject: 'Business English', classId: 'c_b2', studentId: 's_ricardo', tags: ['context', 'differentiation'], note: 'Below group level; extra scaffolding on linkers and report structure.', links: ['student:s_ricardo', 'class:c_b2', 'resource:r_g_b2', 'resource:r_g_feedback'] }),
+    // saved generated worksheets (as knowledge nodes)
+    R({ id: 'r_ws_routines', title: 'Saved — Daily routines practice', kind: 'worksheet', type: 'worksheet', subject: 'English', classId: 'c_a2e', tags: ['present-simple'], note: 'Generated from the worksheet builder and deployed live.', links: ['worksheet:ws_routines', 'class:c_a2e', 'aula:aula_a2e'] }),
+    R({ id: 'r_ws_holiday', title: 'Saved — My last holiday', kind: 'worksheet', type: 'worksheet', subject: 'English', classId: 'c_b1', tags: ['past-simple', 'writing'], note: 'Past-simple narrative worksheet.', links: ['worksheet:ws_past_holiday', 'class:c_b1', 'aula:aula_b1'] }),
   ];
+
   return {
     teacher: {
       id: teacherId, name: 'Sara Viana', email: 'teacher@ensinolibre.org',
@@ -82,40 +168,13 @@ function seed() {
       bio: 'Adult-education EFL teacher. Building persistent, per-student context so planning and feedback compound over time.',
       locale: 'en-GB',
     },
-    classrooms: [
-      { id: c1, name: 'English A2 — Evening', subject: 'English', level: 'A2', term: '2026 Spring',
-        description: 'Adult learners, twice weekly. Focus on everyday communication.',
-        context: 'Mixed A1–A2. The group responds well to real-life scenarios (shops, travel). Avoid heavy grammar metalanguage.',
-        createdAt: nowISO() },
-      { id: c2, name: 'English B1 — Morning', subject: 'English', level: 'B1', term: '2026 Spring',
-        description: 'Pre-intermediate adults preparing for a workplace certificate.',
-        context: 'Confident speakers, need writing structure and cohesion. Professional contexts land best.',
-        createdAt: nowISO() },
-      { id: c3, name: 'English A1 — Intensive', subject: 'English', level: 'A1', term: '2026 Spring',
-        description: 'Absolute beginners, intensive four-week course.',
-        context: 'Start from the alphabet and greetings. Lots of repetition and visual support.',
-        createdAt: nowISO() },
-    ],
+    classrooms,
     students,
     resources,
-    aulas: [
-      { id: 'aula_demo', classId: c1, title: 'Live class — Solar System & Routines', code: 'A2LIVE',
-        status: 'live', worksheetIds: SEED_WORKSHEETS.map((w) => w.id), createdAt: nowISO() },
-    ],
+    aulas,
     worksheets: SEED_WORKSHEETS.map((w) => ({ ...w })),
-    enrollments: [
-      { id: 'enr_ana', aulaId: 'aula_demo', name: 'Ana Ferreira', joinedAt: nowISO() },
-      { id: 'enr_bruno', aulaId: 'aula_demo', name: 'Bruno Costa', joinedAt: nowISO() },
-      { id: 'enr_carla', aulaId: 'aula_demo', name: 'Carla Nunes', joinedAt: nowISO() },
-    ],
-    // progress keyed "aulaId:enrollmentId:worksheetId"
-    progress: {
-      'aula_demo:enr_ana:ws_solar': { total: 4, attempted: 4, correct: 4, done: true, score: 1, validated: null, updatedAt: nowISO() },
-      'aula_demo:enr_ana:ws_routines': { total: 5, attempted: 2, correct: 2, done: false, score: 0.4, validated: null, updatedAt: nowISO() },
-      'aula_demo:enr_bruno:ws_solar': { total: 4, attempted: 3, correct: 2, done: false, score: 0.5, validated: null, updatedAt: nowISO() },
-      'aula_demo:enr_carla:ws_solar': { total: 4, attempted: 4, correct: 4, done: true, score: 1, validated: 'validated', updatedAt: nowISO() },
-      'aula_demo:enr_carla:ws_routines': { total: 5, attempted: 5, correct: 4, done: true, score: 0.8, validated: 'review', updatedAt: nowISO() },
-    },
+    enrollments,
+    progress,
   };
 }
 

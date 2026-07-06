@@ -26,7 +26,7 @@ export function initTopbar() {
   let session = null;
   let name = 'Teacher';
   try { session = JSON.parse(localStorage.getItem('ensinolibre.session.v1') || 'null'); } catch { /* ignore */ }
-  try { const ws = JSON.parse(localStorage.getItem('ensinolibre.workspace.v1') || 'null'); if (ws && ws.teacher && ws.teacher.name) name = ws.teacher.name; } catch { /* ignore */ }
+  try { const ws = JSON.parse(localStorage.getItem('ensinolibre.workspace.v2') || 'null'); if (ws && ws.teacher && ws.teacher.name) name = ws.teacher.name; } catch { /* ignore */ }
 
   account.textContent = '';
   if (session) {
