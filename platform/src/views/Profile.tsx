@@ -1,6 +1,14 @@
 import { useState } from 'react';
-import { store } from '../lib/api';
+import { store, buildVault, makeZip } from '../lib/api';
 import { PageHead, Avatar } from '../components/bits';
+
+function downloadVault() {
+  const blob = makeZip(buildVault());
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'ensinolibre-workspace.zip';
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
+}
 
 export function Profile() {
   const t = store.teacher();
@@ -25,6 +33,16 @@ export function Profile() {
             <h3 className="el-card__title app-profile-name">{form.name}</h3>
             <p className="app-muted">{form.school}</p>
             <p className="el-card__body">{form.subjects}</p>
+          </div>
+          <div className="el-card app-vault-card">
+            <h3 className="el-card__title">🗂️ Obsidian vault export</h3>
+            <p className="el-card__body">Download your whole workspace — classrooms, students, worksheets, resources and live classes — as linked Markdown notes with frontmatter and [[wikilinks]]. Open it in Obsidian, or hand it to an AI agent for token-efficient access.</p>
+            <button className="el-button" onClick={downloadVault}>⬇ Download vault (.zip)</button>
+          </div>
+          <div className="el-card app-danger-card">
+            <h3 className="el-card__title">Local data</h3>
+            <p className="el-card__body">This prototype stores everything in your browser. Reset to reseed the demo data.</p>
+            <button className="el-button el-button--ghost el-button--small" onClick={() => { if (confirm('Reset all local workspace data to the demo seed?')) { store.reset(); location.reload(); } }}>Reset demo data</button>
           </div>
         </div>
       </div>

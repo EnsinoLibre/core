@@ -8,3 +8,24 @@
 @import './graph.css';
 
 #root { min-height: 100vh; }
+
+/* topbar treatments shared with the public landing (consistency) */
+.app-brand { display: inline-flex; align-items: center; }
+.oc-wordmark { display: block; }
+.oc-wordmark--dark { display: none; }
+:root[data-theme='dark'] .oc-wordmark--light { display: none; }
+:root[data-theme='dark'] .oc-wordmark--dark { display: block; }
+
+.app-topbar-link { color: var(--color-text-muted); font-weight: 600; font-size: 0.92rem; text-decoration: none; }
+.app-topbar-link:hover { color: var(--color-text); }
+
+.oc-icon-link { display: inline-flex; align-items: center; color: var(--color-text-muted); }
+.oc-icon-link:hover { color: var(--color-text); }
+.oc-icon-link svg { display: block; }
+
+.oc-theme-toggle {
+  background: transparent; border: 1px solid var(--color-border-strong); border-radius: var(--radius-full);
+  cursor: pointer; font-size: 0.95rem; width: 2rem; height: 2rem; padding: 0; line-height: 1;
+  color: var(--color-text); display: inline-flex; align-items: center; justify-content: center; flex: none;
+}
+.oc-theme-toggle:hover { background: var(--color-surface-muted); }
