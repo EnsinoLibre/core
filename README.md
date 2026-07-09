@@ -40,7 +40,7 @@ core/
 │       ├── styles.css        ← generator styling, bridged onto the design system
 │       ├── app.css           ← teacher-workspace styling (design-system tokens + primitives)
 │       ├── brand/            ← wordmark + favicon (from EnsinoLibre/assets)
-│       ├── vendor/           ← tokens.css + primitives (design-system), marked, anime.js
+│       ├── vendor/           ← tokens.css + primitives (design-system), marked
 │       └── js/
 │           ├── prompt-builder.js   ← builds the AI prompt from a form spec
 │           ├── validator.js        ← worksheet + per-block validation (pure)
