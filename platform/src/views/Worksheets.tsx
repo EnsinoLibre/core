@@ -7,6 +7,7 @@ import {
 } from '../lib/api';
 import { PageHead } from '../components/bits';
 import { DeployModal } from '../components/DeployModal';
+import { useContent } from '../components/ContentPanel';
 
 function unitCount(doc: any) {
   return doc.sections.reduce((n: number, s: any) => n + s.activities.length, 0);
@@ -14,6 +15,7 @@ function unitCount(doc: any) {
 
 export function Worksheets() {
   const nav = useNavigate();
+  const { open } = useContent();
   const [, force] = useState(0);
   const rerender = () => force((n) => n + 1);
   const [adding, setAdding] = useState(false);
@@ -35,10 +37,10 @@ export function Worksheets() {
           const mq = moodleQuestionCount(w.doc);
           return (
             <div key={w.id} className="el-card app-ws-lib-card">
-              <div>
+              <button className="app-cardlink" onClick={() => open('worksheet:' + w.id)} title="Open worksheet & progress">
                 <h3 className="el-card__title">{w.title}</h3>
                 <p className="app-muted">{w.subject} · {unitCount(w.doc)} activities · {mq} auto-graded</p>
-              </div>
+              </button>
               {inAulas.length > 0 && (
                 <div className="app-tags">
                   {inAulas.map((a: any) => (

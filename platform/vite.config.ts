@@ -8,5 +8,7 @@ export default defineConfig({
   base: './',
   plugins: [react()],
   build: { outDir: 'dist', emptyOutDir: true },
-  server: { port: 4180 },
+  // Allow importing the shared worksheet engine (renderer/validator/anim) and
+  // its stylesheet from ../site, which lives outside the platform root.
+  server: { port: 4180, fs: { allow: ['..'] } },
 });

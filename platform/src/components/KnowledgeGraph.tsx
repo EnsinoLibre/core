@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 import Graph from 'graphology';
 import Sigma from 'sigma';
 import {
   forceSimulation, forceManyBody, forceLink, forceCollide, forceX, forceY, forceRadial,
 } from 'd3-force';
-import { deriveGraph, buildAdjacency, bfsDistances, type GraphNode } from '../lib/api';
+import { deriveGraph, buildAdjacency, bfsDistances } from '../lib/api';
+import { useContent } from './ContentPanel';
 
 /* ---------- palette ---------- */
 
@@ -24,7 +24,6 @@ const TYPE_VAR: Record<string, string> = {
 const SIZE: Record<string, number> = {
   teacher: 16, class: 13, aula: 12, worksheet: 10, student: 10, 'resource-guideline': 10,
 };
-const REL: Record<string, string> = { owns: 'teaches', member: 'in class', deploy: 'deployed', context: 'context', wiki: 'linked' };
 
 function cssVar(name: string, fallback = '#888') {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -46,8 +45,49 @@ const RING_STRENGTH = (d: number | undefined) => (d == null ? 0.3 : [1, 0.6, 0.5
 
 export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null }) {
   const stageRef = useRef<HTMLDivElement | null>(null);
-  const [focus, setFocus] = useState<string | null>(initialFocus ?? null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const recenterRef = useRef<() => void>(() => {});
+  // The graph is one view onto the shared "current content" — clicking a node
+  // opens the global content panel; the panel (and cards elsewhere) drive the
+  // focus lens back here.
+  const { current: focus, open, close } = useContent();
+  const openRef = useRef(open);
+  openRef.current = open;
   const [query, setQuery] = useState('');
+
+  // Open the deep-linked node once on mount (?focus=<id>).
+  useEffect(() => { if (initialFocus) open(initialFocus); /* eslint-disable-next-line */ }, []);
+
+  // The graph canvas is NEVER resized when the panel/drawer opens. Instead we
+  // pan the camera so the focused node sits in the visible region — above the
+  // mobile drawer, or centred in the (now narrower) area beside the desktop
+  // panel — while the graph stays full-size and interactive.
+  useEffect(() => {
+    const recenter = () => {
+      const s = sigmaRef.current as any;
+      const root = rootRef.current;
+      if (!s || !root) return;
+      const fid = focusRef.current;
+      if (!fid) return;
+      let nd: any;
+      try { nd = s.getNodeDisplayData(fid); } catch { nd = null; }
+      if (!nd) return;
+      const inset = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--content-bottom-inset')) || 0;
+      let dy = 0;
+      if (inset > 0 && typeof s.viewportToFramedGraph === 'function') {
+        const W = root.clientWidth, H = root.clientHeight;
+        const vCenter = s.viewportToFramedGraph({ x: W / 2, y: H / 2 });
+        const vVisible = s.viewportToFramedGraph({ x: W / 2, y: (H - inset) / 2 });
+        dy = vCenter.y - vVisible.y; // shift so the node rises into the visible area
+      }
+      const cam = s.getCamera();
+      cam.animate({ x: nd.x, y: nd.y + dy, ratio: cam.getState().ratio, angle: 0 }, { duration: 260 });
+    };
+    recenterRef.current = recenter;
+    const onInset = () => requestAnimationFrame(recenter);
+    window.addEventListener('el-content-inset', onInset);
+    return () => { window.removeEventListener('el-content-inset', onInset); recenterRef.current = () => {}; };
+  }, []);
 
   // engine refs
   const sigmaRef = useRef<Sigma | null>(null);
@@ -69,6 +109,7 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
     let raf = 0;
     let killed = false;
     let onTheme: (() => void) | null = null;
+    let ro: ResizeObserver | null = null;
 
     const build = () => {
     const resolvePalette = () => {
@@ -184,7 +225,7 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
     // interactions
     renderer.on('enterNode', ({ node }: any) => { hoverRef.current = node; container.style.cursor = 'pointer'; renderer.refresh(); });
     renderer.on('leaveNode', () => { hoverRef.current = null; container.style.cursor = 'default'; renderer.refresh(); });
-    renderer.on('clickNode', ({ node }: any) => setFocus(node));
+    renderer.on('clickNode', ({ node }: any) => openRef.current(node));
     renderer.on('downNode', ({ node }: any) => {
       dragRef.current = node; sim.alphaTarget(0.15).restart();
       const n = idToSim.get(node); if (n) { n.fx = n.x; n.fy = n.y; }
@@ -208,7 +249,23 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
     onTheme = () => { resolvePalette(); renderer.setSetting('labelColor', { color: paletteRef.current.text }); renderer.setSetting('defaultEdgeColor', paletteRef.current.edge); renderer.refresh(); };
     document.addEventListener('themechange', onTheme);
 
-    if (initialFocus) setTimeout(() => applyFocus(initialFocus), 80);
+    // The content panel shares the row (desktop) or reflows the graph above the
+    // drawer (mobile) — refit Sigma to the container whenever it resizes so the
+    // focused node stays centred in the visible area.
+    let roRaf = 0;
+    ro = new ResizeObserver(() => {
+      cancelAnimationFrame(roRaf);
+      roRaf = requestAnimationFrame(() => {
+        const s = sigmaRef.current as any;
+        if (!s) return;
+        s.resize?.();
+        s.refresh?.();
+        recenterRef.current();      // keep the focus in view after a resize
+      });
+    });
+    ro.observe(container);
+
+    if (focusRef.current) setTimeout(() => applyFocus(focusRef.current), 80);
     }; // end build
 
     const waitAndBuild = () => {
@@ -221,6 +278,7 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
     return () => {
       killed = true;
       cancelAnimationFrame(raf);
+      ro?.disconnect();
       if (onTheme) document.removeEventListener('themechange', onTheme);
       simRef.current?.stop?.();
       sigmaRef.current?.kill?.();
@@ -229,33 +287,24 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
-  // react focus state → engine
-  useEffect(() => { applyFocusRef.current?.(focus); }, [focus]);
-
-  const focusNode = focus ? nodeById.get(focus) : null;
-  const connections = useMemo(() => {
-    if (!focus) return [];
-    const out: { node: GraphNode; kind: string }[] = [];
-    const seen = new Set<string>();
-    for (const e of data.edges) {
-      const otherId = e.source === focus ? e.target : e.target === focus ? e.source : null;
-      if (!otherId || seen.has(otherId) || !nodeById.has(otherId)) continue;
-      seen.add(otherId);
-      out.push({ node: nodeById.get(otherId)!, kind: e.kind });
-    }
-    return out;
-  }, [focus, data, nodeById]);
+  // react focus state → engine (then pan the camera to the focused node)
+  useEffect(() => {
+    applyFocusRef.current?.(focus);
+    if (!focus) return;
+    const t = setTimeout(() => recenterRef.current(), 200);
+    return () => clearTimeout(t);
+  }, [focus]);
 
   const doSearch = (e: React.FormEvent) => {
     e.preventDefault();
     const q = query.trim().toLowerCase();
     if (!q) return;
     const hit = data.nodes.find((n) => n.label.toLowerCase().includes(q));
-    if (hit) setFocus(hit.id);
+    if (hit) open(hit.id);
   };
 
   return (
-    <div className="knw">
+    <div className="knw" ref={rootRef}>
       <div className="knw-stage" ref={stageRef} />
       <div className="knw-toolbar">
         <div>
@@ -264,48 +313,13 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
         </div>
         <form onSubmit={doSearch}><input className="el-input knw-search" placeholder="Search nodes…" value={query} onChange={(e) => setQuery(e.target.value)} /></form>
         <div className="knw-controls">
-          {focus && <button className="el-button el-button--ghost el-button--small" onClick={() => setFocus(null)}>Clear focus</button>}
+          {focus && <button className="el-button el-button--ghost el-button--small" onClick={() => close()}>Clear focus</button>}
           <button className="el-button el-button--ghost el-button--small" onClick={() => sigmaRef.current?.getCamera().animatedReset()}>Fit</button>
         </div>
       </div>
 
       <Legend />
-      {!focus && <div className="knw-hint">Tip: search or click any node to enter the focus lens</div>}
-
-      <AnimatePresence>
-        {focusNode && (
-          <motion.aside
-            className="knw-panel"
-            initial={{ x: 30, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: 30, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 320, damping: 30 }}
-          >
-            <div className="knw-panel-head">
-              <span className="knw-conn-dot" style={{ background: cssVar(TYPE_VAR[focusNode.type] || '--color-text-muted'), width: 12, height: 12, marginTop: 6 }} />
-              <div style={{ flex: 1 }}>
-                <h2 className="knw-panel-title">{focusNode.label}</h2>
-                {focusNode.subtitle && <p className="app-muted">{focusNode.subtitle}</p>}
-              </div>
-              <button className="app-icon-btn" onClick={() => setFocus(null)} aria-label="Close">✕</button>
-            </div>
-            <div className="knw-panel-body">
-              {focusNode.body && <p className="el-card__body">{focusNode.body}</p>}
-              {focusNode.url && <p><a className="knw-open-link" href={focusNode.url} target="_blank" rel="noreferrer">{focusNode.url} ↗</a></p>}
-              <p className="knw-panel-section-title">Connections ({connections.length})</p>
-              <div className="knw-conn">
-                {connections.map(({ node, kind }) => (
-                  <button key={node.id + kind} className="knw-conn-btn" onClick={() => setFocus(node.id)}>
-                    <span className="knw-conn-dot" style={{ background: cssVar(TYPE_VAR[node.type] || '--color-text-muted') }} />
-                    <span>{node.label}</span>
-                    <span className="knw-conn-rel">{REL[kind] || kind}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </motion.aside>
-        )}
-      </AnimatePresence>
+      {!focus && <div className="knw-hint">Tip: search or click any node to open its content</div>}
     </div>
   );
 }

@@ -1,5 +1,10 @@
-/* Knowledge graph view */
+/* Knowledge graph view. The graph bleeds to the edges of the content area via
+   negative margins that must match .app-content's padding — otherwise it grows
+   wider than the viewport and breaks the layout (notably on mobile). */
 .knw { position: relative; height: calc(100vh - 57px); margin: calc(var(--space-6) * -1) calc(var(--space-7) * -1); overflow: hidden; }
+@media (max-width: 900px) {
+  .knw { margin: calc(var(--space-5) * -1) calc(var(--space-4) * -1); }
+}
 .knw-stage { position: absolute; inset: 0; background:
   radial-gradient(circle at 50% 40%, var(--color-surface) 0%, var(--color-surface-muted) 70%); }
 .knw-stage canvas { display: block; }

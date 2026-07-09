@@ -52,3 +52,16 @@ export function Progress({ pct, label }: { pct: number; label?: string }) {
 export function fmtDate(iso?: string) {
   try { return iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''; } catch { return ''; }
 }
+
+/** Flatten markdown to plain text for clamped card previews. */
+export function stripMarkdown(md?: string) {
+  return String(md || '')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\[\[([^\]]+)\]\]/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/[*_>#]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}

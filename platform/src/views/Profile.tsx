@@ -40,9 +40,9 @@ export function Profile() {
             <button className="el-button" onClick={downloadVault}>⬇ Download vault (.zip)</button>
           </div>
           <div className="el-card app-danger-card">
-            <h3 className="el-card__title">Local data</h3>
-            <p className="el-card__body">This prototype stores everything in your browser. Reset to reseed the demo data.</p>
-            <button className="el-button el-button--ghost el-button--small" onClick={() => { if (confirm('Reset all local workspace data to the demo seed?')) { store.reset(); location.reload(); } }}>Reset demo data</button>
+            <h3 className="el-card__title">Workspace data</h3>
+            <p className="el-card__body">Your workspace is stored in your EnsinoLibre account (Supabase), synced across devices. Refresh to re-pull the latest from the server.</p>
+            <button className="el-button el-button--ghost el-button--small" onClick={() => location.reload()}>Refresh from server</button>
           </div>
         </div>
       </div>

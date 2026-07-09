@@ -26,6 +26,7 @@ export function Live() {
   const rerender = () => force((n) => n + 1);
   useEffect(() => onLiveUpdate(rerender), []);
   const [validating, setValidating] = useState<{ aulaId: string; enr: string; ws: string } | null>(null);
+  const [drilling, setDrilling] = useState<{ aulaId: string; enr: string } | null>(null);
   const [deploying, setDeploying] = useState(false);
   const aulas = store.aulas();
 
@@ -99,7 +100,7 @@ export function Live() {
                         );
                       });
                       const overall = tot ? Math.round((att / tot) * 100) : 0;
-                      return <tr key={st.id}><td><div className="app-cell-user"><Avatar name={st.name} size={30} /><span>{st.name}</span></div></td>{cells}<td><Progress pct={overall} label={`${overall}%`} /></td></tr>;
+                      return <tr key={st.id}><td><button className="app-cell-user-btn" onClick={() => setDrilling({ aulaId: a.id, enr: st.id })} title="Open this student’s progress"><Avatar name={st.name} size={30} /><span>{st.name}</span></button></td>{cells}<td><Progress pct={overall} label={`${overall}%`} /></td></tr>;
                     })}
                   </tbody>
                 </table>
@@ -137,9 +138,59 @@ export function Live() {
             onSet={(v) => { store.setValidation(validating.aulaId, validating.enr, validating.ws, v); setValidating(null); rerender(); }}
           />
         )}
+        {drilling && (
+          <StudentDrilldown
+            {...drilling}
+            onClose={() => setDrilling(null)}
+            onValidate={(ws, v) => { store.setValidation(drilling.aulaId, drilling.enr, ws, v); rerender(); }}
+          />
+        )}
         {deploying && <DeployModal onClose={() => setDeploying(false)} onDeployed={() => { setDeploying(false); rerender(); }} />}
       </AnimatePresence>
     </div>
+  );
+}
+
+function StudentDrilldown({ aulaId, enr, onClose, onValidate }: { aulaId: string; enr: string; onClose: () => void; onValidate: (ws: string, v: string | null) => void }) {
+  const student = store.enrollment(enr);
+  const aula = store.aula(aulaId);
+  const worksheets = store.aulaWorksheets(aulaId);
+  return (
+    <motion.div className="app-modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
+      <motion.div className="app-modal" onClick={(e) => e.stopPropagation()}
+        initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12, scale: 0.98 }}>
+        <div className="app-modal-head">
+          <h2 className="app-modal-title"><Avatar name={student?.name || '?'} size={28} /> {student?.name}</h2>
+          <button className="app-icon-btn" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        <p className="app-muted" style={{ marginTop: 0 }}>{aula?.title} · progress across all deployed worksheets.</p>
+        <div className="app-list" style={{ gap: 'var(--space-3)' }}>
+          {worksheets.map((w: any) => {
+            const p = store.getProgress(aulaId, enr, w.id);
+            const pct = p && p.total ? Math.round((p.attempted / p.total) * 100) : 0;
+            const badge = p?.validated ? VBADGE[p.validated] : null;
+            return (
+              <div key={w.id} className="el-card app-deployed-ws" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 'var(--space-2)' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                  <strong>{w.title}</strong><span className="app-spacer" />
+                  {badge && <span className={badge[0]}>{badge[1]}</span>}
+                </div>
+                {p && (p.attempted || p.done) ? (
+                  <>
+                    <Progress pct={pct} label={`${p.done ? '✓ ' : ''}${p.attempted}/${p.total} · ${Math.round((p.score || 0) * 100)}%`} />
+                    <div className="app-form-actions" style={{ gap: 'var(--space-2)' }}>
+                      <button className="el-button el-button--small" onClick={() => onValidate(w.id, 'validated')}>✓ Validate</button>
+                      <button className="el-button el-button--secondary el-button--small" onClick={() => onValidate(w.id, 'review')}>⚑ Needs review</button>
+                      <button className="el-button el-button--ghost el-button--small" onClick={() => onValidate(w.id, null)}>Clear</button>
+                    </div>
+                  </>
+                ) : <span className="app-muted">Not started</span>}
+              </div>
+            );
+          })}
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }
 

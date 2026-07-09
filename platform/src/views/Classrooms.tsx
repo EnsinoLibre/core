@@ -1,25 +1,25 @@
-import { useNavigate } from 'react-router-dom';
 import { store } from '../lib/api';
-import { PageHead, LevelBadge } from '../components/bits';
+import { PageHead, LevelBadge, stripMarkdown } from '../components/bits';
+import { useContent } from '../components/ContentPanel';
 
 export function Classrooms() {
-  const nav = useNavigate();
+  const { open } = useContent();
   return (
     <div>
       <PageHead title="Classrooms" subtitle="Each class carries its own context your assistant can use." />
       <div className="app-card-grid">
         {store.classrooms().map((c: any) => {
           const roster = store.studentsIn(c.id);
+          const openIt = () => open('class:' + c.id);
           return (
-            <div key={c.id} className="el-card app-class-card">
+            <div key={c.id} className="el-card app-class-card app-cardlink--full" role="button" tabIndex={0}
+              onClick={openIt} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openIt(); } }}>
               <div className="app-class-card-top"><h3 className="el-card__title">{c.name}</h3><LevelBadge level={c.level} /></div>
               <p className="el-card__body">{c.description}</p>
-              {c.context && <p className="app-context-quote">{c.context}</p>}
+              {c.context && <p className="app-context-quote app-clamp-2">{stripMarkdown(c.context)}</p>}
               <div className="el-card__footer">
                 <span className="el-badge el-badge--neutral">{roster.length} students</span>
                 <span className="el-badge el-badge--neutral">{c.term}</span>
-                <span className="app-spacer" />
-                <button className="el-button el-button--ghost el-button--small" onClick={() => nav('/knowledge?focus=class:' + c.id)}>View in graph</button>
               </div>
             </div>
           );

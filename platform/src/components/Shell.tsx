@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { auth, store } from '../lib/api';
+import { supabase, store } from '../lib/api';
 import { useTheme } from '../lib/theme';
 import { Avatar } from './bits';
+import { ContentProvider, ContentSidePanel, ContentSheet, useContent, useMobileLayout } from './ContentPanel';
 
 const NAV = [
   { to: '/', label: 'Dashboard', icon: '◱', end: true },
@@ -24,9 +26,21 @@ function GithubIcon() {
 }
 
 export function Shell({ children }: { children: ReactNode }) {
+  return (
+    <ContentProvider>
+      <ShellChrome>{children}</ShellChrome>
+    </ContentProvider>
+  );
+}
+
+function ShellChrome({ children }: { children: ReactNode }) {
   const nav = useNavigate();
   const { theme, toggle } = useTheme();
+  const { current } = useContent();
+  const mobile = useMobileLayout();
   const t = store.teacher();
+  const panelOpen = !!current;
+
   return (
     <div className="app-shell">
       <header className="app-topbar">
@@ -42,7 +56,7 @@ export function Shell({ children }: { children: ReactNode }) {
         <button className="app-teacher-chip" onClick={() => nav('/profile')} title="Your profile">
           <Avatar name={t.name} size={30} /><span className="app-teacher-name">{t.name.split(' ')[0]}</span>
         </button>
-        <button className="el-button el-button--ghost el-button--small" onClick={() => { auth.logout(); nav('/login'); }}>Sign out</button>
+        <button className="el-button el-button--ghost el-button--small" onClick={async () => { await supabase.auth.signOut(); nav('/login'); }}>Sign out</button>
       </header>
       <div className="app-body">
         <aside className="app-sidebar">
@@ -57,8 +71,13 @@ export function Shell({ children }: { children: ReactNode }) {
             <a className="app-nav-link app-nav-link--muted" href="../index.html"><span className="app-nav-icon">✦</span><span>Worksheet generator</span></a>
           </div>
         </aside>
-        <main className="app-content">{children}</main>
+        <div className="app-main-area">
+          <main className="app-content">{children}</main>
+          {panelOpen && !mobile && <ContentSidePanel />}
+        </div>
       </div>
+      {/* Mobile: a non-modal bottom drawer overlay (content behind stays usable) */}
+      <AnimatePresence>{panelOpen && mobile && <ContentSheet key="sheet" />}</AnimatePresence>
     </div>
   );
 }
