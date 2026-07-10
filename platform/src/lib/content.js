@@ -13,6 +13,7 @@
  */
 import { store } from './store.js';
 import { deriveGraph, NODE_TYPES } from './graph.js';
+import { DOC_PAGES, docBySlug, docGroup, docId, docGroupId, docUrl, worksheetsUsing } from './docslayer.js';
 
 const wiki = (name) => `[[${String(name).replace(/[[\]]/g, '')}]]`;
 const fmtDate = (iso) => { try { return iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''; } catch { return ''; } };
@@ -27,6 +28,9 @@ export function typeLabel(type) {
 function nameIndex() {
   const idx = new Map();
   const add = (name, id) => { if (name) idx.set(String(name).trim().toLowerCase(), id); };
+  // docs first so workspace names win on collision
+  add('EnsinoLibre docs', 'docs');
+  for (const g of DOC_PAGES) { add(g.group, docGroupId(g.group)); for (const p of g.pages) add(p.title, docId(p.slug)); }
   add(store.teacher().name, 'teacher');
   for (const c of store.classrooms()) add(c.name, 'class:' + c.id);
   for (const s of store.students()) add(s.name, 'student:' + s.id);
@@ -43,11 +47,11 @@ export function resolveWikilink(name) {
 
 /* ---------------- connections ---------------- */
 
-const REL_LABEL = { owns: 'teaches', member: 'in class', deploy: 'deployed', context: 'context', wiki: 'linked' };
+const REL_LABEL = { owns: 'teaches', member: 'in class', deploy: 'deployed', context: 'context', wiki: 'linked', docs: 'section', uses: 'uses' };
 
 /** Typed connections for a node, derived from the same graph the viz uses. */
 export function entityConnections(nodeId) {
-  const { nodes, edges } = deriveGraph();
+  const { nodes, edges } = deriveGraph({ includeDocs: true });
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const out = [];
   const seen = new Set();
@@ -122,6 +126,35 @@ function aulaMd(a) {
   return parts.join('\n\n');
 }
 
+/* ---------------- docs layer markdown ---------------- */
+
+function docUsageMd(slug) {
+  if (!slug.startsWith('activities/')) return '';
+  const used = worksheetsUsing(slug);
+  if (!used.length) return `## Used in your worksheets\n_Not used in any worksheet yet._`;
+  return `## Used in your worksheets (${used.length})\n${used.map((w) => `- ${wiki(w.title)}`).join('\n')}`;
+}
+
+function docMd(slug) {
+  const d = docBySlug(slug);
+  const parts = [d.blurb, docUsageMd(slug), `_Part of the universal EnsinoLibre docs layer — context every knowledge base carries._`];
+  return parts.filter(Boolean).join('\n\n');
+}
+
+function docGroupMd(name) {
+  const g = docGroup(name);
+  const rows = g.pages.map((p) => {
+    const used = p.slug.startsWith('activities/') ? worksheetsUsing(p.slug).length : 0;
+    return `- ${wiki(p.title)}${used ? ` — used in ${used} worksheet${used === 1 ? '' : 's'}` : ''}`;
+  });
+  return `## Pages\n${rows.join('\n')}`;
+}
+
+function docsHubMd() {
+  const groups = DOC_PAGES.map((g) => `- ${wiki(g.group)} — ${g.pages.length} pages`).join('\n');
+  return `The universal context layer every EnsinoLibre knowledge base carries: the platform docs, floating behind your workspace. Activity docs connect to the worksheets built with them — an at-a-glance map of which components are used where.\n\n## Sections\n${groups}`;
+}
+
 /**
  * Full content descriptor for a node id.
  * Returns null for unknown ids.
@@ -157,6 +190,17 @@ export function entityContent(nodeId) {
     const a = store.aula(id); if (!a) return null;
     type = 'aula'; title = a.title; subtitle = `Live class · code ${a.code}`;
     markdown = aulaMd(a); route = '/live';
+  } else if (kind === 'docs') {
+    type = 'doc-hub'; title = 'EnsinoLibre docs'; subtitle = 'Universal context layer';
+    markdown = docsHubMd(); url = docUrl('overview');
+  } else if (kind === 'docgroup') {
+    const g = docGroup(id); if (!g) return null;
+    type = 'doc-group'; title = g.group; subtitle = `EnsinoLibre docs · ${g.pages.length} pages`;
+    markdown = docGroupMd(id);
+  } else if (kind === 'doc') {
+    const d = docBySlug(id); if (!d) return null;
+    type = 'doc'; title = d.title; subtitle = `EnsinoLibre docs · ${d.group}`;
+    markdown = docMd(id); url = docUrl(id);
   } else {
     return null;
   }

@@ -17,7 +17,7 @@ export const refresh: () => void = _refresh;
 export const hydrate: () => Promise<any> = _hydrate;
 export const isHydrated: () => boolean = _isHydrated;
 
-export const deriveGraph: () => { nodes: GraphNode[]; edges: GraphEdge[] } = _derive;
+export const deriveGraph: (opts?: { includeDocs?: boolean }) => { nodes: GraphNode[]; edges: GraphEdge[] } = _derive;
 export const buildAdjacency: (g: any) => Map<string, Set<string>> = _adj;
 export const bfsDistances: (adj: Map<string, Set<string>>, from: string) => Map<string, number> = _bfs;
 export const NODE_TYPES: Record<string, string> = _NT;

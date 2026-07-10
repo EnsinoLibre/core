@@ -20,10 +20,18 @@ const TYPE_VAR: Record<string, string> = {
   'resource-guideline': '--color-gold-500',
   'resource-external': '--color-gold-400',
   'resource-context': '--color-teal-300',
+  'doc-hub': '--color-text',
+  'doc-group': '--color-text-muted',
+  doc: '--color-text-muted',
 };
 const SIZE: Record<string, number> = {
   teacher: 16, class: 13, aula: 12, worksheet: 10, student: 10, 'resource-guideline': 10,
+  'doc-hub': 14, 'doc-group': 9, doc: 7,
 };
+
+/** The docs layer floats behind the workspace (or vice versa) — see layer switch. */
+const isDocType = (t: string | undefined) => t === 'doc' || t === 'doc-group' || t === 'doc-hub';
+type Layer = 'workspace' | 'docs';
 
 function cssVar(name: string, fallback = '#888') {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -54,6 +62,9 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
   const openRef = useRef(open);
   openRef.current = open;
   const [query, setQuery] = useState('');
+  // Which layer is in the FOREGROUND; the other floats ghostly behind it.
+  const [layer, setLayer] = useState<Layer>('workspace');
+  const layerRef = useRef<Layer>(layer);
 
   // Open the deep-linked node once on mount (?focus=<id>).
   useEffect(() => { if (initialFocus) open(initialFocus); /* eslint-disable-next-line */ }, []);
@@ -100,7 +111,7 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
   const paletteRef = useRef<any>({});
   const applyFocusRef = useRef<(id: string | null) => void>(() => {});
 
-  const data = useMemo(() => deriveGraph(), []);
+  const data = useMemo(() => deriveGraph({ includeDocs: true }), []);
   const nodeById = useMemo(() => new Map(data.nodes.map((n) => [n.id, n])), [data]);
 
   /* build engine once (deferred until the container has a measured size) */
@@ -129,7 +140,9 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
     graphRef.current = g;
     data.nodes.forEach((n, i) => {
       const a = (i / data.nodes.length) * Math.PI * 2;
-      g.addNode(n.id, { x: Math.cos(a) * 200 + (Math.random() - 0.5) * 40, y: Math.sin(a) * 200 + (Math.random() - 0.5) * 40, size: SIZE[n.type] || 8, label: n.label, ntype: n.type });
+      // docs constellation starts on a wider ring so it settles around the workspace
+      const r = isDocType(n.type) ? 430 : 200;
+      g.addNode(n.id, { x: Math.cos(a) * r + (Math.random() - 0.5) * 40, y: Math.sin(a) * r + (Math.random() - 0.5) * 40, size: SIZE[n.type] || 8, label: n.label, ntype: n.type });
     });
     for (const e of data.edges) {
       // simple graph: collapse parallel / bidirectional edges into one
@@ -141,10 +154,18 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
     // d3-force
     const simNodes: any[] = data.nodes.map((n) => ({ id: n.id, x: g.getNodeAttribute(n.id, 'x'), y: g.getNodeAttribute(n.id, 'y') }));
     const idToSim = new Map(simNodes.map((n) => [n.id, n]));
-    const simLinks = data.edges.map((e) => ({ source: e.source, target: e.target }));
+    const simLinks = data.edges.map((e) => ({ source: e.source, target: e.target, kind: e.kind }));
+    // Docs-tree edges pull tight (a constellation of sections); "uses" edges
+    // tether activity docs loosely to the worksheets built with them.
+    const linkDistance = (l: any) => (l.kind === 'docs' ? 55 : l.kind === 'uses' ? 150 : 90);
+    const linkStrength = (l: any) => (l.kind === 'docs' ? 0.45 : l.kind === 'uses' ? 0.04 : 0.12);
+    const nodeCharge = (d: any) => {
+      const t = nodeById.get(d.id)?.type;
+      return t === 'doc-hub' ? -150 : isDocType(t) ? -60 : -260;
+    };
     const sim = forceSimulation(simNodes)
-      .force('charge', forceManyBody().strength(-260).distanceMax(500))
-      .force('link', forceLink(simLinks).id((d: any) => d.id).distance(90).strength(0.12))
+      .force('charge', forceManyBody().strength(nodeCharge).distanceMax(500))
+      .force('link', forceLink(simLinks).id((d: any) => d.id).distance(linkDistance).strength(linkStrength))
       .force('collide', forceCollide().radius((d: any) => (SIZE[nodeById.get(d.id)?.type || ''] || 8) + 8))
       .force('x', forceX(0).strength(0.03))
       .force('y', forceY(0).strength(0.03));
@@ -165,17 +186,22 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
         const hovered = node === hoverRef.current;
         const focused = node === f;
         const neighbor = !!f && dist === 1;
+        // Ghost = the node belongs to the BACKGROUND layer of the switch.
+        const ghost = isDocType(d.ntype) !== (layerRef.current === 'docs');
         let color = nodeColor(d.ntype);
+        if (ghost) color = mix(color, paletteRef.current.bg, 0.78);
         if (f) {
           if (dist == null || dist >= 3) color = mix(color, paletteRef.current.bg, 0.86);
           else if (dist === 2) color = mix(color, paletteRef.current.bg, 0.45);
         }
         if (hovered) color = paletteRef.current.accent;
+        const size = (ghost ? d.size * 0.8 : d.size) * (focused ? 1.5 : hovered ? 1.2 : 1);
         return {
-          ...d, color,
-          size: focused ? d.size * 1.5 : hovered ? d.size * 1.2 : d.size,
-          forceLabel: hovered || focused || neighbor,
-          zIndex: focused ? 3 : hovered ? 2 : 1,
+          ...d, color, size,
+          // ghosts stay quiet: no label unless you reach into the layer
+          label: ghost && !(hovered || focused || neighbor) ? null : d.label,
+          forceLabel: hovered || focused || (neighbor && !ghost),
+          zIndex: focused ? 3 : hovered ? 2 : ghost ? 0 : 1,
           highlighted: hovered || focused,
         };
       },
@@ -183,14 +209,19 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
         const [s, t] = g.extremities(edge);
         const f = focusRef.current; const h = hoverRef.current;
         const incident = s === f || t === f || s === h || t === h;
+        const docLayer = layerRef.current === 'docs';
+        const ghosts = (isDocType(g.getNodeAttribute(s, 'ntype')) !== docLayer ? 1 : 0)
+          + (isDocType(g.getNodeAttribute(t, 'ntype')) !== docLayer ? 1 : 0);
         let color = paletteRef.current.edge;
+        if (ghosts === 2) color = mix(color, paletteRef.current.bg, 0.82);
+        else if (ghosts === 1) color = mix(color, paletteRef.current.bg, 0.55); // cross-layer "uses" tether
         if (f) {
           const ds = distRef.current?.get(s); const dt = distRef.current?.get(t);
           const near = incident || ((ds != null && ds <= 1) && (dt != null && dt <= 1));
-          if (!near) color = mix(paletteRef.current.edge, paletteRef.current.bg, 0.7);
+          if (!near) color = mix(color, paletteRef.current.bg, 0.7);
         }
         if (incident) color = paletteRef.current.accent;
-        return { ...d, color, size: incident ? 2.2 : 1 };
+        return { ...d, color, size: incident ? 2.2 : ghosts === 2 ? 0.6 : ghosts === 1 ? 0.8 : 1 };
       },
     });
     sigmaRef.current = renderer;
@@ -295,6 +326,12 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
     return () => clearTimeout(t);
   }, [focus]);
 
+  // layer switch → restyle only (the layout never jumps; reducers read layerRef)
+  useEffect(() => {
+    layerRef.current = layer;
+    sigmaRef.current?.refresh();
+  }, [layer]);
+
   const doSearch = (e: React.FormEvent) => {
     e.preventDefault();
     const q = query.trim().toLowerCase();
@@ -313,18 +350,28 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
         </div>
         <form onSubmit={doSearch}><input className="el-input knw-search" placeholder="Search nodes…" value={query} onChange={(e) => setQuery(e.target.value)} /></form>
         <div className="knw-controls">
+          <div className="knw-layers" role="group" aria-label="Knowledge layer">
+            <button className={`knw-layer-btn${layer === 'workspace' ? ' knw-layer-btn--active' : ''}`} onClick={() => setLayer('workspace')} title="Your workspace in front, docs floating behind">Workspace</button>
+            <button className={`knw-layer-btn${layer === 'docs' ? ' knw-layer-btn--active' : ''}`} onClick={() => setLayer('docs')} title="EnsinoLibre docs in front — see which components are used where">Docs</button>
+          </div>
           {focus && <button className="el-button el-button--ghost el-button--small" onClick={() => close()}>Clear focus</button>}
           <button className="el-button el-button--ghost el-button--small" onClick={() => sigmaRef.current?.getCamera().animatedReset()}>Fit</button>
         </div>
       </div>
 
-      <Legend />
-      {!focus && <div className="knw-hint">Tip: search or click any node to open its content</div>}
+      <Legend layer={layer} />
+      {!focus && (
+        <div className="knw-hint">
+          {layer === 'docs'
+            ? 'Docs layer: activity pages link to the worksheets built with them'
+            : 'Tip: search or click any node to open its content'}
+        </div>
+      )}
     </div>
   );
 }
 
-function Legend() {
+function Legend({ layer }: { layer: Layer }) {
   const items: [string, string][] = [
     ['Classroom', TYPE_VAR.class], ['Student', TYPE_VAR.student], ['Live class', TYPE_VAR.aula],
     ['Worksheet', TYPE_VAR.worksheet], ['Material', TYPE_VAR['resource-material']],
@@ -337,6 +384,10 @@ function Legend() {
       {items.map(([label, v]) => (
         <div className="knw-legend-row" key={label}><span className="knw-legend-dot" style={{ background: `var(${v})` }} />{label}</div>
       ))}
+      <div className="knw-legend-row" title="Universal context layer — activity docs connect to the worksheets that use them">
+        <span className="knw-legend-dot knw-legend-dot--ghost" style={{ background: `var(${TYPE_VAR.doc})` }} />
+        EnsinoLibre docs {layer === 'docs' ? '(in front)' : '(behind)'}
+      </div>
     </div>
   );
 }

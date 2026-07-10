@@ -10,6 +10,7 @@
  * "student:<id>", "worksheet:<id>", "resource:<id>", "aula:<id>".
  */
 import { store } from './store.js';
+import { deriveDocsLayer } from './docslayer.js';
 
 /** Visual node types → colours are assigned in the view from design tokens. */
 export const NODE_TYPES = {
@@ -23,13 +24,21 @@ export const NODE_TYPES = {
   'resource-context': 'Context',
   'resource-worksheet': 'Saved worksheet',
   aula: 'Live class',
+  'doc-hub': 'EnsinoLibre docs',
+  'doc-group': 'Docs section',
+  doc: 'EnsinoLibre doc',
 };
 
 function resourceType(r) {
   return `resource-${r.kind || 'material'}`;
 }
 
-export function deriveGraph() {
+/**
+ * Derive the workspace graph. With { includeDocs: true } the universal
+ * EnsinoLibre docs layer is merged in: docs hub → sections → pages, plus
+ * "uses" edges from each activity doc to the worksheets built with it.
+ */
+export function deriveGraph({ includeDocs = false } = {}) {
   const nodes = [];
   const edges = [];
   const seen = new Set();
@@ -64,6 +73,12 @@ export function deriveGraph() {
     if (r.classId) addEdge('class:' + r.classId, rid, 'context');
     if (r.studentId) addEdge('student:' + r.studentId, rid, 'context');
     for (const target of (r.links || [])) addEdge(rid, target, 'wiki');
+  }
+
+  if (includeDocs) {
+    const docs = deriveDocsLayer();
+    for (const n of docs.nodes) addNode(n.id, n.type, n.label, { subtitle: n.subtitle, url: n.url });
+    for (const e of docs.edges) addEdge(e.source, e.target, e.kind);
   }
 
   return { nodes, edges };

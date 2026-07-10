@@ -17,7 +17,21 @@
 .knw-title { font-family: var(--font-display); font-size: 1.3rem; margin: 0; }
 .knw-sub { color: var(--color-text-muted); font-size: 0.85rem; margin: 2px 0 0; }
 .knw-search { min-width: 220px; }
-.knw-controls { margin-left: auto; display: flex; gap: var(--space-2); }
+.knw-controls { margin-left: auto; display: flex; gap: var(--space-2); align-items: center; }
+
+/* Layer switch: which knowledge layer is in front (the other floats ghostly) */
+.knw-layers {
+  display: inline-flex; border: 1px solid var(--color-border); border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-surface) 88%, transparent); overflow: hidden; backdrop-filter: blur(6px);
+}
+.knw-layer-btn {
+  border: none; background: none; cursor: pointer; font: inherit; font-size: 0.8rem;
+  color: var(--color-text-muted); padding: var(--space-1) var(--space-3);
+}
+.knw-layer-btn--active { background: var(--color-primary); color: var(--color-surface); }
+.knw-layer-btn:not(.knw-layer-btn--active):hover { color: var(--color-text); }
+
+.knw-legend-dot--ghost { opacity: 0.45; }
 
 .knw-legend {
   position: absolute; bottom: var(--space-4); left: var(--space-4); z-index: 5;

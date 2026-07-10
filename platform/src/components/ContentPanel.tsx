@@ -181,6 +181,7 @@ const TYPE_VAR: Record<string, string> = {
   teacher: '--color-gold-700', class: '--color-teal-500', student: '--color-teal-400', aula: '--color-teal-700',
   worksheet: '--color-terracotta-500', 'resource-worksheet': '--color-terracotta-400', 'resource-material': '--color-terracotta-300',
   'resource-guideline': '--color-gold-500', 'resource-external': '--color-gold-400', 'resource-context': '--color-teal-300',
+  'doc-hub': '--color-text', 'doc-group': '--color-text-muted', doc: '--color-text-muted',
 };
 
 function escapeHtml(s: string) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
