@@ -46,7 +46,6 @@ export function Dashboard() {
             <span className="el-badge el-badge--accent">New</span>
           </div>
           <p className="el-card__body">Explore your classes, students, worksheets and resources as one connected graph. Click a node to focus — the graph reorganises around it.</p>
-          <button className="el-button" onClick={() => nav('/knowledge')}>Open the knowledge graph →</button>
         </section>
       </div>
     </div>

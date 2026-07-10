@@ -34,6 +34,26 @@ const SIZE: Record<string, number> = {
 const isDocType = (t: string | undefined) => t === 'doc' || t === 'doc-group' || t === 'doc-hub';
 type Layer = 'workspace' | 'docs';
 
+/** Camera zoom bounds — kept in sync with the Sigma constructor's min/maxCameraRatio. */
+const CAMERA_RATIO = { min: 0.35, max: 3 };
+
+/** Legend rows double as visibility filters; each maps one or more node types to a toggle key. */
+const LEGEND_ITEMS: { label: string; key: string; colorType: string; types: string[] }[] = [
+  { label: 'Classroom', key: 'class', colorType: 'class', types: ['class'] },
+  { label: 'Student', key: 'student', colorType: 'student', types: ['student'] },
+  { label: 'Live class', key: 'aula', colorType: 'aula', types: ['aula'] },
+  { label: 'Worksheet', key: 'worksheet', colorType: 'worksheet', types: ['worksheet', 'resource-worksheet'] },
+  { label: 'Material', key: 'resource-material', colorType: 'resource-material', types: ['resource-material'] },
+  { label: 'Guideline', key: 'resource-guideline', colorType: 'resource-guideline', types: ['resource-guideline'] },
+  { label: 'External', key: 'resource-external', colorType: 'resource-external', types: ['resource-external'] },
+  { label: 'Context', key: 'resource-context', colorType: 'resource-context', types: ['resource-context'] },
+  { label: 'Teacher', key: 'teacher', colorType: 'teacher', types: ['teacher'] },
+  { label: 'EnsinoLibre docs', key: 'docs', colorType: 'doc', types: ['doc', 'doc-group', 'doc-hub'] },
+];
+const LEGEND_KEY_OF: Record<string, string> = {};
+LEGEND_ITEMS.forEach((item) => item.types.forEach((t) => { LEGEND_KEY_OF[t] = item.key; }));
+const legendKeyOf = (ntype: string | undefined) => (ntype && LEGEND_KEY_OF[ntype]) || ntype || '';
+
 function cssVar(name: string, fallback = '#888') {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   return v || fallback;
@@ -63,9 +83,14 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
   const openRef = useRef(open);
   openRef.current = open;
   const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [legendOpen, setLegendOpen] = useState(false);
   // Which layer is in the FOREGROUND; the other floats ghostly behind it.
   const [layer, setLayer] = useState<Layer>('workspace');
   const layerRef = useRef<Layer>(layer);
+  // Legend rows toggled off — those node types (and their edges) are hidden entirely.
+  const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
+  const hiddenRef = useRef<Set<string>>(hiddenTypes);
 
   // Open the deep-linked node once on mount (?focus=<id>).
   useEffect(() => { if (initialFocus) open(initialFocus); /* eslint-disable-next-line */ }, []);
@@ -215,7 +240,7 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
       labelSize: 12, labelWeight: '600',
       defaultDrawNodeHover: drawNodeHover,
       defaultEdgeColor: paletteRef.current.edge,
-      zIndex: true, minCameraRatio: 0.35, maxCameraRatio: 3,
+      zIndex: true, minCameraRatio: CAMERA_RATIO.min, maxCameraRatio: CAMERA_RATIO.max,
       nodeReducer: (node: string, d: any) => {
         const dist = distRef.current ? distRef.current.get(node) : undefined;
         const f = focusRef.current;
@@ -239,6 +264,7 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
           forceLabel: hovered || focused || (neighbor && !ghost),
           zIndex: focused ? 3 : hovered ? 2 : ghost ? 0 : 1,
           highlighted: hovered || focused,
+          hidden: hiddenRef.current.has(legendKeyOf(d.ntype)),
         };
       },
       edgeReducer: (edge: string, d: any) => {
@@ -246,8 +272,9 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
         const f = focusRef.current; const h = hoverRef.current;
         const incident = s === f || t === f || s === h || t === h;
         const docLayer = layerRef.current === 'docs';
-        const ghosts = (isDocType(g.getNodeAttribute(s, 'ntype')) !== docLayer ? 1 : 0)
-          + (isDocType(g.getNodeAttribute(t, 'ntype')) !== docLayer ? 1 : 0);
+        const sType = g.getNodeAttribute(s, 'ntype'); const tType = g.getNodeAttribute(t, 'ntype');
+        const ghosts = (isDocType(sType) !== docLayer ? 1 : 0) + (isDocType(tType) !== docLayer ? 1 : 0);
+        const suppressed = hiddenRef.current.has(legendKeyOf(sType)) || hiddenRef.current.has(legendKeyOf(tType));
         let color = paletteRef.current.edge;
         if (ghosts === 2) color = mix(color, paletteRef.current.bg, 0.82);
         else if (ghosts === 1) color = mix(color, paletteRef.current.bg, 0.55); // cross-layer "uses" tether
@@ -257,7 +284,7 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
           if (!near) color = mix(color, paletteRef.current.bg, 0.7);
         }
         if (incident) color = paletteRef.current.accent;
-        return { ...d, color, size: incident ? 2.2 : ghosts === 2 ? 0.6 : ghosts === 1 ? 0.8 : 1 };
+        return { ...d, color, size: incident ? 2.2 : ghosts === 2 ? 0.6 : ghosts === 1 ? 0.8 : 1, hidden: suppressed };
       },
     });
     sigmaRef.current = renderer;
@@ -368,6 +395,23 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
     sigmaRef.current?.refresh();
   }, [layer]);
 
+  // legend toggles → restyle only (reducers read hiddenRef)
+  useEffect(() => {
+    hiddenRef.current = hiddenTypes;
+    sigmaRef.current?.refresh();
+  }, [hiddenTypes]);
+
+  const toggleLegend = (key: string) => {
+    const next = new Set(hiddenTypes);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    // don't leave the content panel open on a node that just became invisible
+    if (focus && next.has(key)) {
+      const n = nodeById.get(focus);
+      if (n && legendKeyOf(n.type) === key) close();
+    }
+    setHiddenTypes(next);
+  };
+
   const doSearch = (e: React.FormEvent) => {
     e.preventDefault();
     const q = query.trim().toLowerCase();
@@ -376,26 +420,74 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
     if (hit) open(hit.id);
   };
 
+  // Fit the camera to the bounding box of the currently VISIBLE nodes (legend
+  // filters excluded), with breathing room — not sigma's animatedReset(),
+  // which just recentres on the whole graph regardless of what's shown.
+  const fitToView = () => {
+    const s = sigmaRef.current as any;
+    const root = rootRef.current;
+    const g = graphRef.current;
+    if (!s || !root || !g) return;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    let any = false;
+    g.forEachNode((id: string) => {
+      let d: any;
+      try { d = s.getNodeDisplayData(id); } catch { d = null; }
+      if (!d || d.hidden) return;
+      any = true;
+      minX = Math.min(minX, d.x); maxX = Math.max(maxX, d.x);
+      minY = Math.min(minY, d.y); maxY = Math.max(maxY, d.y);
+    });
+    if (!any) return;
+    const PADDING = 0.2; // 20% breathing room around the bounds
+    const boxW = Math.max(maxX - minX, 1e-6);
+    const boxH = Math.max(maxY - minY, 1e-6);
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+
+    const cam = s.getCamera();
+    const W = root.clientWidth, H = root.clientHeight;
+    // How much framed-graph space the viewport currently shows, at the current
+    // ratio — used as a scale reference to derive the ratio the target box needs.
+    const topLeft = s.viewportToFramedGraph({ x: 0, y: 0 });
+    const bottomRight = s.viewportToFramedGraph({ x: W, y: H });
+    const viewW = Math.abs(bottomRight.x - topLeft.x) || 1e-6;
+    const viewH = Math.abs(bottomRight.y - topLeft.y) || 1e-6;
+    const scale = Math.max((boxW * (1 + PADDING)) / viewW, (boxH * (1 + PADDING)) / viewH);
+    const ratio = Math.min(Math.max(cam.getState().ratio * scale, CAMERA_RATIO.min), CAMERA_RATIO.max);
+    cam.animate({ x: cx, y: cy, ratio, angle: 0 }, { duration: 260 });
+  };
+
+  const toggleSearch = () => { if (searchOpen) setQuery(''); setSearchOpen((o) => !o); };
+  const submitSearch = (e: React.FormEvent) => { doSearch(e); setSearchOpen(false); };
+
   return (
     <div className="knw" ref={rootRef}>
       <div className="knw-stage" ref={stageRef} />
       <div className="knw-toolbar">
-        <div>
-          <h1 className="knw-title">Knowledge</h1>
-          <p className="knw-sub">Click a node — the graph reorganises around it.</p>
-        </div>
-        <form onSubmit={doSearch}><input className="el-input knw-search" placeholder="Search nodes…" value={query} onChange={(e) => setQuery(e.target.value)} /></form>
-        <div className="knw-controls">
-          <div className="knw-layers" role="group" aria-label="Knowledge layer">
-            <button className={`knw-layer-btn${layer === 'workspace' ? ' knw-layer-btn--active' : ''}`} onClick={() => setLayer('workspace')} title="Your workspace in front, docs floating behind">Workspace</button>
-            <button className={`knw-layer-btn${layer === 'docs' ? ' knw-layer-btn--active' : ''}`} onClick={() => setLayer('docs')} title="EnsinoLibre docs in front — see which components are used where">Docs</button>
+        <div className="knw-toolbar-row">
+          <div>
+            <h1 className="knw-title">Knowledge</h1>
+            <p className="knw-sub">Click a node — the graph reorganises around it.</p>
           </div>
-          {focus && <button className="el-button el-button--ghost el-button--small" onClick={() => close()}>Clear focus</button>}
-          <button className="el-button el-button--ghost el-button--small" onClick={() => sigmaRef.current?.getCamera().animatedReset()}>Fit</button>
+          <div className="knw-controls">
+            <div className="knw-layers" role="group" aria-label="Knowledge layer">
+              <button className={`knw-layer-btn${layer === 'workspace' ? ' knw-layer-btn--active' : ''}`} onClick={() => setLayer('workspace')} title="Your workspace in front, docs floating behind">Workspace</button>
+              <button className={`knw-layer-btn${layer === 'docs' ? ' knw-layer-btn--active' : ''}`} onClick={() => setLayer('docs')} title="EnsinoLibre docs in front — see which components are used where">Docs</button>
+            </div>
+            {focus && <button className="el-button el-button--ghost el-button--small" onClick={() => close()}>Clear focus</button>}
+            <button className={`app-icon-btn knw-icon-btn${searchOpen ? ' knw-icon-btn--active' : ''}`} aria-label="Search nodes" aria-expanded={searchOpen} title="Search nodes" onClick={toggleSearch}>🔍</button>
+            <button className={`app-icon-btn knw-icon-btn${legendOpen ? ' knw-icon-btn--active' : ''}`} aria-label="Filter node types" aria-expanded={legendOpen} title="Filter node types" onClick={() => setLegendOpen((o) => !o)}>▽</button>
+            <button className="app-icon-btn knw-icon-btn" aria-label="Fit to view" title="Fit to view" onClick={fitToView}>⛶</button>
+          </div>
         </div>
+        {searchOpen && (
+          <form onSubmit={submitSearch} className="knw-search-row">
+            <input className="el-input knw-search" autoFocus placeholder="Search nodes…" value={query} onChange={(e) => setQuery(e.target.value)} />
+          </form>
+        )}
       </div>
 
-      <Legend layer={layer} />
+      {legendOpen && <Legend hidden={hiddenTypes} onToggle={toggleLegend} />}
       {!focus && (
         <div className="knw-hint">
           {layer === 'docs'
@@ -407,23 +499,23 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
   );
 }
 
-function Legend({ layer }: { layer: Layer }) {
-  const items: [string, string][] = [
-    ['Classroom', TYPE_VAR.class], ['Student', TYPE_VAR.student], ['Live class', TYPE_VAR.aula],
-    ['Worksheet', TYPE_VAR.worksheet], ['Material', TYPE_VAR['resource-material']],
-    ['Guideline', TYPE_VAR['resource-guideline']], ['External', TYPE_VAR['resource-external']],
-    ['Context', TYPE_VAR['resource-context']], ['Teacher', TYPE_VAR.teacher],
-  ];
+function Legend({ hidden, onToggle }: { hidden: Set<string>; onToggle: (key: string) => void }) {
   return (
     <div className="knw-legend">
       <h4>Legend</h4>
-      {items.map(([label, v]) => (
-        <div className="knw-legend-row" key={label}><span className="knw-legend-dot" style={{ background: `var(${v})` }} />{label}</div>
-      ))}
-      <div className="knw-legend-row" title="Universal context layer — activity docs connect to the worksheets that use them">
-        <span className="knw-legend-dot knw-legend-dot--ghost" style={{ background: `var(${TYPE_VAR.doc})` }} />
-        EnsinoLibre docs {layer === 'docs' ? '(in front)' : '(behind)'}
-      </div>
+      {LEGEND_ITEMS.map(({ label, key, colorType }) => {
+        const visible = !hidden.has(key);
+        return (
+          <button
+            key={key} type="button" className="knw-legend-row" aria-pressed={visible}
+            title={visible ? `Hide ${label} nodes` : `Show ${label} nodes`}
+            onClick={() => onToggle(key)}
+          >
+            <span className="knw-legend-dot" style={{ background: visible ? `var(${TYPE_VAR[colorType]})` : 'var(--color-text-muted)' }} />
+            {label}
+          </button>
+        );
+      })}
     </div>
   );
 }

@@ -67,9 +67,6 @@ function ShellChrome({ children }: { children: ReactNode }) {
               </NavLink>
             ))}
           </nav>
-          <div className="app-sidebar-foot">
-            <a className="app-nav-link app-nav-link--muted" href="../index.html"><span className="app-nav-icon">✦</span><span>Worksheet generator</span></a>
-          </div>
         </aside>
         <div className="app-main-area">
           <main className="app-content">{children}</main>

@@ -14,6 +14,7 @@
 import { store } from './store.js';
 import { deriveGraph, NODE_TYPES } from './graph.js';
 import { DOC_PAGES, docBySlug, docGroup, docId, docGroupId, docUrl, worksheetsUsing } from './docslayer.js';
+import { emitAnalog } from './analog.js';
 
 const wiki = (name) => `[[${String(name).replace(/[[\]]/g, '')}]]`;
 const fmtDate = (iso) => { try { return iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''; } catch { return ''; } };
@@ -106,11 +107,13 @@ function resourceMd(r) {
 }
 
 function worksheetMd(w) {
-  const activities = w.doc?.sections?.reduce((n, s) => n + s.activities.length, 0) || 0;
   const aulas = store.aulas().filter((a) => a.worksheetIds.includes(w.id));
-  const parts = [`${w.subject || 'Worksheet'} · ${activities} activities`];
-  const secs = (w.doc?.sections || []).map((s) => `- **${s.title}** — ${s.activities.length} activities`).join('\n');
-  if (secs) parts.push(`## Sections\n${secs}`);
+  // Show the actual worksheet (learner sheet + answer key), same analog
+  // emitter the Obsidian vault export uses — not just a metadata summary.
+  let analog = '';
+  try { analog = emitAnalog(w.doc); } catch { analog = '_Worksheet content unavailable._'; }
+  analog = analog.replace(/^---\n[\s\S]*?\n---\n\n?/, ''); // drop its own frontmatter; the panel header already shows title/subject
+  const parts = [analog];
   if (aulas.length) parts.push(`## Deployed in\n${aulas.map((a) => `- ${wiki(a.title)} — code \`${a.code}\``).join('\n')}`);
   return parts.join('\n\n');
 }

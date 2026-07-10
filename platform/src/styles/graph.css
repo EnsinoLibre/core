@@ -9,15 +9,19 @@
   radial-gradient(circle at 50% 40%, var(--color-surface) 0%, var(--color-surface-muted) 70%); }
 .knw-stage canvas { display: block; }
 
-.knw-toolbar {
-  position: absolute; top: var(--space-4); left: var(--space-4); right: var(--space-4);
-  display: flex; gap: var(--space-3); align-items: flex-start; pointer-events: none; z-index: 5;
-}
-.knw-toolbar > * { pointer-events: auto; }
+.knw-toolbar { position: absolute; top: var(--space-4); left: var(--space-4); right: var(--space-4); z-index: 5; pointer-events: none; }
+.knw-toolbar-row { display: flex; gap: var(--space-3); align-items: flex-start; }
+.knw-toolbar-row > * { pointer-events: auto; }
 .knw-title { font-family: var(--font-display); font-size: 1.3rem; margin: 0; }
 .knw-sub { color: var(--color-text-muted); font-size: 0.85rem; margin: 2px 0 0; }
-.knw-search { min-width: 220px; }
+@media (max-width: 900px) {
+  .knw-sub { display: none; }
+}
+.knw-search-row { margin-top: var(--space-2); pointer-events: auto; }
+.knw-search { min-width: 220px; width: 100%; max-width: 320px; }
 .knw-controls { margin-left: auto; display: flex; gap: var(--space-2); align-items: center; }
+.knw-icon-btn { font-size: 1rem; }
+.knw-icon-btn--active, .knw-icon-btn--active:hover { background: var(--color-primary); color: var(--color-surface); }
 
 /* Layer switch: which knowledge layer is in front (the other floats ghostly) */
 .knw-layers {
@@ -31,8 +35,6 @@
 .knw-layer-btn--active { background: var(--color-primary); color: var(--color-surface); }
 .knw-layer-btn:not(.knw-layer-btn--active):hover { color: var(--color-text); }
 
-.knw-legend-dot--ghost { opacity: 0.45; }
-
 .knw-legend {
   position: absolute; bottom: var(--space-4); left: var(--space-4); z-index: 5;
   background: color-mix(in srgb, var(--color-surface) 88%, transparent);
@@ -40,7 +42,15 @@
   padding: var(--space-3) var(--space-4); backdrop-filter: blur(6px); max-width: 220px;
 }
 .knw-legend h4 { margin: 0 0 var(--space-2); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-text-muted); }
-.knw-legend-row { display: flex; align-items: center; gap: var(--space-2); font-size: 0.82rem; padding: 1px 0; cursor: default; }
+/* Legend rows double as filters — click to toggle a node type on/off. */
+.knw-legend-row {
+  display: flex; align-items: center; gap: var(--space-2); width: 100%;
+  font: inherit; font-size: 0.82rem; padding: 3px var(--space-1); margin: 0 calc(var(--space-1) * -1);
+  background: none; border: none; border-radius: var(--radius-sm); color: inherit; text-align: left; cursor: pointer;
+}
+.knw-legend-row:hover { background: var(--color-surface-muted); }
+.knw-legend-row:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+.knw-legend-row[aria-pressed='false'] { color: var(--color-text-muted); }
 .knw-legend-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
 
 .knw-hint { position: absolute; bottom: var(--space-4); left: 50%; transform: translateX(-50%); z-index: 4; color: var(--color-text-muted); font-size: 0.82rem; background: color-mix(in srgb, var(--color-surface) 80%, transparent); padding: var(--space-1) var(--space-4); border-radius: var(--radius-full); }

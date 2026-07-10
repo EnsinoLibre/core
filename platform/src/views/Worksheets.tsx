@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
   store,
   exportAnalogPDF, exportMoodle, exportMarkdown, moodleQuestionCount,
 } from '../lib/api';
-import { PageHead } from '../components/bits';
+import { PageHead, FilterBar } from '../components/bits';
 import { DeployModal } from '../components/DeployModal';
 import { CreateWorksheetModal } from '../components/CreateWorksheet';
 import { useContent } from '../components/ContentPanel';
@@ -14,6 +14,8 @@ function unitCount(doc: any) {
   return doc.sections.reduce((n: number, s: any) => n + s.activities.length, 0);
 }
 
+const ALL = '__all__';
+
 export function Worksheets() {
   const nav = useNavigate();
   const { open } = useContent();
@@ -21,8 +23,22 @@ export function Worksheets() {
   const rerender = () => force((n) => n + 1);
   const [adding, setAdding] = useState(false);
   const [deploy, setDeploy] = useState<string[] | null>(null); // preselected ids, or null = closed
+  const [query, setQuery] = useState('');
+  const [subject, setSubject] = useState(ALL);
+  const [deployed, setDeployed] = useState(ALL);
 
-  const worksheets = store.worksheetsAll();
+  const all = store.worksheetsAll();
+  const subjects = useMemo(() => ([...new Set(all.map((w: any) => w.subject).filter(Boolean))] as string[]).sort(), [all]);
+
+  const q = query.trim().toLowerCase();
+  const worksheets = all.filter((w: any) => {
+    if (subject !== ALL && w.subject !== subject) return false;
+    const isDeployed = store.aulas().some((a: any) => a.worksheetIds.includes(w.id));
+    if (deployed === 'yes' && !isDeployed) return false;
+    if (deployed === 'no' && isDeployed) return false;
+    if (q && !w.title.toLowerCase().includes(q)) return false;
+    return true;
+  });
 
   return (
     <div>
@@ -31,6 +47,13 @@ export function Worksheets() {
           <button className="el-button el-button--ghost" onClick={() => setAdding(true)}>+ Create worksheet</button>
           <button className="el-button" onClick={() => setDeploy([])}>◉ Deploy to a class</button>
         </>} />
+      <FilterBar
+        query={query} onQuery={setQuery} placeholder="Search worksheets…"
+        filters={[
+          { label: 'Subject', value: subject, onChange: setSubject, options: [{ value: ALL, label: 'All subjects' }, ...subjects.map((s: string) => ({ value: s, label: s }))] },
+          { label: 'Deployment', value: deployed, onChange: setDeployed, options: [{ value: ALL, label: 'All' }, { value: 'yes', label: 'Deployed' }, { value: 'no', label: 'Not deployed' }] },
+        ]}
+      />
 
       <div className="app-card-grid">
         {worksheets.map((w: any) => {
@@ -65,7 +88,14 @@ export function Worksheets() {
             </div>
           );
         })}
-        {worksheets.length === 0 && (
+        {worksheets.length === 0 && all.length > 0 && (
+          <div className="app-empty">
+            <div className="app-empty-icon">▤</div>
+            <h3>No worksheets match</h3>
+            <p>Try a different search or clear the filters.</p>
+          </div>
+        )}
+        {all.length === 0 && (
           <div className="app-empty">
             <div className="app-empty-icon">▤</div>
             <h3>No worksheets yet</h3>

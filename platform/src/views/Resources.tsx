@@ -1,7 +1,6 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useMemo, useState } from 'react';
 import { store } from '../lib/api';
-import { PageHead, fmtDate, stripMarkdown } from '../components/bits';
+import { PageHead, FilterBar, SectionAccordion, namePreview, fmtDate, stripMarkdown } from '../components/bits';
 import { useContent } from '../components/ContentPanel';
 import { SeedButton } from '../components/SeedKB';
 
@@ -12,34 +11,55 @@ const KIND_ICON: Record<string, string> = { worksheet: '📝', material: '📎',
 const ORDER = ['worksheet', 'material', 'guideline', 'external', 'context'];
 // Subcategories a teacher can seed from files (worksheets come from the generator).
 const SEEDABLE = new Set(['material', 'guideline', 'external', 'context']);
+const ALL = '__all__';
 
 export function Resources() {
-  const nav = useNavigate();
   const { open } = useContent();
   const [, force] = useState(0);
   const rerender = () => force((n) => n + 1);
+  const [query, setQuery] = useState('');
+  const [subject, setSubject] = useState(ALL);
+  const [classId, setClassId] = useState(ALL);
   const all = store.resources();
+
+  const subjects = useMemo(() => ([...new Set(all.map((r: any) => r.subject).filter(Boolean))] as string[]).sort(), [all]);
+  const classes = store.classrooms();
+
+  const q = query.trim().toLowerCase();
+  const filtered = all.filter((r: any) => {
+    if (subject !== ALL && r.subject !== subject) return false;
+    if (classId !== ALL && r.classId !== classId) return false;
+    if (q && !`${r.title} ${r.subject} ${r.note} ${(r.tags || []).join(' ')}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
   const byKind = new Map<string, any[]>();
-  for (const r of all) { const k = r.kind || 'material'; if (!byKind.has(k)) byKind.set(k, []); byKind.get(k)!.push(r); }
+  for (const r of filtered) { const k = r.kind || 'material'; if (!byKind.has(k)) byKind.set(k, []); byKind.get(k)!.push(r); }
   // Seedable subcategories always show (each is an upload surface); others only when populated.
   const kinds = ORDER.filter((k) => byKind.has(k) || SEEDABLE.has(k));
+
   return (
     <div>
       <PageHead
         title="Resources"
         subtitle="A linked knowledge repository — worksheets, materials, guidelines, external resources and captured context."
-        actions={<>
-          <SeedButton label="🌱 Seed knowledge base" onApplied={rerender} />
-          <button className="el-button" onClick={() => nav('/knowledge')}>✸ Open knowledge graph</button>
-        </>}
+        actions={<SeedButton label="🌱 Seed knowledge base" onApplied={rerender} />}
+      />
+      <FilterBar
+        query={query} onQuery={setQuery} placeholder="Search resources…"
+        filters={[
+          { label: 'Subject', value: subject, onChange: setSubject, options: [{ value: ALL, label: 'All subjects' }, ...subjects.map((s: string) => ({ value: s, label: s }))] },
+          { label: 'Classroom', value: classId, onChange: setClassId, options: [{ value: ALL, label: 'All classrooms' }, ...classes.map((c: any) => ({ value: c.id, label: c.name }))] },
+        ]}
       />
       {kinds.map((k) => {
         const rs = byKind.get(k) || [];
         return (
-          <section key={k} className="app-side-section">
-            <h2 className="app-section-title">{KIND_ICON[k]} {KIND_LABEL[k]}<span className="el-badge el-badge--neutral">{rs.length}</span>
-              {SEEDABLE.has(k) && <span className="app-section-actions"><SeedButton scope={{ kind: k }} label="⬆ Add files" small onApplied={rerender} /></span>}
-            </h2>
+          <SectionAccordion
+            key={k} icon={KIND_ICON[k]} label={KIND_LABEL[k]} count={rs.length}
+            preview={rs.length ? namePreview(rs, (r) => r.title) : undefined}
+            actions={SEEDABLE.has(k) ? <SeedButton scope={{ kind: k }} label="⬆ Add files" small onApplied={rerender} /> : undefined}
+          >
             {rs.length === 0 && <p className="app-muted">Nothing here yet — add files and your local agent will summarize them into linked notes.</p>}
             <div className="app-card-grid">
               {rs.map((r) => {
@@ -60,7 +80,7 @@ export function Resources() {
                 );
               })}
             </div>
-          </section>
+          </SectionAccordion>
         );
       })}
     </div>
