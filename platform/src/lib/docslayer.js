@@ -36,6 +36,9 @@ export const DOC_PAGES = [
     { slug: 'knowledge-seeding', title: 'Seeding the knowledge base', blurb: 'Bulk-seed the knowledge base: local-agent prompts, Google Classroom import, and front-facing summary notes (llm.wiki).' },
     { slug: 'mcp-connect', title: 'Connect your AI (MCP)', blurb: 'The EnsinoLibre MCP server: agent keys plus tools for reading workspace context and creating worksheets and knowledge notes directly.' },
   ]},
+  { group: 'Imports', pages: [
+    { slug: 'google-classroom-import', title: 'Import from Google Classroom', blurb: 'No-technical-background walkthrough: export your data with Google Takeout, then bring classes, rosters and materials into EnsinoLibre.' },
+  ]},
   { group: 'Core activities', pages: [
     act('mcq', 'Multiple choice'), act('true-false', 'True or false'), act('gap-fill', 'Fill in the gaps'),
     act('matching', 'Matching'), act('ordering', 'Put in order'), act('open-response', 'Open writing'),

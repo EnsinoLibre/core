@@ -21,6 +21,9 @@ export const DOC_PAGES = [
     { slug: 'knowledge-seeding', title: 'Seeding the knowledge base' },
     { slug: 'mcp-connect', title: 'Connect your AI (MCP)' },
   ]},
+  { group: 'Imports', pages: [
+    { slug: 'google-classroom-import', title: 'Import from Google Classroom' },
+  ]},
   { group: 'Core activities', pages: [
     { slug: 'activities/mcq', title: 'Multiple choice' },
     { slug: 'activities/true-false', title: 'True or false' },

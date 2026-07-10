@@ -219,24 +219,42 @@ export function applySeedResult(entries, scope = {}) {
 
 /* ---------------- Google Classroom import ---------------- */
 
-export function buildClassroomImportPrompt() {
-  return `You are the teacher's local agent. Your job: pull the teacher's Google Classroom data and prepare it for import into their EnsinoLibre knowledge base.
+/**
+ * Build the copy-paste prompt for the teacher's local agent, grounded in a
+ * real Google Takeout export the teacher downloaded (see docs: "Import from
+ * Google Classroom") — same staged-files mechanic as buildSeedPrompt, so the
+ * agent has concrete paths to read instead of being asked to browse a live,
+ * logged-in classroom.google.com session (unreliable and not something most
+ * teachers' agents can actually do).
+ */
+export function buildClassroomImportPrompt(stagedFiles = []) {
+  const fileBlock = stagedFiles.map((f) => {
+    const head = `### ${f.path} (${fmtSize(f.size)}${f.mime ? `, ${f.mime}` : ''})`;
+    return f.excerpt ? `${head}\nExcerpt${f.truncated ? ' (truncated)' : ''}:\n\`\`\`\n${f.excerpt}\n\`\`\`` : head;
+  }).join('\n\n');
+
+  const filesSection = stagedFiles.length
+    ? `TAKEOUT EXPORT FILES (${stagedFiles.length})
+The teacher selected their unzipped Google Takeout export folder in their browser; locate it on disk (ask for the path if unclear) and read the real files — Classroom Takeout lays out one folder per class, each containing the class's coursework/announcements/roster JSON plus any attachments. Excerpts below are only for orientation.
+
+${fileBlock}`
+    : `No files were staged — the teacher skipped folder selection. Ask them to paste the roster and materials directly, or to go back and select their Google Takeout export folder (see docs: "Import from Google Classroom").`;
+
+  return `You are the teacher's local agent. Your job: read their Google Classroom export and prepare it for import into their EnsinoLibre knowledge base.
 
 ${PHILOSOPHY}
 
 WORKSPACE (already in EnsinoLibre — merge, don't duplicate)
 ${workspaceContextMd()}
 
-HOW TO GET THE DATA (pick what you can actually do; ask the teacher which they prefer):
-- Browse classroom.google.com in the teacher's logged-in browser and read each class: name, section/level, description, roster (People tab), and Classwork materials.
-- Or read a Google Takeout export of Classroom the teacher downloaded (folder of JSON/HTML).
-- Or have the teacher paste the roster and materials to you directly.
+${filesSection}
 
 INSTRUCTIONS
-1. For EVERY class, write a "context" field: a front-facing summarizing markdown note describing the group, level, what they've covered, and current focus (see PHILOSOPHY).
-2. For every Classwork material worth keeping, write its own front-facing "summary" markdown.
-3. Skip classes/students that already exist in the workspace above unless you have new information.
-4. Reply with STRICT JSON ONLY (no prose, no code fences) matching exactly:
+1. Group files by class (Takeout exports one folder per class — use the folder name as a starting point for the class name).
+2. For EVERY class, write a "context" field: a front-facing summarizing markdown note describing the group, level, what they've covered, and current focus (see PHILOSOPHY).
+3. For every Classwork material worth keeping, write its own front-facing "summary" markdown.
+4. Skip classes/students that already exist in the workspace above unless you have new information.
+5. Reply with STRICT JSON ONLY (no prose, no code fences) matching exactly:
 
 {
   "version": "${GC_SCHEMA_VERSION}",

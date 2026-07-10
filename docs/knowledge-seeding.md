@@ -5,7 +5,7 @@ description: Bulk-add files or import Google Classroom, and let your local agent
 
 # Seeding the knowledge base
 
-Your EnsinoLibre workspace is a **linked knowledge base**: classrooms, students, worksheets and resources, each backed by a markdown note, connected by [[wikilinks]], visualised in the knowledge graph and exportable as an Obsidian vault.
+Your EnsinoLibre workspace is a **linked knowledge base**: classrooms, students, worksheets and resources, each backed by a markdown note, connected by wikilinks (e.g. `[[worksheet-schema]]`), visualised in the knowledge graph and exportable as an Obsidian vault.
 
 Seeding follows the same copy-paste mechanic as the worksheet generator — EnsinoLibre writes the prompt, **your own AI agent** does the heavy reading, and you paste the result back. No files are uploaded to our servers.
 
@@ -15,7 +15,7 @@ We follow the *llm.wiki* idea (after Andrej Karpathy): knowledge meant for AI co
 
 - a ~200-word factual summary an LLM can read instead of the original,
 - a **Key points** bullet list,
-- `[[wikilinks]]` to the classrooms, students and resources it relates to.
+- wikilinks (e.g. `[[worksheet-schema]]`) to the classrooms, students and resources it relates to.
 
 The raw files stay on *your* machine, where your local agent can always re-read them. The workspace stays token-efficient: an agent handed your vault export gets the whole picture in a few thousand tokens.
 
@@ -31,11 +31,7 @@ If you want to skip the agent step, **Add names only** registers placeholder not
 
 ## Import from Google Classroom
 
-Found in **Profile → Import from Google Classroom** and on the **Classrooms** page. Same mechanic:
-
-1. Copy the prompt. Your agent gathers the data — browsing classroom.google.com in your logged-in browser, reading a Google Takeout export, or from what you paste to it.
-2. The agent replies with strict JSON: each class with a front-facing context note, its roster, and its materials each with their own summary note.
-3. Paste it back. Existing classrooms (matched by name) are merged, not duplicated: missing students are enrolled, new materials are filed as notes tagged `google-classroom`.
+Found in **Profile → Import from Google Classroom** and on the **Classrooms** page — same mechanic, grounded in a real Google Takeout export of your Classroom data rather than a live browsing session. Full no-technical-background walkthrough, including exactly how to export from Google: [[google-classroom-import]].
 
 ## Where the notes go
 

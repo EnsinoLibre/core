@@ -190,11 +190,30 @@ export function SeedButton({ scope, label = '⬆ Seed files', small = false, onA
 
 /* ---------------- Google Classroom import ---------------- */
 
+/**
+ * Four-step Google Classroom import, following the same staged-files
+ * mechanic as SeedModal: 1. get a real Google Takeout export → 2. select the
+ * downloaded folder → 3. hand the prompt to your local agent → 4. paste its
+ * JSON back. Step 1 links out to the docs page with the exact Takeout steps,
+ * since most teachers have never used Takeout before.
+ */
 export function ClassroomImportModal({ onClose, onApplied }: { onClose: () => void; onApplied?: () => void }) {
-  const [prompt] = useState(() => buildClassroomImportPrompt());
+  const [staged, setStaged] = useState<any[]>([]);
+  const [prompt, setPrompt] = useState<string | null>(null);
   const [reply, setReply] = useState('');
   const [error, setError] = useState('');
   const [counts, setCounts] = useState<any | null>(null);
+  const folderRef = useRef<HTMLInputElement>(null);
+
+  const addFiles = async (list: FileList | File[] | null) => {
+    if (!list || !(list as FileList).length) return;
+    const next = await stageFiles(list);
+    setStaged((prev) => {
+      const seen = new Set(prev.map((f) => f.path));
+      return [...prev, ...next.filter((f: any) => !seen.has(f.path))];
+    });
+    setPrompt(null); // staged set changed → prompt is stale
+  };
 
   const integrate = () => {
     setError('');
@@ -222,12 +241,45 @@ export function ClassroomImportModal({ onClose, onApplied }: { onClose: () => vo
     <Modal title="Import from Google Classroom" onClose={onClose}>
       <div className="app-form">
         <div className="app-field">
-          <label className="el-label">1 · Hand the prompt to your local agent</label>
-          <PromptStep prompt={prompt} hint="Your agent gathers the data — by browsing classroom.google.com in your logged-in browser, or from a Google Takeout export — and writes a front-facing summary note per class and material." />
-          <div className="app-form-actions"><CopyButton text={prompt} /></div>
+          <label className="el-label">1 · Export your data from Google Classroom</label>
+          <p className="app-muted app-seed-hint">
+            Go to <a className="knw-open-link" href="https://takeout.google.com" target="_blank" rel="noopener">takeout.google.com</a>, select only <strong>Classroom</strong>, choose <strong>.zip</strong>, then <strong>Create export</strong>. Google emails you when it's ready — download and unzip it.
+            {' '}Full walkthrough: <a className="knw-open-link" href="../docs.html?page=google-classroom-import" target="_blank" rel="noopener">Import from Google Classroom docs</a>.
+          </p>
         </div>
+
         <div className="app-field">
-          <label className="el-label">2 · Paste the agent's JSON reply</label>
+          <label className="el-label">2 · Select the unzipped export folder</label>
+          <div
+            className="app-seed-drop"
+            role="button" tabIndex={0}
+            onClick={() => folderRef.current?.click()}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); folderRef.current?.click(); } }}
+          >
+            {staged.length === 0
+              ? <>Click to choose the folder you unzipped from Takeout. Files stay on your machine — only names and short excerpts go into the prompt.</>
+              : <>{staged.length} file{staged.length === 1 ? '' : 's'} staged from the export.</>}
+          </div>
+          {/* webkitdirectory: Takeout exports one folder per class, so teachers pick the whole tree at once, not file-by-file. */}
+          <input ref={folderRef} type="file" multiple hidden {...{ webkitdirectory: '', directory: '' }}
+            onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }} />
+        </div>
+
+        <div className="app-field">
+          <label className="el-label">3 · Hand the prompt to your local agent</label>
+          {prompt
+            ? <PromptStep prompt={prompt} hint="Paste this into the agent running on the machine where the export lives (Claude Code, etc.). It reads the real files and writes a front-facing summary note per class and material." />
+            : <p className="app-muted app-seed-hint">{staged.length === 0 ? 'No export folder selected — you can still generate a prompt and paste details to the agent directly.' : 'Files staged above, then generate the prompt.'}</p>}
+          <div className="app-form-actions">
+            <button className="el-button el-button--ghost" onClick={() => setPrompt(buildClassroomImportPrompt(staged))}>
+              {prompt ? '↻ Regenerate prompt' : '⚙ Generate prompt'}
+            </button>
+            {prompt && <CopyButton text={prompt} />}
+          </div>
+        </div>
+
+        <div className="app-field">
+          <label className="el-label">4 · Paste the agent's JSON reply</label>
           <textarea className="el-input app-seed-prompt" rows={5} value={reply} placeholder='{ "version": "el-gc-import-1", "classrooms": [ … ] }'
             onChange={(e) => { setReply(e.target.value); setError(''); }} />
           {error && <p className="app-seed-error">{error}</p>}

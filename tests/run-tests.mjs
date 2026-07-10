@@ -12,6 +12,7 @@
  *  6. docs integrity: wikilinks resolve, frontmatter present, sidebar slugs exist.
  */
 import { readFile, readdir } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
@@ -37,15 +38,23 @@ let failed = 0;
 const failures = [];
 
 function test(name, fn) {
-  try {
-    fn();
-    passed += 1;
-    console.log(`  ok    ${name}`);
-  } catch (e) {
+  const ok = () => { passed += 1; console.log(`  ok    ${name}`); };
+  const fail = (e) => {
     failed += 1;
     failures.push({ name, error: e });
     console.error(`  FAIL  ${name}\n        ${e.message}`);
+  };
+  let result;
+  try {
+    result = fn();
+  } catch (e) {
+    fail(e);
+    return;
   }
+  if (result && typeof result.then === 'function') {
+    return result.then(ok, fail);
+  }
+  ok();
 }
 
 /* ---------- setup: schema + gather examples ---------- */
@@ -423,13 +432,13 @@ test('every embedded docs example emits analog Markdown without throwing', () =>
 
 console.log('\n10) Animation layer');
 
-test('Anime.js v4 is vendored locally (no CDN)', async () => {
-  const anime = await import(new URL('../site/assets/vendor/anime.esm.min.js', import.meta.url));
-  for (const fn of ['animate', 'stagger', 'spring']) {
-    assert.equal(typeof anime[fn], 'function', `anime.${fn} missing`);
-  }
+test('animation layer has no vendored engine (native Web Animations API only)', () => {
+  assert.ok(
+    !existsSync(join(ROOT, 'site', 'assets', 'vendor', 'anime.esm.min.js')),
+    'a vendored Anime.js should not exist — the animation layer runs on the native Web Animations API',
+  );
 });
-test('anim.js imports and exposes graceful helpers (no DOM needed to load)', async () => {
+await test('anim.js imports and exposes graceful helpers (no DOM needed to load)', async () => {
   const anim = await import(new URL('../site/assets/js/anim.js', import.meta.url));
   for (const fn of ['warmAnime', 'enterTiles', 'exitTiles', 'popTiles', 'pulseWave', 'flyInMorphemes', 'drawPaths']) {
     assert.equal(typeof anim[fn], 'function', `anim.${fn} missing`);
@@ -439,7 +448,7 @@ test('anim.js imports and exposes graceful helpers (no DOM needed to load)', asy
   await anim.exitTiles([]);
   await anim.drawPaths([]);
 });
-test('no site source references an external CDN (self-contained rule)', async () => {
+await test('no site source references an external CDN (self-contained rule)', async () => {
   const files = ['renderer.js', 'anim.js', 'validator.js', 'analog.js', 'prompt-builder.js', 'app.js', 'docs.js', 'md.js'];
   for (const f of files) {
     const src = await readFile(join(ROOT, 'site', 'assets', 'js', f), 'utf8');
