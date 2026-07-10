@@ -38,7 +38,7 @@ core/
 │       ├── styles.css         ← public site styles (bridged onto design tokens)
 │       ├── app.css            ← shared app-chrome styles
 │       ├── brand/             ← wordmark + favicon (theme-adaptive)
-│       ├── vendor/            ← tokens.css, primitives/, marked, anime, supabase.esm.js
+│       ├── vendor/            ← tokens.css, primitives/, marked, supabase.esm.js
 │       └── js/
 │           ├── prompt-builder / validator / renderer / anim / analog / exporters  ← the worksheet "blocks" engine (shared)
 │           ├── nav.js, theme.js, md.js, docs.js, app.js  ← public site wiring
@@ -213,9 +213,8 @@ in‑memory cache hydrated from Supabase.
 - **Rendering a worksheet inside React**: the renderer is DOM‑based
   (`site/assets/js/renderer.js`). You can import it into the platform via a
   relative path (`../../site/assets/js/renderer.js`) — Vite bundles it and
-  `anim.js`'s dynamic `import('../vendor/anime.esm.min.js')` resolves because that
-  file exists next to it. Mount it in a `useEffect` into a `ref` div. (Or build a
-  small read‑only preview.)
+  `anim.js` is self-contained (vanilla Web Animations API, no vendored engine).
+  Mount it in a `useEffect` into a `ref` div. (Or build a small read‑only preview.)
 - Also wire up the obvious drill‑downs the user asked for: **Live** monitor cells
   / student rows → a per‑student progress panel; keep classroom/student cards
   clickable (they already route to details in `Classrooms`/`Students`).
