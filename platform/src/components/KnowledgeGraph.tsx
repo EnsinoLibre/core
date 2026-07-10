@@ -4,6 +4,7 @@ import Sigma from 'sigma';
 import {
   forceSimulation, forceManyBody, forceLink, forceCollide, forceX, forceY, forceRadial,
 } from 'd3-force';
+import { drawDiscNodeLabel } from 'sigma/rendering';
 import { deriveGraph, buildAdjacency, bfsDistances } from '../lib/api';
 import { useContent } from './ContentPanel';
 
@@ -135,6 +136,40 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
     resolvePalette();
     const nodeColor = (type: string) => paletteRef.current.type[type] || cssVar('--color-text-muted', '#888');
 
+    // Sigma's default hover renderer fills the label's background pill with a
+    // hardcoded "#FFF", which reads as white-on-white against our (near-white)
+    // dark-theme label text. Same geometry, themed fill instead.
+    const drawNodeHover = (context: CanvasRenderingContext2D, data: any, settings: any) => {
+      const size = settings.labelSize, font = settings.labelFont, weight = settings.labelWeight;
+      context.font = `${weight} ${size}px ${font}`;
+      context.fillStyle = paletteRef.current.bg;
+      context.shadowOffsetX = 0; context.shadowOffsetY = 0; context.shadowBlur = 8; context.shadowColor = '#000';
+      const PADDING = 2;
+      if (typeof data.label === 'string') {
+        const textWidth = context.measureText(data.label).width;
+        const boxWidth = Math.round(textWidth + 5);
+        const boxHeight = Math.round(size + 2 * PADDING);
+        const radius = Math.max(data.size, size / 2) + PADDING;
+        const angle = Math.asin(boxHeight / 2 / radius);
+        const dx = Math.sqrt(Math.abs(radius ** 2 - (boxHeight / 2) ** 2));
+        context.beginPath();
+        context.moveTo(data.x + dx, data.y + boxHeight / 2);
+        context.lineTo(data.x + radius + boxWidth, data.y + boxHeight / 2);
+        context.lineTo(data.x + radius + boxWidth, data.y - boxHeight / 2);
+        context.lineTo(data.x + dx, data.y - boxHeight / 2);
+        context.arc(data.x, data.y, radius, angle, -angle);
+        context.closePath();
+        context.fill();
+      } else {
+        context.beginPath();
+        context.arc(data.x, data.y, data.size + PADDING, 0, Math.PI * 2);
+        context.closePath();
+        context.fill();
+      }
+      context.shadowOffsetX = 0; context.shadowOffsetY = 0; context.shadowBlur = 0;
+      drawDiscNodeLabel(context, data, settings);
+    };
+
     // graphology graph
     const g = new Graph({ multi: false });
     graphRef.current = g;
@@ -178,6 +213,7 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
       labelFont: 'Atkinson Hyperlegible, system-ui, sans-serif',
       labelColor: { color: paletteRef.current.text },
       labelSize: 12, labelWeight: '600',
+      defaultDrawNodeHover: drawNodeHover,
       defaultEdgeColor: paletteRef.current.edge,
       zIndex: true, minCameraRatio: 0.35, maxCameraRatio: 3,
       nodeReducer: (node: string, d: any) => {
