@@ -18,6 +18,7 @@ export const DOC_PAGES = [
     { slug: 'worksheet-schema', title: 'Worksheet schema' },
     { slug: 'rendering-and-embedding', title: 'Rendering & embedding' },
     { slug: 'obsidian-vault', title: 'Using with Obsidian' },
+    { slug: 'knowledge-seeding', title: 'Seeding the knowledge base' },
   ]},
   { group: 'Core activities', pages: [
     { slug: 'activities/mcq', title: 'Multiple choice' },

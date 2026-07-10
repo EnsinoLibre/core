@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { store, buildVault, makeZip } from '../lib/api';
 import { PageHead, Avatar } from '../components/bits';
+import { SeedKnowledgeBaseCard, ClassroomImportCard } from '../components/SeedKB';
 
 function downloadVault() {
   const blob = makeZip(buildVault());
@@ -34,6 +35,8 @@ export function Profile() {
             <p className="app-muted">{form.school}</p>
             <p className="el-card__body">{form.subjects}</p>
           </div>
+          <SeedKnowledgeBaseCard />
+          <ClassroomImportCard />
           <div className="el-card app-vault-card">
             <h3 className="el-card__title">🗂️ Obsidian vault export</h3>
             <p className="el-card__body">Download your whole workspace — classrooms, students, worksheets, resources and live classes — as linked Markdown notes with frontmatter and [[wikilinks]]. Open it in Obsidian, or hand it to an AI agent for token-efficient access.</p>

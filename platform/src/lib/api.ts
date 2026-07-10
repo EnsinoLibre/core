@@ -42,5 +42,15 @@ export const makeZip: (files: { name: string; content: string }[]) => Blob = _zi
 import { validateWorksheet as _vw } from './validator.js';
 export const validateWorksheet: (ws: any) => string[] = _vw;
 
+// @ts-ignore - knowledge-base seeding (bulk files / Google Classroom → summary notes)
+import { stageFiles as _sf, buildSeedPrompt as _bsp, parseSeedResult as _psr, applySeedResult as _asr, buildClassroomImportPrompt as _bcp, parseClassroomImport as _pci, applyClassroomImport as _aci } from './kbseed.js';
+export const stageFiles: (files: FileList | File[]) => Promise<any[]> = _sf;
+export const buildSeedPrompt: (staged: any[], scope?: any) => string = _bsp;
+export const parseSeedResult: (text: string) => any[] = _psr;
+export const applySeedResult: (entries: any[], scope?: any) => { created: any[]; linked: number; unresolved: string[] } = _asr;
+export const buildClassroomImportPrompt: () => string = _bcp;
+export const parseClassroomImport: (text: string) => any[] = _pci;
+export const applyClassroomImport: (classes: any[]) => { classroomsCreated: number; classroomsMerged: number; students: number; resources: number } = _aci;
+
 export interface GraphNode { id: string; type: string; label: string; subtitle?: string; body?: string; url?: string; }
 export interface GraphEdge { source: string; target: string; kind: string; }

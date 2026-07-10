@@ -1,12 +1,16 @@
+import { useState } from 'react';
 import { store } from '../lib/api';
 import { PageHead, LevelBadge, stripMarkdown } from '../components/bits';
 import { useContent } from '../components/ContentPanel';
+import { ClassroomImportButton } from '../components/SeedKB';
 
 export function Classrooms() {
   const { open } = useContent();
+  const [, force] = useState(0);
   return (
     <div>
-      <PageHead title="Classrooms" subtitle="Each class carries its own context your assistant can use." />
+      <PageHead title="Classrooms" subtitle="Each class carries its own context your assistant can use."
+        actions={<ClassroomImportButton onApplied={() => force((n) => n + 1)} />} />
       <div className="app-card-grid">
         {store.classrooms().map((c: any) => {
           const roster = store.studentsIn(c.id);

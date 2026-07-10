@@ -23,11 +23,21 @@ import { supabase } from './supabase';
 const nowISO = () => new Date().toISOString();
 const uuid = () => (crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
-/** Fire a Supabase write and log (but don't throw) on failure. */
+/**
+ * Fire a Supabase write and log (but don't throw) on failure.
+ * Writes are serialized in call order: supabase builders are lazy thenables,
+ * so chaining defers each request until the previous one lands — parent rows
+ * (classroom) commit before children (students, resources) and FK constraints
+ * hold during bulk operations like the Google Classroom import.
+ */
+let writeChain = Promise.resolve();
 function fire(builder, label) {
-  Promise.resolve(builder).then(({ error }) => {
-    if (error) console.error(`[store] ${label} failed:`, error.message || error);
-  }).catch((e) => console.error(`[store] ${label} threw:`, e));
+  writeChain = writeChain
+    .then(() => builder)
+    .then(({ error }) => {
+      if (error) console.error(`[store] ${label} failed:`, error.message || error);
+    })
+    .catch((e) => console.error(`[store] ${label} threw:`, e));
 }
 
 /* ---------------- in-memory state ---------------- */

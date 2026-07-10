@@ -189,6 +189,24 @@ a:hover { text-decoration: underline; }
 .app-icon-btn { background: none; border: none; font-size: 1.1rem; cursor: pointer; color: var(--color-text-muted); border-radius: var(--radius-sm); padding: var(--space-1) var(--space-2); }
 .app-icon-btn:hover { background: var(--color-surface-muted); color: var(--color-text); }
 
+/* ---------- knowledge-base seeding ---------- */
+
+.app-seed-modal { max-width: 640px; }
+.app-section-actions { margin-left: auto; }
+.app-seed-drop {
+  border: 2px dashed var(--color-border); border-radius: var(--radius-md); cursor: pointer;
+  padding: var(--space-5); text-align: center; color: var(--color-text-muted); font-size: 0.9rem;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.app-seed-drop:hover, .app-seed-drop:focus-visible { border-color: var(--color-primary); background: var(--color-surface-muted); }
+.app-seed-files { list-style: none; margin: var(--space-3) 0 0; padding: 0; max-height: 180px; overflow-y: auto; }
+.app-seed-files li { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); }
+.app-seed-files li:hover { background: var(--color-surface-muted); }
+.app-seed-file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9rem; }
+.app-seed-prompt { font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.78rem; line-height: 1.45; width: 100%; }
+.app-seed-hint { margin: var(--space-2) 0 0; }
+.app-seed-error { color: var(--color-terracotta-700, #a4402c); font-size: 0.85rem; margin: var(--space-2) 0 0; }
+
 /* ---------- empty state ---------- */
 
 .app-empty { text-align: center; padding: var(--space-8) var(--space-5); color: var(--color-text-muted); grid-column: 1 / -1; }
