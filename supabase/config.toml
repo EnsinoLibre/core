@@ -1,0 +1,8 @@
+# Supabase project config (project ref: edgdxuvzyhwqidjjbidq).
+# The mcp function uses custom agent-key auth (elk_… bearer tokens hashed in
+# public.agent_keys) — JWT verification must stay off for it.
+
+project_id = "edgdxuvzyhwqidjjbidq"
+
+[functions.mcp]
+verify_jwt = false

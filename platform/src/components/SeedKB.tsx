@@ -9,7 +9,7 @@ import {
 
 /* ---------------- shared bits ---------------- */
 
-function copyText(text: string) {
+export function copyText(text: string) {
   if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
   const ta = document.createElement('textarea');
   ta.value = text; document.body.appendChild(ta); ta.select();
@@ -17,11 +17,11 @@ function copyText(text: string) {
   return Promise.resolve();
 }
 
-function CopyButton({ text }: { text: string }) {
+export function CopyButton({ text, label = '⧉ Copy prompt', small = false }: { text: string; label?: string; small?: boolean }) {
   const [copied, setCopied] = useState(false);
   return (
-    <button className="el-button" onClick={() => { copyText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); }}>
-      {copied ? 'Copied ✓' : '⧉ Copy prompt'}
+    <button className={`el-button${small ? ' el-button--small' : ''}`} onClick={() => { copyText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); }}>
+      {copied ? 'Copied ✓' : label}
     </button>
   );
 }

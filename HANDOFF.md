@@ -256,3 +256,25 @@ URL with a cache‑buster, and re‑run `get_advisors` after any DDL.
 - Repo: https://github.com/EnsinoLibre/core
 - Supabase project `edgdxuvzyhwqidjjbidq` (org PHD)
 - Worksheet format: `schema/worksheet.schema.json` + `docs/` (Obsidian)
+
+---
+
+## 10. MCP backend (agent integration)
+
+The teacher app's "Create worksheet -> Connect via MCP" tab talks to a
+Supabase Edge Function that implements the Model Context Protocol
+(streamable HTTP): `supabase/functions/mcp/` + migration
+`supabase/migrations/20260710120000_agent_keys.sql`.
+
+- Auth: personal agent keys (`elk_...`) generated in the app; only SHA-256
+  hashes stored in `agent_keys` (RLS teacher-scoped). The function maps
+  key -> teacher_id and writes with the service role, always teacher-scoped.
+- Tools: get_workspace_context, get_worksheet_contract, create_worksheet
+  (validated with the shared validator), list_worksheets, add_resource.
+- `validator.js` / `prompt-builder.js` inside the function dir are verbatim
+  copies of `site/assets/js/*` - keep in sync.
+- Deploy (needs a Supabase access token for project edgdxuvzyhwqidjjbidq):
+    supabase link --project-ref edgdxuvzyhwqidjjbidq
+    supabase db push
+    supabase functions deploy mcp --no-verify-jwt
+  (`--no-verify-jwt` is required: the function does its own key auth.)

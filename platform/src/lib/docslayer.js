@@ -34,6 +34,7 @@ export const DOC_PAGES = [
     { slug: 'rendering-and-embedding', title: 'Rendering & embedding', blurb: 'How worksheets render anywhere — the embed API and the token-efficient analog print export.' },
     { slug: 'obsidian-vault', title: 'Using with Obsidian', blurb: 'The workspace exported as linked markdown notes — for Obsidian, or for handing to an AI agent.' },
     { slug: 'knowledge-seeding', title: 'Seeding the knowledge base', blurb: 'Bulk-seed the knowledge base: local-agent prompts, Google Classroom import, and front-facing summary notes (llm.wiki).' },
+    { slug: 'mcp-connect', title: 'Connect your AI (MCP)', blurb: 'The EnsinoLibre MCP server: agent keys plus tools for reading workspace context and creating worksheets and knowledge notes directly.' },
   ]},
   { group: 'Core activities', pages: [
     act('mcq', 'Multiple choice'), act('true-false', 'True or false'), act('gap-fill', 'Fill in the gaps'),

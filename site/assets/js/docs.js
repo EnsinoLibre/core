@@ -19,6 +19,7 @@ export const DOC_PAGES = [
     { slug: 'rendering-and-embedding', title: 'Rendering & embedding' },
     { slug: 'obsidian-vault', title: 'Using with Obsidian' },
     { slug: 'knowledge-seeding', title: 'Seeding the knowledge base' },
+    { slug: 'mcp-connect', title: 'Connect your AI (MCP)' },
   ]},
   { group: 'Core activities', pages: [
     { slug: 'activities/mcq', title: 'Multiple choice' },

@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
-  store, validateWorksheet,
+  store,
   exportAnalogPDF, exportMoodle, exportMarkdown, moodleQuestionCount,
 } from '../lib/api';
 import { PageHead } from '../components/bits';
 import { DeployModal } from '../components/DeployModal';
+import { CreateWorksheetModal } from '../components/CreateWorksheet';
 import { useContent } from '../components/ContentPanel';
 
 function unitCount(doc: any) {
@@ -27,7 +28,7 @@ export function Worksheets() {
     <div>
       <PageHead title="Worksheets" subtitle="Your deployable materials. Deploy a set to a class as a live session students can join."
         actions={<>
-          <button className="el-button el-button--ghost" onClick={() => setAdding(true)}>+ Add worksheet</button>
+          <button className="el-button el-button--ghost" onClick={() => setAdding(true)}>+ Create worksheet</button>
           <button className="el-button" onClick={() => setDeploy([])}>◉ Deploy to a class</button>
         </>} />
 
@@ -68,63 +69,16 @@ export function Worksheets() {
           <div className="app-empty">
             <div className="app-empty-icon">▤</div>
             <h3>No worksheets yet</h3>
-            <p>Generate one in the worksheet builder, then paste its JSON here — or add one directly.</p>
-            <button className="el-button" onClick={() => setAdding(true)}>+ Add worksheet</button>
+            <p>Build one right here with the prompt builder — or connect your AI via MCP and let it create worksheets directly.</p>
+            <button className="el-button" onClick={() => setAdding(true)}>+ Create worksheet</button>
           </div>
         )}
       </div>
 
       <AnimatePresence>
-        {adding && <AddWorksheetModal onClose={() => setAdding(false)} onAdded={() => { setAdding(false); rerender(); }} />}
+        {adding && <CreateWorksheetModal onClose={() => setAdding(false)} onAdded={() => { setAdding(false); rerender(); }} />}
         {deploy !== null && <DeployModal preselect={deploy} onClose={() => setDeploy(null)} onDeployed={(a) => { setDeploy(null); nav('/live'); }} />}
       </AnimatePresence>
     </div>
-  );
-}
-
-function AddWorksheetModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
-  const [text, setText] = useState('');
-  const [errors, setErrors] = useState<string[]>([]);
-
-  const add = () => {
-    let doc: any;
-    try {
-      const t = text.trim();
-      const start = t.indexOf('{'); const end = t.lastIndexOf('}');
-      doc = JSON.parse(t.slice(start, end + 1));
-    } catch (e: any) { setErrors(['That is not valid JSON: ' + e.message]); return; }
-    const problems = validateWorksheet(doc);
-    if (problems.length) { setErrors(problems.slice(0, 6)); return; }
-    store.addWorksheet(doc);
-    onAdded();
-  };
-
-  return (
-    <motion.div className="app-modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div className="app-modal" onClick={(e) => e.stopPropagation()}
-        initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12, scale: 0.98 }}>
-        <div className="app-modal-head">
-          <h2 className="app-modal-title">Add a worksheet</h2>
-          <button className="app-icon-btn" onClick={onClose} aria-label="Close">✕</button>
-        </div>
-        <div className="app-form">
-          <p className="app-muted" style={{ marginTop: 0 }}>Paste the worksheet JSON from the <a className="knw-open-link" href="../index.html" target="_blank" rel="noopener">worksheet builder</a>. It is validated before it is added.</p>
-          <textarea className="el-input" rows={9} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}
-            placeholder='{ "title": "…", "subject": "…", "audience": "…", "language": "en-GB", "sections": [ … ] }'
-            value={text} onChange={(e) => { setText(e.target.value); setErrors([]); }} />
-          {errors.length > 0 && (
-            <div className="oc-errors">
-              <strong>{errors.length === 1 ? 'One problem:' : 'Problems to fix:'}</strong>
-              <ul>{errors.map((er, i) => <li key={i}>{er}</li>)}</ul>
-            </div>
-          )}
-          <div className="app-form-actions">
-            <button className="el-button el-button--ghost" onClick={onClose}>Cancel</button>
-            <span className="app-spacer" />
-            <button className="el-button" onClick={add}>Validate &amp; add</button>
-          </div>
-        </div>
-      </motion.div>
-    </motion.div>
   );
 }
