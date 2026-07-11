@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { store } from '../lib/api';
+import { store, hydrate } from '../lib/api';
+import { McpConnectTab } from './McpConnect';
 // @ts-ignore - plain JS module
 import {
   stageFiles, fmtSize, buildSeedPrompt, parseSeedResult, applySeedResult,
@@ -60,6 +61,7 @@ export interface SeedScope { kind?: string; classId?: string; studentId?: string
  * agent's JSON back to create one front-facing summary note per file.
  */
 export function SeedModal({ scope = {}, onClose, onApplied }: { scope?: SeedScope; onClose: () => void; onApplied?: () => void }) {
+  const [tab, setTab] = useState<'files' | 'mcp'>('files');
   const [staged, setStaged] = useState<any[]>([]);
   const [prompt, setPrompt] = useState<string | null>(null);
   const [reply, setReply] = useState('');
@@ -117,6 +119,28 @@ export function SeedModal({ scope = {}, onClose, onApplied }: { scope?: SeedScop
 
   return (
     <Modal title="Seed knowledge base" onClose={onClose}>
+      <div className="app-tabs" role="tablist">
+        <button role="tab" aria-selected={tab === 'files'} className={`app-tab${tab === 'files' ? ' app-tab--active' : ''}`} onClick={() => setTab('files')}>📝 From files</button>
+        <button role="tab" aria-selected={tab === 'mcp'} className={`app-tab${tab === 'mcp' ? ' app-tab--active' : ''}`} onClick={() => setTab('mcp')}>🔌 Connect via MCP</button>
+      </div>
+      {tab === 'mcp' ? (
+        <McpConnectTab
+          intro={<>
+            Connect Claude (or any MCP client) straight to your workspace. Your AI can read your classes and
+            existing knowledge base, then <strong>write resource notes directly</strong> — no staging files or
+            copy-paste needed here.
+          </>}
+          tools={['get_workspace_context', 'add_resource', 'list_worksheets', 'create_worksheet']}
+          checkLabel="↻ Check for new resources"
+          onCheck={async () => {
+            const before = store.resources().length;
+            await hydrate();
+            const after = store.resources().length;
+            if (after !== before) onApplied?.();
+            return after > before ? `✓ ${after - before} new resource${after - before === 1 ? '' : 's'} arrived!` : 'No new resources yet.';
+          }}
+        />
+      ) : (
       <div className="app-form">
         <div className="app-field">
           <label className="el-label">1 · Add files (bulk)</label>
@@ -173,6 +197,7 @@ export function SeedModal({ scope = {}, onClose, onApplied }: { scope?: SeedScop
           </div>
         </div>
       </div>
+      )}
     </Modal>
   );
 }
