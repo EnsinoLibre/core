@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import { store } from '../lib/api';
 import { PageHead, FilterBar, SectionAccordion, namePreview, fmtDate, stripMarkdown } from '../components/bits';
 import { useContent } from '../components/ContentPanel';
 import { SeedButton } from '../components/SeedKB';
+import { AddResourceModal } from '../components/AddEntity';
 
 const KIND_LABEL: Record<string, string> = {
   worksheet: 'Worksheets', material: 'Teaching materials', guideline: 'Guidelines', external: 'External resources', context: 'Context',
@@ -17,6 +19,7 @@ export function Resources() {
   const { open } = useContent();
   const [, force] = useState(0);
   const rerender = () => force((n) => n + 1);
+  const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState('');
   const [subject, setSubject] = useState(ALL);
   const [classId, setClassId] = useState(ALL);
@@ -43,7 +46,10 @@ export function Resources() {
       <PageHead
         title="Resources"
         subtitle="A linked knowledge repository — worksheets, materials, guidelines, external resources and captured context."
-        actions={<SeedButton label="🌱 Seed knowledge base" onApplied={rerender} />}
+        actions={<>
+          <button className="el-button el-button--ghost" onClick={() => setAdding(true)}>+ Add resource</button>
+          <SeedButton label="🌱 Seed knowledge base" onApplied={rerender} />
+        </>}
       />
       <FilterBar
         query={query} onQuery={setQuery} placeholder="Search resources…"
@@ -83,6 +89,9 @@ export function Resources() {
           </SectionAccordion>
         );
       })}
+      <AnimatePresence>
+        {adding && <AddResourceModal onClose={() => setAdding(false)} onAdded={rerender} />}
+      </AnimatePresence>
     </div>
   );
 }

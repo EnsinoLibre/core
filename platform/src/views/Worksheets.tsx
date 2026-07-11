@@ -5,7 +5,7 @@ import {
   store,
   exportAnalogPDF, exportMoodle, exportMarkdown, moodleQuestionCount,
 } from '../lib/api';
-import { PageHead, FilterBar } from '../components/bits';
+import { PageHead, FilterBar, KebabMenu } from '../components/bits';
 import { DeployModal } from '../components/DeployModal';
 import { CreateWorksheetModal } from '../components/CreateWorksheet';
 import { useContent } from '../components/ContentPanel';
@@ -58,11 +58,15 @@ export function Worksheets() {
       <div className="app-card-grid">
         {worksheets.map((w: any) => {
           const inAulas = store.aulas().filter((a: any) => a.worksheetIds.includes(w.id));
+          const isLive = inAulas.some((a: any) => a.status === 'live');
           const mq = moodleQuestionCount(w.doc);
           return (
             <div key={w.id} className="el-card app-ws-lib-card">
               <button className="app-cardlink" onClick={() => open('worksheet:' + w.id)} title="Open worksheet & progress">
-                <h3 className="el-card__title">{w.title}</h3>
+                <h3 className="el-card__title app-ws-title">
+                  <span>{w.title}</span>
+                  {isLive && <span className="app-live-indicator" role="img" aria-label="Live now" title="Deployed to a live class right now" />}
+                </h3>
                 <p className="app-muted">{w.subject} · {unitCount(w.doc)} activities · {mq} auto-graded</p>
               </button>
               {inAulas.length > 0 && (
@@ -75,15 +79,24 @@ export function Worksheets() {
                 </div>
               )}
               <div className="el-card__footer app-ws-lib-actions">
-                <button className="el-button el-button--small" onClick={() => setDeploy([w.id])}>◉ Deploy</button>
-                <button className="el-button el-button--ghost el-button--small" onClick={() => exportAnalogPDF(w.doc)}>📄 PDF</button>
-                <button className="el-button el-button--ghost el-button--small" title={`${mq} Moodle questions`} onClick={() => exportMoodle(w.doc)}>🎓 Moodle</button>
-                <button className="el-button el-button--ghost el-button--small" onClick={() => exportMarkdown(w.doc)}>⬇ MD</button>
+                {inAulas.length > 0 ? (
+                  <button className="el-button el-button--small" onClick={() => nav('/live')}>→ Open live class</button>
+                ) : (
+                  <button className="el-button el-button--small" onClick={() => setDeploy([w.id])}>◉ Deploy</button>
+                )}
                 <span className="app-spacer" />
-                <button className="el-button el-button--ghost el-button--small" onClick={() => {
-                  if (inAulas.length) { alert('This worksheet is deployed in a live class. Remove it there first.'); return; }
-                  if (confirm(`Remove "${w.title}" from your library?`)) { store.removeWorksheet(w.id); rerender(); }
-                }}>Remove</button>
+                <KebabMenu items={[
+                  { label: '◉ Deploy to another class', onClick: () => setDeploy([w.id]) },
+                  { label: '📄 PDF', onClick: () => exportAnalogPDF(w.doc) },
+                  { label: `🎓 Moodle (${mq})`, onClick: () => exportMoodle(w.doc) },
+                  { label: '⬇ Markdown', onClick: () => exportMarkdown(w.doc) },
+                  {
+                    label: 'Remove', danger: true, onClick: () => {
+                      if (inAulas.length) { alert('This worksheet is deployed in a live class. Remove it there first.'); return; }
+                      if (confirm(`Remove "${w.title}" from your library?`)) { store.removeWorksheet(w.id); rerender(); }
+                    },
+                  },
+                ]} />
               </div>
             </div>
           );

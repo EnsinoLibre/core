@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 export function initials(name: string) {
   const p = String(name || '').trim().split(/\s+/);
@@ -98,6 +98,122 @@ export function namePreview(items: any[], nameOf: (x: any) => string, max = 4) {
   const names = items.slice(0, max).map(nameOf);
   const rest = items.length - names.length;
   return names.join(', ') + (rest > 0 ? `, +${rest} more` : '');
+}
+
+export interface RelationOption { id: string; label: string; sublabel?: string }
+
+/**
+ * Notion-style relation field: search existing entities, pick one, or type a
+ * name that doesn't match anything yet and create it on the spot (if
+ * `onCreate` is given). Used wherever an "+Add" form needs to point at
+ * another entity (a student's classroom, a resource's classroom/student).
+ */
+export function RelationPicker({
+  value, onChange, options, placeholder = 'Search or type to create…', onCreate, allowClear = true,
+}: {
+  value: string | null;
+  onChange: (id: string | null) => void;
+  options: RelationOption[];
+  placeholder?: string;
+  onCreate?: (name: string) => RelationOption;
+  allowClear?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+  const selected = options.find((o) => o.id === value) || null;
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+
+  const q = query.trim().toLowerCase();
+  const filtered = q ? options.filter((o) => o.label.toLowerCase().includes(q)) : options;
+  const exactMatch = options.some((o) => o.label.toLowerCase() === q);
+
+  const pick = (opt: RelationOption) => { onChange(opt.id); setQuery(''); setOpen(false); };
+  const create = () => {
+    if (!onCreate || !query.trim()) return;
+    const opt = onCreate(query.trim());
+    onChange(opt.id); setQuery(''); setOpen(false);
+  };
+
+  return (
+    <div className="app-relation" ref={ref}>
+      {selected && !open ? (
+        <button type="button" className="app-relation-selected" onClick={() => { setOpen(true); setQuery(''); }}>
+          <span>{selected.label}{selected.sublabel && <span className="app-muted"> · {selected.sublabel}</span>}</span>
+          {allowClear && (
+            <span className="app-relation-clear" role="button" tabIndex={0} aria-label="Clear"
+              onClick={(e) => { e.stopPropagation(); onChange(null); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onChange(null); } }}>✕</span>
+          )}
+        </button>
+      ) : (
+        <input
+          className="el-input" value={query} placeholder={placeholder}
+          onFocus={() => setOpen(true)}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (filtered[0]) pick(filtered[0]); else create(); } }}
+        />
+      )}
+      {open && (
+        <div className="app-relation-menu" role="listbox">
+          {filtered.map((o) => (
+            <button type="button" key={o.id} className="app-relation-item" onClick={() => pick(o)} role="option">
+              {o.label}{o.sublabel && <span className="app-muted"> · {o.sublabel}</span>}
+            </button>
+          ))}
+          {onCreate && query.trim() && !exactMatch && (
+            <button type="button" className="app-relation-item app-relation-item--create" onClick={create}>
+              + Create "{query.trim()}"
+            </button>
+          )}
+          {filtered.length === 0 && !query.trim() && !onCreate && <div className="app-muted app-relation-empty">No options yet.</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export interface KebabItem { label: string; onClick: () => void; danger?: boolean }
+
+/** A "⋮" button that opens a small dropdown of secondary actions — keeps card footers to one primary action. */
+export function KebabMenu({ items }: { items: KebabItem[] }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+
+  return (
+    <div className="app-kebab" ref={ref}>
+      <button type="button" className="app-icon-btn" aria-label="More actions" aria-haspopup="menu" aria-expanded={open}
+        onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}>⋮</button>
+      {open && (
+        <div className="app-kebab-menu" role="menu">
+          {items.map((it, i) => (
+            <button type="button" key={i} role="menuitem"
+              className={'app-kebab-item' + (it.danger ? ' app-kebab-item--danger' : '')}
+              onClick={(e) => { e.stopPropagation(); setOpen(false); it.onClick(); }}>
+              {it.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** Flatten markdown to plain text for clamped card previews. */

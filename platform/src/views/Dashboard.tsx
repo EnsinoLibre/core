@@ -21,33 +21,24 @@ export function Dashboard() {
           </button>
         ))}
       </div>
-      <div className="app-grid-2">
-        <section>
-          <h2 className="app-section-title">Your classrooms</h2>
-          <div className="app-card-grid">
-            {store.classrooms().slice(0, 4).map((cls: any) => {
-              const roster = store.studentsIn(cls.id);
-              return (
-                <div key={cls.id} className="el-card el-card--interactive app-class-card" onClick={() => nav('/classrooms')}>
-                  <div className="app-class-card-top"><h3 className="el-card__title">{cls.name}</h3><LevelBadge level={cls.level} /></div>
-                  <p className="el-card__body">{cls.description}</p>
-                  <div className="el-card__footer">
-                    <span className="el-badge el-badge--neutral">{roster.length} students</span>
-                    <span className="el-badge el-badge--neutral">{cls.term}</span>
-                  </div>
+      <section>
+        <h2 className="app-section-title">Your classrooms</h2>
+        <div className="app-card-grid">
+          {store.classrooms().slice(0, 4).map((cls: any) => {
+            const roster = store.studentsIn(cls.id);
+            return (
+              <div key={cls.id} className="el-card el-card--interactive app-class-card" onClick={() => nav('/classrooms')}>
+                <div className="app-class-card-top"><h3 className="el-card__title">{cls.name}</h3><LevelBadge level={cls.level} /></div>
+                <p className="el-card__body">{cls.description}</p>
+                <div className="el-card__footer">
+                  <span className="el-badge el-badge--neutral">{roster.length} students</span>
+                  <span className="el-badge el-badge--neutral">{cls.term}</span>
                 </div>
-              );
-            })}
-          </div>
-        </section>
-        <section className="el-card app-assistant">
-          <div className="app-assistant-head">
-            <span className="app-assistant-badge">✸ Knowledge</span>
-            <span className="el-badge el-badge--accent">New</span>
-          </div>
-          <p className="el-card__body">Explore your classes, students, worksheets and resources as one connected graph. Click a node to focus — the graph reorganises around it.</p>
-        </section>
-      </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
     </div>
   );
 }

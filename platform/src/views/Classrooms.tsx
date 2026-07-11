@@ -1,14 +1,17 @@
 import { useMemo, useState } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import { store } from '../lib/api';
 import { PageHead, LevelBadge, stripMarkdown, FilterBar } from '../components/bits';
 import { useContent } from '../components/ContentPanel';
 import { ClassroomImportButton } from '../components/SeedKB';
+import { AddClassroomModal } from '../components/AddEntity';
 
 const ALL = '__all__';
 
 export function Classrooms() {
   const { open } = useContent();
   const [, force] = useState(0);
+  const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState('');
   const [subject, setSubject] = useState(ALL);
   const [level, setLevel] = useState(ALL);
@@ -27,7 +30,10 @@ export function Classrooms() {
   return (
     <div>
       <PageHead title="Classrooms" subtitle="Each class carries its own context your assistant can use."
-        actions={<ClassroomImportButton onApplied={() => force((n) => n + 1)} />} />
+        actions={<>
+          <button className="el-button el-button--ghost" onClick={() => setAdding(true)}>+ Add classroom</button>
+          <ClassroomImportButton onApplied={() => force((n) => n + 1)} />
+        </>} />
       <FilterBar
         query={query} onQuery={setQuery} placeholder="Search classrooms…"
         filters={[
@@ -53,6 +59,9 @@ export function Classrooms() {
           );
         })}
       </div>
+      <AnimatePresence>
+        {adding && <AddClassroomModal onClose={() => setAdding(false)} onAdded={() => force((n) => n + 1)} />}
+      </AnimatePresence>
     </div>
   );
 }

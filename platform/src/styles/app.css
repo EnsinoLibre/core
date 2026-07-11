@@ -166,12 +166,6 @@ a:hover { text-decoration: underline; }
 .app-note-text { margin: 0 0 var(--space-1); }
 .app-note-time { font-size: 0.78rem; color: var(--color-text-muted); }
 
-/* ---------- assistant stub ---------- */
-
-.app-assistant { background: linear-gradient(180deg, var(--color-teal-100-tint), var(--color-surface-raised)); border-color: var(--color-teal-300); }
-.app-assistant-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-2); }
-.app-assistant-badge { font-family: var(--font-display); font-weight: 700; color: var(--color-teal-900); }
-.app-assistant-input .el-button { flex: none; }
 .app-context-quote {
   margin: var(--space-3) 0; padding: var(--space-2) var(--space-4); border-left: 3px solid var(--color-teal-300);
   color: var(--color-text-secondary); font-style: italic; font-size: 0.9rem; white-space: pre-wrap;
@@ -191,6 +185,30 @@ a:hover { text-decoration: underline; }
 .app-form-actions { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-2); }
 .app-form textarea.el-input { resize: vertical; }
 
+/* ---------- relation picker (notion-style: pick existing or create new) ---------- */
+
+.app-relation { position: relative; }
+.app-relation-selected {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); width: 100%;
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3); cursor: pointer; font: inherit; color: var(--color-text); text-align: left;
+}
+.app-relation-selected:hover { border-color: var(--color-border-strong); }
+.app-relation-clear { color: var(--color-text-muted); border-radius: var(--radius-sm); padding: 0 var(--space-1); }
+.app-relation-clear:hover { color: var(--color-text); background: var(--color-surface-muted); }
+.app-relation-menu {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 10; max-height: 220px; overflow-y: auto;
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md); padding: var(--space-1);
+}
+.app-relation-item {
+  display: block; width: 100%; text-align: left; background: none; border: none; font: inherit; font-size: 0.9rem;
+  color: var(--color-text); padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); cursor: pointer;
+}
+.app-relation-item:hover { background: var(--color-surface-muted); }
+.app-relation-item--create { color: var(--color-primary); font-weight: 600; }
+.app-relation-empty { padding: var(--space-2) var(--space-3); }
+
 .app-modal-overlay {
   position: fixed; inset: 0; background: rgba(20, 20, 15, 0.45);
   display: flex; align-items: flex-start; justify-content: center; padding: var(--space-7) var(--space-4);
@@ -204,6 +222,21 @@ a:hover { text-decoration: underline; }
 .app-modal-title { font-size: 1.3rem; margin: 0; }
 .app-icon-btn { background: none; border: none; font-size: 1.1rem; cursor: pointer; color: var(--color-text-muted); border-radius: var(--radius-sm); padding: var(--space-1) var(--space-2); }
 .app-icon-btn:hover { background: var(--color-surface-muted); color: var(--color-text); }
+
+/* ---------- kebab menu (card footers: one primary action + "⋮" for the rest) ---------- */
+
+.app-kebab { position: relative; }
+.app-kebab-menu {
+  position: absolute; bottom: calc(100% + 4px); right: 0; z-index: 10; min-width: 160px;
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md); padding: var(--space-1);
+}
+.app-kebab-item {
+  display: block; width: 100%; text-align: left; background: none; border: none; font: inherit; font-size: 0.9rem;
+  color: var(--color-text); padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); cursor: pointer; white-space: nowrap;
+}
+.app-kebab-item:hover { background: var(--color-surface-muted); }
+.app-kebab-item--danger { color: var(--color-danger-fg); }
 
 /* ---------- create-worksheet modal (tabs, spec form, MCP) ---------- */
 
@@ -273,6 +306,20 @@ a:hover { text-decoration: underline; }
 /* ---------- live classroom monitor ---------- */
 
 .app-live-dot { color: var(--color-primary); font-weight: 700; font-size: 0.8rem; }
+
+.app-ws-title { display: flex; align-items: center; gap: var(--space-2); }
+.app-live-indicator { position: relative; display: inline-flex; width: 9px; height: 9px; border-radius: 50%; background: var(--color-primary); flex: none; }
+.app-live-indicator::before {
+  content: ''; position: absolute; inset: -5px; border-radius: 50%; background: var(--color-primary);
+  animation: app-live-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+@keyframes app-live-ping {
+  0% { transform: scale(0.55); opacity: 0.6; }
+  75%, 100% { transform: scale(2.1); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-live-indicator::before { animation: none; opacity: 0.35; }
+}
 .app-stats--tight { grid-template-columns: repeat(3, 1fr); margin-bottom: var(--space-5); }
 .app-stats--tight .app-stat { padding: var(--space-4); }
 .app-share-strip {
@@ -281,6 +328,14 @@ a:hover { text-decoration: underline; }
   padding: var(--space-3) var(--space-4); margin-bottom: var(--space-5); font-size: 0.9rem;
 }
 .app-code { font-family: var(--font-mono); font-size: 1.05rem; letter-spacing: 0.08em; color: var(--color-teal-900); }
+
+/* Dark mode: fixed-light teal tokens above read as a pale, washed-out box
+   with illegible light-on-light text — re-tint like the badge primitive. */
+:root[data-theme='dark'] .app-share-strip {
+  background: color-mix(in srgb, var(--color-teal-400) 16%, transparent);
+  border-color: color-mix(in srgb, var(--color-teal-400) 40%, transparent);
+}
+:root[data-theme='dark'] .app-code { color: var(--color-teal-300); }
 
 .app-table-wrap { overflow-x: auto; border-radius: var(--radius-lg); }
 .app-monitor-table th, .app-monitor-table td { vertical-align: middle; }

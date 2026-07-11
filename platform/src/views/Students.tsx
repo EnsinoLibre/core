@@ -1,12 +1,16 @@
 import { useMemo, useState } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import { store } from '../lib/api';
 import { PageHead, LevelBadge, Avatar, stripMarkdown, FilterBar, SectionAccordion, namePreview } from '../components/bits';
 import { useContent } from '../components/ContentPanel';
+import { AddStudentModal } from '../components/AddEntity';
 
 const ALL = '__all__';
 
 export function Students() {
   const { open } = useContent();
+  const [, force] = useState(0);
+  const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState('');
   const [classId, setClassId] = useState(ALL);
   const [level, setLevel] = useState(ALL);
@@ -27,7 +31,8 @@ export function Students() {
 
   return (
     <div>
-      <PageHead title="Students" subtitle="Every learner and the context you keep on them." />
+      <PageHead title="Students" subtitle="Every learner and the context you keep on them."
+        actions={<button className="el-button el-button--ghost" onClick={() => setAdding(true)}>+ Add student</button>} />
       <FilterBar
         query={query} onQuery={setQuery} placeholder="Search students…"
         filters={[
@@ -58,6 +63,9 @@ export function Students() {
           </SectionAccordion>
         );
       })}
+      <AnimatePresence>
+        {adding && <AddStudentModal onClose={() => setAdding(false)} onAdded={() => force((n) => n + 1)} />}
+      </AnimatePresence>
     </div>
   );
 }
