@@ -25,11 +25,14 @@ const TYPE_VAR: Record<string, string> = {
   'doc-hub': '--color-text',
   'doc-group': '--color-text-muted',
   doc: '--color-text-muted',
-  agent: '--color-primary',
+  // Violet is reserved for this one type — never used for workspace content —
+  // so an agent node reads as categorically different at a glance.
+  agent: '--color-violet-500',
 };
 const SIZE: Record<string, number> = {
   teacher: 16, class: 13, aula: 12, worksheet: 10, student: 10, 'resource-guideline': 10,
-  'doc-hub': 14, 'doc-group': 9, doc: 7, agent: 15,
+  'doc-hub': 14, 'doc-group': 9, doc: 7,
+  agent: 20, // biggest node in the graph — an active process outranks any single piece of content
 };
 
 /** How long an agent node / touch glow / WIP ring survive after their last activity row. */
@@ -258,11 +261,13 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
           context.arc(data.x, data.y, data.size + 6, 0, Math.PI * 2);
           context.stroke();
         } else {
-          // Agent node: two concentric pulsing rings in the accent colour.
-          context.strokeStyle = paletteRef.current.accent;
-          context.globalAlpha = 0.35 + pulse * 0.4;
+          // Agent node: two concentric pulsing rings, always at least half-
+          // visible so it reads as "a live thing" even between pulses — in
+          // its own violet, not the teal accent used for hover/focus.
+          context.strokeStyle = nodeColor('agent');
+          context.globalAlpha = 0.55 + pulse * 0.4;
           for (const mult of [1, 1.6]) {
-            context.lineWidth = mult === 1 ? 3 : 1.5;
+            context.lineWidth = mult === 1 ? 3.5 : 1.5;
             context.beginPath();
             context.arc(data.x, data.y, data.size + 5 + pulse * 6 * mult, 0, Math.PI * 2);
             context.stroke();
@@ -507,17 +512,25 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
     // node the WIP ring is drawn on actually exists.
     const attemptedRef = new Set<string>();
 
+    // Spawn point for any brand-new live node (agent or freshly-merged
+    // resource/worksheet): next to a real anchor if one exists, else next to
+    // the 'teacher' hub — never a bare random offset from the origin, which
+    // tends to land in empty space far from wherever the cluster has drifted.
+    const spawnNear = (anchorId: string | null) => {
+      const g = graphRef.current;
+      const id = anchorId && g?.hasNode(anchorId) ? anchorId : (g?.hasNode('teacher') ? 'teacher' : null);
+      if (id && g) return { x: g.getNodeAttribute(id, 'x') + (Math.random() - 0.5) * 60, y: g.getNodeAttribute(id, 'y') + (Math.random() - 0.5) * 60 };
+      return { x: (Math.random() - 0.5) * 100, y: (Math.random() - 0.5) * 100 };
+    };
+
     const mergeFreshNodes = () => {
       const g = graphRef.current; if (!g) return;
       const fresh = deriveGraph({ includeDocs: true });
       for (const n of fresh.nodes) {
         if (g.hasNode(n.id)) continue;
-        let x = (Math.random() - 0.5) * 100, y = (Math.random() - 0.5) * 100;
         const anchorEdge = fresh.edges.find((e) => (e.source === n.id && g.hasNode(e.target)) || (e.target === n.id && g.hasNode(e.source)));
-        if (anchorEdge) {
-          const anchor = anchorEdge.source === n.id ? anchorEdge.target : anchorEdge.source;
-          if (g.hasNode(anchor)) { x = g.getNodeAttribute(anchor, 'x') + (Math.random() - 0.5) * 30; y = g.getNodeAttribute(anchor, 'y') + (Math.random() - 0.5) * 30; }
-        }
+        const anchor = anchorEdge ? (anchorEdge.source === n.id ? anchorEdge.target : anchorEdge.source) : null;
+        const { x, y } = spawnNear(anchor);
         g.addNode(n.id, { x, y, size: SIZE[n.type] || 8, label: n.label, ntype: n.type });
         const simNode = { id: n.id, x, y };
         simNodesRef.current.push(simNode);
@@ -539,9 +552,10 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
     const ensureAgentNode = (agentKeyId: string, label: string) => {
       const g = graphRef.current; if (!g || !simRef.current) return;
       const nid = 'agent:' + agentKeyId;
-      if (g.hasNode(nid)) { g.setNodeAttribute(nid, 'label', label); return; }
-      const x = (Math.random() - 0.5) * 80, y = (Math.random() - 0.5) * 80;
-      g.addNode(nid, { x, y, size: SIZE.agent, label, ntype: 'agent' });
+      const displayLabel = '🤖 ' + label;
+      if (g.hasNode(nid)) { g.setNodeAttribute(nid, 'label', displayLabel); return; }
+      const { x, y } = spawnNear(null); // no specific target yet — spawn by the teacher hub
+      g.addNode(nid, { x, y, size: SIZE.agent, label: displayLabel, ntype: 'agent' });
       const simNode = { id: nid, x, y };
       simNodesRef.current.push(simNode);
       idToSimRef.current.set(nid, simNode);

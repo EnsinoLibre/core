@@ -43,6 +43,14 @@
   --color-gold-400-alt: #dca94a;
   --color-gold-100: #f6e9cf;
 
+  /* --- Violet: reserved for live/ephemeral "agent" entities, deliberately
+     outside the teal/terracotta/gold content palette so it never gets
+     confused with an actual workspace node. --- */
+  --color-violet-700: #4c2f8c;
+  --color-violet-500: #7c4dcc;
+  --color-violet-400: #9b6fe0;
+  --color-violet-300: #b998ea;
+
   /* --- Warm neutrals: light mode --- */
   --color-neutral-surface-1: #fffdf7; /* lightest surface, page background */
   --color-neutral-surface-2: #f4f1e8; /* raised surface / alt background */
@@ -128,6 +136,7 @@
 
   --color-primary: #4bb298; /* primary-on-dark accent */
   --color-primary-hover: var(--color-teal-300);
+  --color-violet-500: #a687e8; /* lighter for contrast against dark surfaces */
 
   --color-surface: var(--color-neutral-surface-1);
   --color-surface-muted: var(--color-neutral-surface-2);
