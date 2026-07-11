@@ -32,7 +32,7 @@ const TYPE_VAR: Record<string, string> = {
 const SIZE: Record<string, number> = {
   teacher: 16, class: 13, aula: 12, worksheet: 10, student: 10, 'resource-guideline': 10,
   'doc-hub': 14, 'doc-group': 9, doc: 7,
-  agent: 20, // biggest node in the graph — an active process outranks any single piece of content
+  agent: 15, // on par with the other hub-ish nodes — distinct colour does the differentiating, not size
 };
 
 /** How long an agent node / touch glow / WIP ring survive after their last activity row. */
@@ -223,55 +223,44 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
       drawDiscNodeLabel(context, data, settings);
     };
 
-    // "Still in process" ring: a bold dashed amber outline + soft halo around
-    // resources/worksheets the agent just wrote (WIP grace window), and a
-    // pulsing double ring around the agent node itself while it has recent
-    // activity. Drawn on the label layer so it isn't tied to hover state and
-    // survives every node (forceLabel guarantees this callback runs for it).
+    // "Still in process" ring: a slim dashed amber outline around resources/
+    // worksheets the agent just wrote (WIP grace window), and a slim pulsing
+    // ring around the agent node itself while it has recent activity — quiet
+    // enough to sit alongside the rest of the graph's understated styling.
+    // Drawn on the label layer so it isn't tied to hover state and survives
+    // every node (forceLabel guarantees this callback runs for it).
     const drawNodeLabel = (context: CanvasRenderingContext2D, data: any, settings: any) => {
       if (data.wip || data.ntype === 'agent' || data.glow > 0) {
-        const pulse = data.ntype === 'agent' ? (Math.sin(Date.now() / 260) + 1) / 2 : 0;
+        const pulse = data.ntype === 'agent' ? (Math.sin(Date.now() / 320) + 1) / 2 : 0;
         context.save();
         if (!data.wip && data.ntype !== 'agent' && data.glow > 0) {
-          // Being read/written right now: a single bright ring that fades out
-          // over TOUCH_GLOW_MS as the agent moves on to the next node.
+          // Being read/written right now: a slim ring that fades out over
+          // TOUCH_GLOW_MS as the agent moves on to the next node.
           context.strokeStyle = paletteRef.current.accent;
-          context.lineWidth = 3;
-          context.globalAlpha = Math.min(1, data.glow * 1.2);
+          context.lineWidth = 1.5;
+          context.globalAlpha = Math.min(0.6, data.glow);
           context.beginPath();
-          context.arc(data.x, data.y, data.size + 6, 0, Math.PI * 2);
+          context.arc(data.x, data.y, data.size + 4, 0, Math.PI * 2);
           context.stroke();
         } else if (data.wip) {
-          // Soft filled halo so it reads at a glance, even zoomed out or in a busy graph.
-          const haloR = data.size + 10;
-          const grad = context.createRadialGradient(data.x, data.y, data.size, data.x, data.y, haloR);
-          grad.addColorStop(0, 'rgba(217, 165, 72, 0.45)');
-          grad.addColorStop(1, 'rgba(217, 165, 72, 0)');
-          context.fillStyle = grad;
-          context.beginPath();
-          context.arc(data.x, data.y, haloR, 0, Math.PI * 2);
-          context.fill();
-          // Bold dashed ring in a distinct "in progress" amber/gold.
+          // Slim dashed ring in a distinct "in progress" amber/gold — static,
+          // not animated, so it reads as a state rather than an alert.
           context.strokeStyle = '#d9a548';
-          context.lineWidth = 3.5;
-          context.setLineDash([6, 4]);
-          context.lineDashOffset = -(Date.now() / 40 % 10); // marching ants
-          context.globalAlpha = 1;
+          context.lineWidth = 1.5;
+          context.setLineDash([4, 3]);
+          context.globalAlpha = 0.75;
           context.beginPath();
-          context.arc(data.x, data.y, data.size + 6, 0, Math.PI * 2);
+          context.arc(data.x, data.y, data.size + 5, 0, Math.PI * 2);
           context.stroke();
         } else {
-          // Agent node: two concentric pulsing rings, always at least half-
-          // visible so it reads as "a live thing" even between pulses — in
-          // its own violet, not the teal accent used for hover/focus.
+          // Agent node: one slim pulsing ring in its own violet, not the teal
+          // accent used for hover/focus.
           context.strokeStyle = nodeColor('agent');
-          context.globalAlpha = 0.55 + pulse * 0.4;
-          for (const mult of [1, 1.6]) {
-            context.lineWidth = mult === 1 ? 3.5 : 1.5;
-            context.beginPath();
-            context.arc(data.x, data.y, data.size + 5 + pulse * 6 * mult, 0, Math.PI * 2);
-            context.stroke();
-          }
+          context.lineWidth = 1.5;
+          context.globalAlpha = 0.35 + pulse * 0.25;
+          context.beginPath();
+          context.arc(data.x, data.y, data.size + 4 + pulse * 2, 0, Math.PI * 2);
+          context.stroke();
         }
         context.restore();
       }
@@ -352,9 +341,9 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
           if (dist == null || dist >= 3) color = mix(color, paletteRef.current.bg, 0.86);
           else if (dist === 2) color = mix(color, paletteRef.current.bg, 0.45);
         }
-        if (glow > 0) color = mix(color, paletteRef.current.accent, glow * 0.85);
+        if (glow > 0) color = mix(color, paletteRef.current.accent, glow * 0.4);
         if (hovered) color = paletteRef.current.accent;
-        const size = (ghost ? d.size * 0.8 : d.size) * (focused ? 1.5 : hovered ? 1.2 : 1) * (1 + glow * 0.4);
+        const size = (ghost ? d.size * 0.8 : d.size) * (focused ? 1.5 : hovered ? 1.2 : 1) * (1 + glow * 0.15);
         const forceLabel = hovered || focused || (neighbor && !ghost) || touching || wip || d.ntype === 'agent';
         return {
           ...d, color, size, wip, glow,
@@ -387,9 +376,9 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
           const near = incident || ((ds != null && ds <= 1) && (dt != null && dt <= 1));
           if (!near) color = mix(color, paletteRef.current.bg, 0.7);
         }
-        if (glow > 0) color = mix(color, paletteRef.current.accent, glow);
+        if (glow > 0) color = mix(color, paletteRef.current.accent, glow * 0.6);
         if (incident) color = paletteRef.current.accent;
-        return { ...d, color, size: incident ? 2.2 : glow > 0 ? 2 + glow * 1.5 : ghosts === 2 ? 0.6 : ghosts === 1 ? 0.8 : 1, hidden: suppressed };
+        return { ...d, color, size: incident ? 2.2 : glow > 0 ? 1.4 + glow * 0.6 : ghosts === 2 ? 0.6 : ghosts === 1 ? 0.8 : 1, hidden: suppressed };
       },
     });
     sigmaRef.current = renderer;
@@ -513,14 +502,19 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
     const attemptedRef = new Set<string>();
 
     // Spawn point for any brand-new live node (agent or freshly-merged
-    // resource/worksheet): next to a real anchor if one exists, else next to
-    // the 'teacher' hub — never a bare random offset from the origin, which
-    // tends to land in empty space far from wherever the cluster has drifted.
+    // resource/worksheet): near a real anchor if one exists, else near the
+    // 'teacher' hub — never a bare random offset from the origin, which tends
+    // to land in empty space far from wherever the cluster has drifted. Placed
+    // at arm's length on a random bearing (not a tight jitter box), so it
+    // doesn't spawn directly on top of the anchor or its other neighbours —
+    // the link/collide forces pull it into a natural resting spot from there.
     const spawnNear = (anchorId: string | null) => {
       const g = graphRef.current;
       const id = anchorId && g?.hasNode(anchorId) ? anchorId : (g?.hasNode('teacher') ? 'teacher' : null);
-      if (id && g) return { x: g.getNodeAttribute(id, 'x') + (Math.random() - 0.5) * 60, y: g.getNodeAttribute(id, 'y') + (Math.random() - 0.5) * 60 };
-      return { x: (Math.random() - 0.5) * 100, y: (Math.random() - 0.5) * 100 };
+      if (!id || !g) return { x: (Math.random() - 0.5) * 100, y: (Math.random() - 0.5) * 100 };
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 90 + Math.random() * 40;
+      return { x: g.getNodeAttribute(id, 'x') + Math.cos(angle) * dist, y: g.getNodeAttribute(id, 'y') + Math.sin(angle) * dist };
     };
 
     const mergeFreshNodes = () => {
