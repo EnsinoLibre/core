@@ -70,7 +70,7 @@ a:hover { text-decoration: underline; }
 
 /* ---------- page bits ---------- */
 
-.app-page-head { display: flex; align-items: flex-start; gap: var(--space-4); margin-bottom: var(--space-5); }
+.app-page-head { display: flex; align-items: flex-start; flex-wrap: wrap; gap: var(--space-4); margin-bottom: var(--space-5); }
 .app-page-title { font-size: 1.9rem; margin: 0; }
 .app-page-sub { color: var(--color-text-muted); margin: var(--space-1) 0 0; }
 .app-page-actions { margin-left: auto; display: flex; gap: var(--space-2); flex-wrap: wrap; }
@@ -91,7 +91,7 @@ a:hover { text-decoration: underline; }
 
 /* ---------- accordion sections ---------- */
 
-.app-accordion-head { display: flex; align-items: center; gap: var(--space-2); }
+.app-accordion-head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
 .app-accordion-toggle {
   background: none; border: none; cursor: pointer; font: inherit; color: inherit; text-align: left;
   display: flex; align-items: center; gap: var(--space-2); padding: 0; min-width: 0;
@@ -412,6 +412,8 @@ a:hover { text-decoration: underline; }
   .app-content { padding: var(--space-5) var(--space-4); }
   .app-card-grid { grid-template-columns: 1fr; gap: var(--space-3); }
   .app-card-grid .el-card { padding: var(--space-4); }
+  .app-page-actions, .app-section-actions { margin-left: 0; width: 100%; }
+  .app-page-actions .el-button, .app-page-actions button { flex: 1 1 auto; }
 
   /* ---- reclaim vertical space: compact the two mobile bars ---- */
   /* topbar */

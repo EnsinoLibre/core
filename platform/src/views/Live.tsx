@@ -8,6 +8,7 @@ import {
 import { PageHead, Avatar, Progress, KebabMenu } from '../components/bits';
 import { DeployModal, joinLink } from '../components/DeployModal';
 import { CopyButton } from '../components/SeedKB';
+import { useContent } from '../components/ContentPanel';
 
 const VBADGE: Record<string, [string, string]> = {
   validated: ['el-badge', '✓ Validated'],
@@ -23,6 +24,7 @@ function toCSV(rows: any[]) {
 
 export function Live() {
   const nav = useNavigate();
+  const { open: openContent } = useContent();
   const [, force] = useState(0);
   const rerender = () => force((n) => n + 1);
   useEffect(() => onLiveUpdate(rerender), []);
@@ -146,11 +148,12 @@ export function Live() {
                         <p className="app-muted">{w.subject} · {w.doc.sections.flatMap((s: any) => s.activities).length} activities</p>
                       </div>
                       <span className="app-spacer" />
-                      <div className="app-ws-exports">
-                        <button className="el-button el-button--ghost el-button--small" onClick={() => exportAnalogPDF(w.doc)}>📄 PDF</button>
-                        <button className="el-button el-button--ghost el-button--small" title={`${moodleQuestionCount(w.doc)} auto-gradeable questions`} onClick={() => exportMoodle(w.doc)}>🎓 Moodle ({moodleQuestionCount(w.doc)})</button>
-                        <button className="el-button el-button--ghost el-button--small" onClick={() => exportMarkdown(w.doc)}>⬇ MD</button>
-                      </div>
+                      <button className="el-button el-button--small" onClick={() => openContent('worksheet:' + w.id)}>Open worksheet</button>
+                      <KebabMenu items={[
+                        { label: '📄 PDF', onClick: () => exportAnalogPDF(w.doc) },
+                        { label: `🎓 Moodle (${moodleQuestionCount(w.doc)})`, onClick: () => exportMoodle(w.doc) },
+                        { label: '⬇ Markdown', onClick: () => exportMarkdown(w.doc) },
+                      ]} />
                     </div>
                   ))}
                 </div>

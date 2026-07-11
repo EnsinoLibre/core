@@ -163,7 +163,7 @@ function seed() {
 
   return {
     teacher: {
-      id: teacherId, name: 'Sara Viana', email: 'teacher@ensinolibre.org',
+      id: teacherId, name: 'DT (Demo Teacher)', email: 'teacher@ensinolibre.org',
       school: 'IPVC — Viana do Castelo', subjects: 'English as a Foreign Language',
       bio: 'Adult-education EFL teacher. Building persistent, per-student context so planning and feedback compound over time.',
       locale: 'en-GB',
