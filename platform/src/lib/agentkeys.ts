@@ -66,3 +66,24 @@ export function connectionSnippets(rawKey: string) {
     }, null, 2),
   };
 }
+
+/* ---------------- live agent activity (Knowledge graph overlay) ---------------- */
+
+export interface ActivityRow {
+  id: string; agentKeyId: string | null; agentLabel: string; tool: string;
+  status: 'start' | 'done' | 'error'; targetNodeId: string | null; createdAt: string;
+}
+
+const mapActivity = (r: any): ActivityRow => ({
+  id: r.id, agentKeyId: r.agent_key_id, agentLabel: r.agent_label, tool: r.tool,
+  status: r.status, targetNodeId: r.target_node_id, createdAt: r.created_at,
+});
+
+/** Every agent_activity row for this teacher since `sinceIso` (RLS-scoped). */
+export async function listRecentActivity(sinceIso: string): Promise<ActivityRow[]> {
+  const { data, error } = await supabase.from('agent_activity')
+    .select('id,agent_key_id,agent_label,tool,status,target_node_id,created_at')
+    .gte('created_at', sinceIso).order('created_at', { ascending: true });
+  if (error) return [];
+  return (data || []).map(mapActivity);
+}

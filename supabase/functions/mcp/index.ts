@@ -43,16 +43,33 @@ async function sha256hex(s: string) {
 
 const supa = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
-/** Resolve the agent key from headers → teacher_id, or null. */
-async function authenticate(req: Request): Promise<string | null> {
+interface Auth { teacherId: string; agentKeyId: string; agentLabel: string }
+
+/** Resolve the agent key from headers → { teacherId, agentKeyId, agentLabel }, or null. */
+async function authenticate(req: Request): Promise<Auth | null> {
   const auth = req.headers.get('authorization') || '';
   const raw = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : (req.headers.get('x-agent-key') || '').trim();
   if (!raw.startsWith('elk_')) return null;
   const hash = await sha256hex(raw);
-  const { data } = await supa.from('agent_keys').select('id,teacher_id').eq('key_hash', hash).maybeSingle();
+  const { data } = await supa.from('agent_keys').select('id,teacher_id,label').eq('key_hash', hash).maybeSingle();
   if (!data) return null;
   supa.from('agent_keys').update({ last_used_at: new Date().toISOString() }).eq('id', data.id).then(() => {});
-  return data.teacher_id;
+  return { teacherId: data.teacher_id, agentKeyId: data.id, agentLabel: data.label };
+}
+
+/**
+ * Fire-and-forget activity log for the Knowledge graph's live "agent" node:
+ * one row per successful tool call, plus a cheap sweep of this teacher's
+ * older rows so the table stays small (the graph only ever looks at the
+ * last couple of minutes).
+ */
+function logActivity(who: Auth, tool: string, targetNodeId: string | null) {
+  supa.from('agent_activity').insert({
+    teacher_id: who.teacherId, agent_key_id: who.agentKeyId, agent_label: who.agentLabel,
+    tool, status: 'done', target_node_id: targetNodeId,
+  }).then(() => {});
+  supa.from('agent_activity').delete().eq('teacher_id', who.teacherId)
+    .lt('created_at', new Date(Date.now() - 5 * 60_000).toISOString()).then(() => {});
 }
 
 /* ---------------- tools ---------------- */
@@ -177,7 +194,7 @@ async function createWorksheet(teacherId: string, args: any) {
     id, teacher_id: teacherId, title: doc.title || 'Untitled worksheet', subject: doc.subject || '', doc,
   });
   if (error) return text(`Insert failed: ${error.message}`, true);
-  return text(`Created worksheet "${doc.title}" (${id}) with ${activityCount(doc)} activities. It is now in the teacher's library and can be deployed to a class.`);
+  return { ...text(`Created worksheet "${doc.title}" (${id}) with ${activityCount(doc)} activities. It is now in the teacher's library and can be deployed to a class.`), createdId: id };
 }
 
 async function listWorksheets(teacherId: string) {
@@ -199,12 +216,12 @@ async function addResource(teacherId: string, args: any) {
     tags: Array.isArray(args?.tags) ? args.tags.map(String) : [], links: [],
   });
   if (error) return text(`Insert failed: ${error.message}`, true);
-  return text(`Added ${kind} note "${title}" (${id}) to the knowledge base.`);
+  return { ...text(`Added ${kind} note "${title}" (${id}) to the knowledge base.`), createdId: id };
 }
 
 /* ---------------- MCP over streamable HTTP ---------------- */
 
-async function handleMessage(msg: any, teacherId: string) {
+async function handleMessage(msg: any, who: Auth) {
   const { id, method, params } = msg;
   switch (method) {
     case 'initialize':
@@ -222,11 +239,29 @@ async function handleMessage(msg: any, teacherId: string) {
       const name = params?.name;
       const args = params?.arguments || {};
       try {
-        if (name === 'get_workspace_context') return rpcResult(id, text(await getWorkspaceContext(teacherId)));
-        if (name === 'get_worksheet_contract') return rpcResult(id, text(getWorksheetContract(args.types)));
-        if (name === 'create_worksheet') return rpcResult(id, await createWorksheet(teacherId, args));
-        if (name === 'list_worksheets') return rpcResult(id, await listWorksheets(teacherId));
-        if (name === 'add_resource') return rpcResult(id, await addResource(teacherId, args));
+        if (name === 'get_workspace_context') {
+          const out = await getWorkspaceContext(who.teacherId);
+          logActivity(who, name, 'teacher');
+          return rpcResult(id, text(out));
+        }
+        if (name === 'get_worksheet_contract') {
+          logActivity(who, name, null);
+          return rpcResult(id, text(getWorksheetContract(args.types)));
+        }
+        if (name === 'create_worksheet') {
+          const result = await createWorksheet(who.teacherId, args);
+          if (!result.isError) logActivity(who, name, 'worksheet:' + result.createdId);
+          return rpcResult(id, result);
+        }
+        if (name === 'list_worksheets') {
+          logActivity(who, name, 'teacher');
+          return rpcResult(id, await listWorksheets(who.teacherId));
+        }
+        if (name === 'add_resource') {
+          const result = await addResource(who.teacherId, args);
+          if (!result.isError) logActivity(who, name, 'resource:' + result.createdId);
+          return rpcResult(id, result);
+        }
         return rpcError(id, -32602, `Unknown tool: ${name}`);
       } catch (e) {
         return rpcResult(id, text(`Tool failed: ${(e as Error).message}`, true));
@@ -244,8 +279,8 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'DELETE') return new Response(null, { status: 200, headers: CORS });
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405);
 
-  const teacherId = await authenticate(req);
-  if (!teacherId) {
+  const who = await authenticate(req);
+  if (!who) {
     return new Response(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Unauthorized: pass your EnsinoLibre agent key (elk_…) as a bearer token.' } }),
       { status: 401, headers: { 'Content-Type': 'application/json', 'WWW-Authenticate': 'Bearer realm="ensinolibre-mcp"', ...CORS } });
   }
@@ -257,10 +292,10 @@ Deno.serve(async (req: Request) => {
     // JSON-RPC batch: answer each request (notifications produce nothing)
     const answers = [];
     for (const m of body) {
-      const r = await handleMessage(m, teacherId);
+      const r = await handleMessage(m, who);
       if (r.status !== 202 && m.id !== undefined) answers.push(await r.json());
     }
     return json(answers);
   }
-  return handleMessage(body, teacherId);
+  return handleMessage(body, who);
 });

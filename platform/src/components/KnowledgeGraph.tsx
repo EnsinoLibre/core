@@ -5,8 +5,9 @@ import {
   forceSimulation, forceManyBody, forceLink, forceCollide, forceX, forceY, forceRadial,
 } from 'd3-force';
 import { drawDiscNodeLabel } from 'sigma/rendering';
-import { deriveGraph, buildAdjacency, bfsDistances } from '../lib/api';
+import { deriveGraph, buildAdjacency, bfsDistances, hydrate } from '../lib/api';
 import { useContent } from './ContentPanel';
+import { listRecentActivity, type ActivityRow } from '../lib/agentkeys';
 
 /* ---------- palette ---------- */
 
@@ -24,11 +25,19 @@ const TYPE_VAR: Record<string, string> = {
   'doc-hub': '--color-text',
   'doc-group': '--color-text-muted',
   doc: '--color-text-muted',
+  agent: '--color-primary',
 };
 const SIZE: Record<string, number> = {
   teacher: 16, class: 13, aula: 12, worksheet: 10, student: 10, 'resource-guideline': 10,
-  'doc-hub': 14, 'doc-group': 9, doc: 7,
+  'doc-hub': 14, 'doc-group': 9, doc: 7, agent: 15,
 };
+
+/** How long an agent node / touch glow / WIP ring survive after their last activity row. */
+const AGENT_IDLE_MS = 45_000;
+const TOUCH_GLOW_MS = 12_000;
+const WIP_GRACE_MS = 60_000;
+const ACTIVITY_POLL_MS = 2_000;
+const ACTIVITY_LOOKBACK_MS = 120_000;
 
 /** The docs layer floats behind the workspace (or vice versa) — see layer switch. */
 const isDocType = (t: string | undefined) => t === 'doc' || t === 'doc-group' || t === 'doc-hub';
@@ -49,6 +58,7 @@ const LEGEND_ITEMS: { label: string; key: string; colorType: string; types: stri
   { label: 'Context', key: 'resource-context', colorType: 'resource-context', types: ['resource-context'] },
   { label: 'Teacher', key: 'teacher', colorType: 'teacher', types: ['teacher'] },
   { label: 'EnsinoLibre docs', key: 'docs', colorType: 'doc', types: ['doc', 'doc-group', 'doc-hub'] },
+  { label: 'Connected agent', key: 'agent', colorType: 'agent', types: ['agent'] },
 ];
 const LEGEND_KEY_OF: Record<string, string> = {};
 LEGEND_ITEMS.forEach((item) => item.types.forEach((t) => { LEGEND_KEY_OF[t] = item.key; }));
@@ -91,6 +101,9 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
   // Legend rows toggled off — those node types (and their edges) are hidden entirely.
   const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
   const hiddenRef = useRef<Set<string>>(hiddenTypes);
+  // Click on an "agent:<id>" node opens a lightweight popover (live/ephemeral
+  // data, not a workspace entity — doesn't go through the shared content panel).
+  const [agentPopover, setAgentPopover] = useState<{ id: string; label: string; recent: ActivityRow[] } | null>(null);
 
   // Open the deep-linked node once on mount (?focus=<id>).
   useEffect(() => { if (initialFocus) open(initialFocus); /* eslint-disable-next-line */ }, []);
@@ -136,6 +149,18 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
   const hoverRef = useRef<string | null>(null);
   const paletteRef = useRef<any>({});
   const applyFocusRef = useRef<(id: string | null) => void>(() => {});
+  // d3-force's own node list — the live-agent overlay pushes/removes entries
+  // here directly so new nodes join the simulation without resetting it.
+  const simNodesRef = useRef<any[]>([]);
+  const idToSimRef = useRef<Map<string, any>>(new Map());
+  const simLinksRef = useRef<any[]>([]);
+  // Live MCP-agent overlay, refreshed by the polling effect below and read
+  // by the reducers each frame — never triggers a React re-render itself.
+  const agentsRef = useRef<Map<string, { label: string; lastSeen: number }>>(new Map());
+  const touchesRef = useRef<Map<string, number>>(new Map());
+  const wipRef = useRef<Map<string, number>>(new Map());
+  const activityByAgentRef = useRef<Map<string, ActivityRow[]>>(new Map());
+  const pulseRafRef = useRef(0);
 
   const data = useMemo(() => deriveGraph({ includeDocs: true }), []);
   const nodeById = useMemo(() => new Map(data.nodes.map((n) => [n.id, n])), [data]);
@@ -195,6 +220,59 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
       drawDiscNodeLabel(context, data, settings);
     };
 
+    // "Still in process" ring: a bold dashed amber outline + soft halo around
+    // resources/worksheets the agent just wrote (WIP grace window), and a
+    // pulsing double ring around the agent node itself while it has recent
+    // activity. Drawn on the label layer so it isn't tied to hover state and
+    // survives every node (forceLabel guarantees this callback runs for it).
+    const drawNodeLabel = (context: CanvasRenderingContext2D, data: any, settings: any) => {
+      if (data.wip || data.ntype === 'agent' || data.glow > 0) {
+        const pulse = data.ntype === 'agent' ? (Math.sin(Date.now() / 260) + 1) / 2 : 0;
+        context.save();
+        if (!data.wip && data.ntype !== 'agent' && data.glow > 0) {
+          // Being read/written right now: a single bright ring that fades out
+          // over TOUCH_GLOW_MS as the agent moves on to the next node.
+          context.strokeStyle = paletteRef.current.accent;
+          context.lineWidth = 3;
+          context.globalAlpha = Math.min(1, data.glow * 1.2);
+          context.beginPath();
+          context.arc(data.x, data.y, data.size + 6, 0, Math.PI * 2);
+          context.stroke();
+        } else if (data.wip) {
+          // Soft filled halo so it reads at a glance, even zoomed out or in a busy graph.
+          const haloR = data.size + 10;
+          const grad = context.createRadialGradient(data.x, data.y, data.size, data.x, data.y, haloR);
+          grad.addColorStop(0, 'rgba(217, 165, 72, 0.45)');
+          grad.addColorStop(1, 'rgba(217, 165, 72, 0)');
+          context.fillStyle = grad;
+          context.beginPath();
+          context.arc(data.x, data.y, haloR, 0, Math.PI * 2);
+          context.fill();
+          // Bold dashed ring in a distinct "in progress" amber/gold.
+          context.strokeStyle = '#d9a548';
+          context.lineWidth = 3.5;
+          context.setLineDash([6, 4]);
+          context.lineDashOffset = -(Date.now() / 40 % 10); // marching ants
+          context.globalAlpha = 1;
+          context.beginPath();
+          context.arc(data.x, data.y, data.size + 6, 0, Math.PI * 2);
+          context.stroke();
+        } else {
+          // Agent node: two concentric pulsing rings in the accent colour.
+          context.strokeStyle = paletteRef.current.accent;
+          context.globalAlpha = 0.35 + pulse * 0.4;
+          for (const mult of [1, 1.6]) {
+            context.lineWidth = mult === 1 ? 3 : 1.5;
+            context.beginPath();
+            context.arc(data.x, data.y, data.size + 5 + pulse * 6 * mult, 0, Math.PI * 2);
+            context.stroke();
+          }
+        }
+        context.restore();
+      }
+      drawDiscNodeLabel(context, data, settings);
+    };
+
     // graphology graph
     const g = new Graph({ multi: false });
     graphRef.current = g;
@@ -214,19 +292,25 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
     // d3-force
     const simNodes: any[] = data.nodes.map((n) => ({ id: n.id, x: g.getNodeAttribute(n.id, 'x'), y: g.getNodeAttribute(n.id, 'y') }));
     const idToSim = new Map(simNodes.map((n) => [n.id, n]));
-    const simLinks = data.edges.map((e) => ({ source: e.source, target: e.target, kind: e.kind }));
+    simNodesRef.current = simNodes;
+    idToSimRef.current = idToSim;
+    const simLinks: any[] = data.edges.map((e) => ({ source: e.source, target: e.target, kind: e.kind }));
+    simLinksRef.current = simLinks;
     // Docs-tree edges pull tight (a constellation of sections); "uses" edges
     // tether activity docs loosely to the worksheets built with them.
-    const linkDistance = (l: any) => (l.kind === 'docs' ? 55 : l.kind === 'uses' ? 150 : 90);
-    const linkStrength = (l: any) => (l.kind === 'docs' ? 0.45 : l.kind === 'uses' ? 0.04 : 0.12);
+    const linkDistance = (l: any) => (l.kind === 'docs' ? 55 : l.kind === 'uses' ? 150 : l.kind === 'agent-touch' ? 70 : 90);
+    const linkStrength = (l: any) => (l.kind === 'docs' ? 0.45 : l.kind === 'uses' ? 0.04 : l.kind === 'agent-touch' ? 0.08 : 0.12);
+    // Live agent nodes aren't in `data.nodes` (the static snapshot) — read
+    // their type off the live graphology graph first, falling back to it.
+    const typeOf = (id: string) => (g.hasNode(id) ? g.getNodeAttribute(id, 'ntype') : nodeById.get(id)?.type);
     const nodeCharge = (d: any) => {
-      const t = nodeById.get(d.id)?.type;
+      const t = typeOf(d.id);
       return t === 'doc-hub' ? -150 : isDocType(t) ? -60 : -260;
     };
     const sim = forceSimulation(simNodes)
       .force('charge', forceManyBody().strength(nodeCharge).distanceMax(500))
       .force('link', forceLink(simLinks).id((d: any) => d.id).distance(linkDistance).strength(linkStrength))
-      .force('collide', forceCollide().radius((d: any) => (SIZE[nodeById.get(d.id)?.type || ''] || 8) + 8))
+      .force('collide', forceCollide().radius((d: any) => (SIZE[typeOf(d.id) || ''] || 8) + 8))
       .force('x', forceX(0).strength(0.03))
       .force('y', forceY(0).strength(0.03));
     simRef.current = sim;
@@ -239,6 +323,7 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
       labelColor: { color: paletteRef.current.text },
       labelSize: 12, labelWeight: '600',
       defaultDrawNodeHover: drawNodeHover,
+      defaultDrawNodeLabel: drawNodeLabel,
       defaultEdgeColor: paletteRef.current.edge,
       zIndex: true, minCameraRatio: CAMERA_RATIO.min, maxCameraRatio: CAMERA_RATIO.max,
       nodeReducer: (node: string, d: any) => {
@@ -249,19 +334,28 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
         const neighbor = !!f && dist === 1;
         // Ghost = the node belongs to the BACKGROUND layer of the switch.
         const ghost = isDocType(d.ntype) !== (layerRef.current === 'docs');
+        // Live MCP-agent overlay: knowledge retrieval/generation "lights up"
+        // whatever node the agent just touched, decaying over a few seconds.
+        const touchedAt = touchesRef.current.get(node);
+        const touchAge = touchedAt ? Date.now() - touchedAt : Infinity;
+        const touching = touchAge < TOUCH_GLOW_MS;
+        const glow = touching ? 1 - touchAge / TOUCH_GLOW_MS : 0;
+        const wip = wipRef.current.has(node);
         let color = nodeColor(d.ntype);
         if (ghost) color = mix(color, paletteRef.current.bg, 0.78);
         if (f) {
           if (dist == null || dist >= 3) color = mix(color, paletteRef.current.bg, 0.86);
           else if (dist === 2) color = mix(color, paletteRef.current.bg, 0.45);
         }
+        if (glow > 0) color = mix(color, paletteRef.current.accent, glow * 0.85);
         if (hovered) color = paletteRef.current.accent;
-        const size = (ghost ? d.size * 0.8 : d.size) * (focused ? 1.5 : hovered ? 1.2 : 1);
+        const size = (ghost ? d.size * 0.8 : d.size) * (focused ? 1.5 : hovered ? 1.2 : 1) * (1 + glow * 0.4);
+        const forceLabel = hovered || focused || (neighbor && !ghost) || touching || wip || d.ntype === 'agent';
         return {
-          ...d, color, size,
+          ...d, color, size, wip, glow,
           // ghosts stay quiet: no label unless you reach into the layer
-          label: ghost && !(hovered || focused || neighbor) ? null : d.label,
-          forceLabel: hovered || focused || (neighbor && !ghost),
+          label: ghost && !forceLabel ? null : d.label,
+          forceLabel,
           zIndex: focused ? 3 : hovered ? 2 : ghost ? 0 : 1,
           highlighted: hovered || focused,
           hidden: hiddenRef.current.has(legendKeyOf(d.ntype)),
@@ -275,6 +369,11 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
         const sType = g.getNodeAttribute(s, 'ntype'); const tType = g.getNodeAttribute(t, 'ntype');
         const ghosts = (isDocType(sType) !== docLayer ? 1 : 0) + (isDocType(tType) !== docLayer ? 1 : 0);
         const suppressed = hiddenRef.current.has(legendKeyOf(sType)) || hiddenRef.current.has(legendKeyOf(tType));
+        // An "agent-touch" edge glows for as long as its target node does.
+        const otherEnd = sType === 'agent' ? t : tType === 'agent' ? s : null;
+        const touchedAt = otherEnd ? touchesRef.current.get(otherEnd) : undefined;
+        const touchAge = touchedAt ? Date.now() - touchedAt : Infinity;
+        const glow = d.kind === 'agent-touch' && touchAge < TOUCH_GLOW_MS ? 1 - touchAge / TOUCH_GLOW_MS : 0;
         let color = paletteRef.current.edge;
         if (ghosts === 2) color = mix(color, paletteRef.current.bg, 0.82);
         else if (ghosts === 1) color = mix(color, paletteRef.current.bg, 0.55); // cross-layer "uses" tether
@@ -283,8 +382,9 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
           const near = incident || ((ds != null && ds <= 1) && (dt != null && dt <= 1));
           if (!near) color = mix(color, paletteRef.current.bg, 0.7);
         }
+        if (glow > 0) color = mix(color, paletteRef.current.accent, glow);
         if (incident) color = paletteRef.current.accent;
-        return { ...d, color, size: incident ? 2.2 : ghosts === 2 ? 0.6 : ghosts === 1 ? 0.8 : 1, hidden: suppressed };
+        return { ...d, color, size: incident ? 2.2 : glow > 0 ? 2 + glow * 1.5 : ghosts === 2 ? 0.6 : ghosts === 1 ? 0.8 : 1, hidden: suppressed };
       },
     });
     sigmaRef.current = renderer;
@@ -319,7 +419,20 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
     // interactions
     renderer.on('enterNode', ({ node }: any) => { hoverRef.current = node; container.style.cursor = 'pointer'; renderer.refresh(); });
     renderer.on('leaveNode', () => { hoverRef.current = null; container.style.cursor = 'default'; renderer.refresh(); });
-    renderer.on('clickNode', ({ node }: any) => openRef.current(node));
+    renderer.on('clickStage', () => setAgentPopover(null));
+    renderer.on('clickNode', ({ node }: any) => {
+      // Agent nodes are live/ephemeral, not a workspace entity with a markdown
+      // note — show a small popover instead of routing through the shared
+      // content panel.
+      if (node.startsWith('agent:')) {
+        const agentKeyId = node.slice('agent:'.length);
+        const info = agentsRef.current.get(agentKeyId);
+        setAgentPopover({ id: agentKeyId, label: info?.label || 'Agent', recent: activityByAgentRef.current.get(agentKeyId) || [] });
+        return;
+      }
+      setAgentPopover(null);
+      openRef.current(node);
+    });
     renderer.on('downNode', ({ node }: any) => {
       dragRef.current = node; sim.alphaTarget(0.15).restart();
       const n = idToSim.get(node); if (n) { n.fx = n.x; n.fy = n.y; }
@@ -380,6 +493,151 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
+
+  // Live MCP-agent overlay: poll agent_activity and mutate the graph engine
+  // directly (agent nodes/touch edges are ephemeral — not part of the static
+  // `data` snapshot deriveGraph() produced, so they never trigger a rebuild).
+  useEffect(() => {
+    let stopped = false;
+    let timer = 0;
+    // A resource/worksheet the agent just created isn't a REAL graph node yet
+    // — deriveGraph() only ran once, off the local store snapshot, which never
+    // saw the agent's direct-to-Supabase write. Re-hydrate once per missing
+    // target and graft any brand-new nodes/edges into the live graph, so the
+    // node the WIP ring is drawn on actually exists.
+    const attemptedRef = new Set<string>();
+
+    const mergeFreshNodes = () => {
+      const g = graphRef.current; if (!g) return;
+      const fresh = deriveGraph({ includeDocs: true });
+      for (const n of fresh.nodes) {
+        if (g.hasNode(n.id)) continue;
+        let x = (Math.random() - 0.5) * 100, y = (Math.random() - 0.5) * 100;
+        const anchorEdge = fresh.edges.find((e) => (e.source === n.id && g.hasNode(e.target)) || (e.target === n.id && g.hasNode(e.source)));
+        if (anchorEdge) {
+          const anchor = anchorEdge.source === n.id ? anchorEdge.target : anchorEdge.source;
+          if (g.hasNode(anchor)) { x = g.getNodeAttribute(anchor, 'x') + (Math.random() - 0.5) * 30; y = g.getNodeAttribute(anchor, 'y') + (Math.random() - 0.5) * 30; }
+        }
+        g.addNode(n.id, { x, y, size: SIZE[n.type] || 8, label: n.label, ntype: n.type });
+        const simNode = { id: n.id, x, y };
+        simNodesRef.current.push(simNode);
+        idToSimRef.current.set(n.id, simNode);
+        adjRef.current.set(n.id, new Set());
+      }
+      for (const e of fresh.edges) {
+        if (!g.hasNode(e.source) || !g.hasNode(e.target) || g.hasEdge(e.source, e.target) || g.hasEdge(e.target, e.source)) continue;
+        g.addEdge(e.source, e.target, { kind: e.kind, size: 1 });
+        simLinksRef.current.push({ source: e.source, target: e.target, kind: e.kind });
+        adjRef.current.get(e.source)?.add(e.target);
+        adjRef.current.get(e.target)?.add(e.source);
+      }
+      simRef.current?.nodes(simNodesRef.current);
+      (simRef.current?.force('link') as any)?.links(simLinksRef.current);
+      simRef.current?.alpha(0.6).restart();
+    };
+
+    const ensureAgentNode = (agentKeyId: string, label: string) => {
+      const g = graphRef.current; if (!g || !simRef.current) return;
+      const nid = 'agent:' + agentKeyId;
+      if (g.hasNode(nid)) { g.setNodeAttribute(nid, 'label', label); return; }
+      const x = (Math.random() - 0.5) * 80, y = (Math.random() - 0.5) * 80;
+      g.addNode(nid, { x, y, size: SIZE.agent, label, ntype: 'agent' });
+      const simNode = { id: nid, x, y };
+      simNodesRef.current.push(simNode);
+      idToSimRef.current.set(nid, simNode);
+      simRef.current.nodes(simNodesRef.current);
+      adjRef.current.set(nid, new Set());
+      simRef.current.alpha(0.5).restart();
+    };
+
+    const removeAgentNode = (agentKeyId: string) => {
+      const g = graphRef.current; if (!g || !simRef.current) return;
+      const nid = 'agent:' + agentKeyId;
+      if (!g.hasNode(nid)) return;
+      g.dropNode(nid); // also drops incident edges from the graphology graph
+      simNodesRef.current = simNodesRef.current.filter((n) => n.id !== nid);
+      idToSimRef.current.delete(nid);
+      simLinksRef.current = simLinksRef.current.filter((l: any) => {
+        const sid = typeof l.source === 'string' ? l.source : l.source.id;
+        const tid = typeof l.target === 'string' ? l.target : l.target.id;
+        return sid !== nid && tid !== nid;
+      });
+      simRef.current.nodes(simNodesRef.current);
+      (simRef.current.force('link') as any)?.links(simLinksRef.current);
+      adjRef.current.delete(nid);
+    };
+
+    const ensureTouchEdge = (agentKeyId: string, targetId: string) => {
+      const g = graphRef.current; if (!g || !simRef.current) return;
+      const a = 'agent:' + agentKeyId;
+      if (!g.hasNode(a) || !g.hasNode(targetId) || a === targetId) return;
+      if (g.hasEdge(a, targetId) || g.hasEdge(targetId, a)) return;
+      g.addEdge(a, targetId, { kind: 'agent-touch', size: 1 });
+      simLinksRef.current.push({ source: a, target: targetId, kind: 'agent-touch' });
+      (simRef.current.force('link') as any)?.links(simLinksRef.current);
+      adjRef.current.get(a)?.add(targetId);
+      adjRef.current.get(targetId)?.add(a);
+    };
+
+    const poll = async () => {
+      if (stopped) return;
+      if (!graphRef.current || !simRef.current) { timer = window.setTimeout(poll, ACTIVITY_POLL_MS); return; }
+      const rows = await listRecentActivity(new Date(Date.now() - ACTIVITY_LOOKBACK_MS).toISOString());
+      if (stopped) return;
+      const now = Date.now();
+      const byAgent = new Map<string, ActivityRow[]>();
+      for (const r of rows) {
+        if (!r.agentKeyId) continue;
+        if (!byAgent.has(r.agentKeyId)) byAgent.set(r.agentKeyId, []);
+        byAgent.get(r.agentKeyId)!.push(r);
+        const at = new Date(r.createdAt).getTime();
+        agentsRef.current.set(r.agentKeyId, { label: r.agentLabel, lastSeen: Math.max(agentsRef.current.get(r.agentKeyId)?.lastSeen || 0, at) });
+        if (r.targetNodeId) {
+          touchesRef.current.set(r.targetNodeId, Math.max(touchesRef.current.get(r.targetNodeId) || 0, at));
+          if ((r.tool === 'create_worksheet' || r.tool === 'add_resource') && !wipRef.current.has(r.targetNodeId)) {
+            wipRef.current.set(r.targetNodeId, at);
+          }
+        }
+      }
+      activityByAgentRef.current = byAgent;
+
+      const missing = rows.filter((r) =>
+        (r.tool === 'create_worksheet' || r.tool === 'add_resource') && r.targetNodeId
+        && !graphRef.current!.hasNode(r.targetNodeId) && !attemptedRef.has(r.targetNodeId));
+      if (missing.length) {
+        for (const r of missing) attemptedRef.add(r.targetNodeId!);
+        try { await hydrate(); mergeFreshNodes(); } catch { /* best-effort */ }
+      }
+
+      for (const [aid, info] of agentsRef.current) {
+        if (now - info.lastSeen > AGENT_IDLE_MS) { agentsRef.current.delete(aid); removeAgentNode(aid); continue; }
+        ensureAgentNode(aid, info.label);
+      }
+      for (const r of rows) {
+        if (r.agentKeyId && r.targetNodeId && agentsRef.current.has(r.agentKeyId)) ensureTouchEdge(r.agentKeyId, r.targetNodeId);
+      }
+      for (const [nid, ts] of wipRef.current) if (now - ts > WIP_GRACE_MS) wipRef.current.delete(nid);
+
+      const anyActive = agentsRef.current.size > 0 || [...touchesRef.current.values()].some((ts) => now - ts < TOUCH_GLOW_MS);
+      if (anyActive && !pulseRafRef.current) {
+        const tick = () => { sigmaRef.current?.refresh(); pulseRafRef.current = requestAnimationFrame(tick); };
+        pulseRafRef.current = requestAnimationFrame(tick);
+      } else if (!anyActive && pulseRafRef.current) {
+        cancelAnimationFrame(pulseRafRef.current);
+        pulseRafRef.current = 0;
+      }
+      sigmaRef.current?.refresh();
+
+      if (!stopped) timer = window.setTimeout(poll, ACTIVITY_POLL_MS);
+    };
+    poll();
+
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+      if (pulseRafRef.current) { cancelAnimationFrame(pulseRafRef.current); pulseRafRef.current = 0; }
+    };
+  }, []);
 
   // react focus state → engine (then pan the camera to the focused node)
   useEffect(() => {
@@ -488,6 +746,7 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
       </div>
 
       {legendOpen && <Legend hidden={hiddenTypes} onToggle={toggleLegend} />}
+      {agentPopover && <AgentPopover info={agentPopover} onClose={() => setAgentPopover(null)} />}
       {!focus && (
         <div className="knw-hint">
           {layer === 'docs'
@@ -516,6 +775,47 @@ function Legend({ hidden, onToggle }: { hidden: Set<string>; onToggle: (key: str
           </button>
         );
       })}
+    </div>
+  );
+}
+
+const TOOL_LABEL: Record<string, string> = {
+  get_workspace_context: 'read the workspace',
+  get_worksheet_contract: 'fetched the worksheet contract',
+  create_worksheet: 'created a worksheet',
+  list_worksheets: 'listed worksheets',
+  add_resource: 'added a knowledge note',
+};
+
+function timeAgo(iso: string) {
+  const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 5) return 'just now';
+  if (s < 60) return `${s}s ago`;
+  return `${Math.round(s / 60)}m ago`;
+}
+
+/** Live/ephemeral info about a connected MCP agent — not a workspace entity,
+ * so it gets its own small popover rather than the shared content panel. */
+function AgentPopover({ info, onClose }: { info: { id: string; label: string; recent: ActivityRow[] }; onClose: () => void }) {
+  return (
+    <div className="knw-legend knw-agent-popover">
+      <div className="knw-agent-popover-head">
+        <h4>🤖 {info.label}</h4>
+        <button className="app-icon-btn" aria-label="Close" onClick={onClose}>✕</button>
+      </div>
+      <p className="app-muted">Connected via MCP · recent activity</p>
+      {info.recent.length === 0 ? (
+        <p className="app-muted">No recent tool calls.</p>
+      ) : (
+        <ul className="knw-agent-activity">
+          {info.recent.slice().reverse().slice(0, 8).map((r) => (
+            <li key={r.id}>
+              <span>{TOOL_LABEL[r.tool] || r.tool}</span>
+              <span className="app-muted">{timeAgo(r.createdAt)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
