@@ -6,7 +6,8 @@ import {
   exportAnalogPDF, exportMoodle, exportMarkdown, moodleQuestionCount, download,
 } from '../lib/api';
 import { PageHead, Avatar, Progress } from '../components/bits';
-import { DeployModal } from '../components/DeployModal';
+import { DeployModal, joinLink } from '../components/DeployModal';
+import { CopyButton } from '../components/SeedKB';
 
 const VBADGE: Record<string, [string, string]> = {
   validated: ['el-badge', '✓ Validated'],
@@ -32,15 +33,15 @@ export function Live() {
 
   return (
     <div>
-      <PageHead title="Live classroom" subtitle="Deploy worksheets to a class, then watch progress in real time, validate and export."
-        actions={<button className="el-button" onClick={() => setDeploying(true)}>◉ Deploy a class</button>} />
+      <PageHead title="Live classroom" subtitle="Deploy worksheets to a class or a public link, then watch progress in real time, validate and export."
+        actions={<button className="el-button" onClick={() => setDeploying(true)}>◉ Deploy</button>} />
 
       {aulas.length === 0 && (
         <div className="app-empty">
           <div className="app-empty-icon">◉</div>
-          <h3>No live classes yet</h3>
-          <p>Deploy a set of worksheets to a class. Students join with a code and their progress shows up here live.</p>
-          <button className="el-button" onClick={() => setDeploying(true)}>◉ Deploy a class</button>
+          <h3>No live deployments yet</h3>
+          <p>Deploy a set of worksheets to a class, or as a public link. Students join with a code and their progress shows up here live.</p>
+          <button className="el-button" onClick={() => setDeploying(true)}>◉ Deploy</button>
         </div>
       )}
 
@@ -56,8 +57,10 @@ export function Live() {
           <section key={a.id} className="app-side-section">
             <div className="app-share-strip">
               <strong style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem' }}>{a.title}</strong>
-              <span className="app-muted"> · {cls?.name} · join code </span><strong className="app-code">{a.code}</strong>
-              <a className="knw-open-link" href="../aula.html" target="_blank" rel="noopener" style={{ marginLeft: 8 }}>class page ↗</a>
+              <span className="app-muted"> · {cls ? cls.name : 'Public link'} · join code </span><strong className="app-code">{a.code}</strong>
+              {a.hasPassword && <span className="el-badge el-badge--neutral" title="Password required to join">🔒 password</span>}
+              <CopyButton text={joinLink(a.code)} label="⧉ Copy link" small />
+              <a className="knw-open-link" href={`../aula.html?code=${a.code}`} target="_blank" rel="noopener" style={{ marginLeft: 8 }}>open ↗</a>
               <span className="app-spacer" />
               <span className={a.status === 'live' ? 'app-live-dot' : 'el-badge el-badge--neutral'}>{a.status === 'live' ? '● Live' : 'Closed'}</span>
               <button className="el-button el-button--ghost el-button--small" onClick={() => { store.setAulaStatus(a.id, a.status === 'live' ? 'closed' : 'live'); rerender(); }}>

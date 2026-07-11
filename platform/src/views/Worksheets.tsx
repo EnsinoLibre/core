@@ -42,10 +42,10 @@ export function Worksheets() {
 
   return (
     <div>
-      <PageHead title="Worksheets" subtitle="Your deployable materials. Deploy a set to a class as a live session students can join."
+      <PageHead title="Worksheets" subtitle="Your deployable materials. Deploy a set to a class or a public link as a live session students can join."
         actions={<>
           <button className="el-button el-button--ghost" onClick={() => setAdding(true)}>+ Create worksheet</button>
-          <button className="el-button" onClick={() => setDeploy([])}>◉ Deploy to a class</button>
+          <button className="el-button" onClick={() => setDeploy([])}>◉ Deploy</button>
         </>} />
       <FilterBar
         query={query} onQuery={setQuery} placeholder="Search worksheets…"
@@ -86,7 +86,7 @@ export function Worksheets() {
                 )}
                 <span className="app-spacer" />
                 <KebabMenu items={[
-                  { label: '◉ Deploy to another class', onClick: () => setDeploy([w.id]) },
+                  { label: '◉ Deploy again', onClick: () => setDeploy([w.id]) },
                   { label: '📄 PDF', onClick: () => exportAnalogPDF(w.doc) },
                   { label: `🎓 Moodle (${mq})`, onClick: () => exportMoodle(w.doc) },
                   { label: '⬇ Markdown', onClick: () => exportMarkdown(w.doc) },

@@ -22,6 +22,10 @@ import { supabase } from './supabase';
 
 const nowISO = () => new Date().toISOString();
 const uuid = () => (crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+async function sha256hex(s) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
 
 /**
  * Fire a Supabase write and log (but don't throw) on failure.
@@ -63,7 +67,7 @@ const mapStudent = (r) => ({ id: r.id, classId: r.class_id, name: r.name, level:
 const mapNote = (r) => ({ id: r.id, at: r.created_at, text: r.text });
 const mapWorksheet = (r) => ({ id: r.id, title: r.title, subject: r.subject || '', doc: r.doc });
 const mapResource = (r) => ({ id: r.id, title: r.title, kind: r.kind || 'material', type: r.type || 'other', subject: r.subject || '', classId: r.class_id || null, studentId: r.student_id || null, url: r.url || undefined, note: r.note || '', tags: r.tags || [], links: r.links || [], createdAt: r.created_at });
-const mapAula = (r) => ({ id: r.id, classId: r.class_id, title: r.title, code: r.code, status: r.status || 'live', worksheetIds: [], createdAt: r.created_at });
+const mapAula = (r) => ({ id: r.id, classId: r.class_id || null, title: r.title, code: r.code, status: r.status || 'live', hasPassword: !!r.password_hash, worksheetIds: [], createdAt: r.created_at });
 const mapEnrollment = (r) => ({ id: r.id, aulaId: r.aula_id, name: r.name, joinedAt: r.joined_at });
 const mapProgressRow = (r) => ({ total: r.total || 0, attempted: r.attempted || 0, correct: r.correct || 0, done: !!r.done, score: Number(r.score) || 0, validated: r.validated ?? null, updatedAt: r.updated_at });
 const progressKey = (aulaId, enrollmentId, worksheetId) => `${aulaId}:${enrollmentId}:${worksheetId}`;
@@ -311,14 +315,22 @@ export const store = {
     fire(supabase.from('worksheets').delete().eq('id', id), 'removeWorksheet'); // cascades aula_worksheets/progress
   },
 
-  /** Deploy worksheets to a class as a new live aula (with a unique join code). */
-  createAula(classId, title, worksheetIds) {
+  /**
+   * Deploy worksheets as a new live aula (unique join code) — to a class
+   * (classId set, roster-gated on join) or as a public link (classId null,
+   * anyone with the code + password, if set, can join under any name).
+   */
+  async createAula(classId, title, worksheetIds, password) {
     const used = new Set(state.aulas.map((a) => a.code));
     let code;
     do { code = 'A' + Math.random().toString(36).slice(2, 6).toUpperCase(); } while (used.has(code));
-    const a = { id: uuid(), classId, title, code, status: 'live', worksheetIds: worksheetIds.slice(), createdAt: nowISO() };
+    const passwordHash = password ? await sha256hex(password) : null;
+    const a = { id: uuid(), classId: classId || null, title, code, status: 'live', hasPassword: !!passwordHash, worksheetIds: worksheetIds.slice(), createdAt: nowISO() };
     state.aulas.unshift(a);
-    fire(supabase.from('aulas').insert({ id: a.id, teacher_id: teacherId, class_id: classId, title, code, status: 'live' }), 'createAula');
+    // Await the parent row before firing the worksheet links: aula_worksheets'
+    // RLS check looks up this aula by id, so the parent must be committed first.
+    const { error } = await supabase.from('aulas').insert({ id: a.id, teacher_id: teacherId, class_id: classId || null, title, code, status: 'live', password_hash: passwordHash });
+    if (error) { console.error('[store] createAula failed:', error.message); return a; }
     if (a.worksheetIds.length) {
       fire(supabase.from('aula_worksheets').insert(a.worksheetIds.map((wid, i) => ({ aula_id: a.id, worksheet_id: wid, position: i }))), 'createAula.worksheets');
     }

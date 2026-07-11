@@ -30,9 +30,9 @@ export async function getAula(code) {
   return data;
 }
 
-/** Join a deployment with a class code + name; returns aula, worksheets, enrolment id. */
-export async function joinAula(code, name) {
-  const { data, error } = await supabase.rpc('join_aula', { p_code: code, p_name: name });
+/** Join a deployment with a code + name (+ password, if required); returns aula, worksheets, enrolment id. */
+export async function joinAula(code, name, password) {
+  const { data, error } = await supabase.rpc('join_aula', { p_code: code, p_name: name, p_password: password || null });
   if (error) return { error: error.message };
   return data;
 }

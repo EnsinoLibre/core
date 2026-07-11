@@ -18,51 +18,109 @@ function brandTop(right) {
 
 /* ---------------- join ---------------- */
 
+const JOIN_ERRORS = {
+  not_found: 'No live class found for that code. Check with your teacher.',
+  closed: 'That class is not open right now.',
+  name_required: 'Please enter your name.',
+  not_on_roster: 'That name isn’t on this class’s roster. Check with your teacher.',
+  password_required: 'Please enter the password.',
+  bad_password: 'That password is incorrect.',
+};
+
+/** Two-stage join: code first, then (once we know the deployment) a roster
+ * dropdown or free-text name, plus a password field if one is required. */
 export function renderJoin(root) {
   clear(root);
   const params = new URLSearchParams(location.search);
   const presetCode = (params.get('code') || '').toUpperCase();
+  const card = el('div', { class: 'el-card app-auth-card' });
+  let info = null; // set once the code resolves: { code, class, roster, has_password }
 
-  const code = el('input', { class: 'el-input app-join-code', placeholder: 'CLASS CODE', maxlength: 10, value: presetCode, autocapitalize: 'characters' });
-  const name = el('input', { class: 'el-input', placeholder: 'Your name', autocomplete: 'name' });
-  const err = el('p', { class: 'el-help-text el-help-text--invalid', text: '' });
-  const submit = el('button', { class: 'el-button app-join-submit', type: 'submit', text: 'Join the class' });
+  function showCodeStep(prefill = '', message = '') {
+    clear(card);
+    const code = el('input', { class: 'el-input app-join-code', placeholder: 'CLASS CODE', maxlength: 10, value: prefill, autocapitalize: 'characters' });
+    const err = el('p', { class: 'el-help-text el-help-text--invalid', text: message });
+    const submit = el('button', { class: 'el-button app-join-submit', type: 'submit', text: 'Continue' });
+    const form = el('form', { class: 'app-form', onsubmit: async (e) => {
+      e.preventDefault();
+      err.textContent = '';
+      const c = code.value.trim();
+      if (!c) { code.classList.add('el-input--invalid'); return; }
+      submit.disabled = true; submit.textContent = 'Checking…';
+      const data = await getAula(c);
+      submit.disabled = false; submit.textContent = 'Continue';
+      if (data.error) { err.textContent = JOIN_ERRORS[data.error] || ('Could not check that code: ' + data.error); return; }
+      info = { code: c, ...data };
+      showNameStep();
+    } }, [
+      el('label', { class: 'el-label', text: 'Class code' }), code,
+      err, submit,
+    ]);
+    card.append(
+      el('h1', { class: 'app-auth-title', text: 'Join your class' }),
+      el('p', { class: 'app-auth-sub', text: 'Enter the code your teacher shared.' }),
+      form,
+    );
+    code.focus();
+  }
 
-  const form = el('form', { class: 'app-form', onsubmit: async (e) => {
-    e.preventDefault();
-    err.textContent = '';
-    const c = code.value.trim();
-    const n = name.value.trim();
-    if (!c) { code.classList.add('el-input--invalid'); return; }
-    if (!n) { name.classList.add('el-input--invalid'); return; }
-    submit.disabled = true; submit.textContent = 'Joining…';
-    const data = await joinAula(c, n);
-    submit.disabled = false; submit.textContent = 'Join the class';
-    if (data.error) {
-      err.textContent = data.error === 'not_found' ? 'No live class found for that code. Check with your teacher.'
-        : data.error === 'closed' ? 'That class is not open right now.'
-        : data.error === 'name_required' ? 'Please enter your name.' : 'Could not join: ' + data.error;
-      return;
-    }
-    session.set({ code: c, enrollmentId: data.enrollment_id, name: data.student_name, aula: { title: data.title, class: data.class, worksheets: data.worksheets } });
-    navigate('/');
-  } }, [
-    el('label', { class: 'el-label', text: 'Class code' }), code,
-    el('label', { class: 'el-label', text: 'Your name' }), name,
-    err, submit,
-  ]);
+  function showNameStep() {
+    clear(card);
+    const hasRoster = Array.isArray(info.roster) && info.roster.length > 0;
+    const nameField = hasRoster
+      ? el('select', { class: 'el-input' }, [
+        el('option', { value: '', text: 'Select your name…' }),
+        ...info.roster.map((n) => el('option', { value: n, text: n })),
+      ])
+      : el('input', { class: 'el-input', placeholder: 'Your name', autocomplete: 'name' });
+    const password = info.has_password ? el('input', { class: 'el-input', type: 'password', placeholder: 'Password', autocomplete: 'off' }) : null;
+    const err = el('p', { class: 'el-help-text el-help-text--invalid', text: '' });
+    const submit = el('button', { class: 'el-button app-join-submit', type: 'submit', text: 'Join the class' });
+    const back = el('button', { class: 'app-back', type: 'button', text: '← Different code', onclick: () => showCodeStep(info.code) });
+
+    const form = el('form', { class: 'app-form', onsubmit: async (e) => {
+      e.preventDefault();
+      err.textContent = '';
+      const n = (nameField.value || '').trim();
+      const pw = password ? password.value : '';
+      if (!n) { nameField.classList.add('el-input--invalid'); return; }
+      if (password && !pw) { password.classList.add('el-input--invalid'); return; }
+      submit.disabled = true; submit.textContent = 'Joining…';
+      const data = await joinAula(info.code, n, pw);
+      submit.disabled = false; submit.textContent = 'Join the class';
+      if (data.error) { err.textContent = JOIN_ERRORS[data.error] || ('Could not join: ' + data.error); return; }
+      session.set({ code: info.code, enrollmentId: data.enrollment_id, name: data.student_name, aula: { title: data.title, class: data.class, worksheets: data.worksheets } });
+      navigate('/');
+    } }, [
+      el('label', { class: 'el-label', text: 'Your name' }), nameField,
+      ...(password ? [el('label', { class: 'el-label', text: 'Password' }), password] : []),
+      err, submit, back,
+    ]);
+    card.append(
+      el('h1', { class: 'app-auth-title', text: info.class || 'Join' }),
+      el('p', { class: 'app-auth-sub', text: hasRoster ? 'Select your name to join.' : 'Enter your name to join.' }),
+      form,
+    );
+    nameField.focus();
+  }
 
   root.append(
     el('div', { class: 'app-auth' }, [
       el('div', { class: 'app-auth-brand' }, [el('img', { src: 'assets/brand/wordmark-primary-light.svg', alt: 'EnsinoLibre', height: 30 })]),
-      el('div', { class: 'el-card app-auth-card' }, [
-        el('h1', { class: 'app-auth-title', text: 'Join your class' }),
-        el('p', { class: 'app-auth-sub', text: presetCode ? 'Enter your name to join this class.' : 'Enter the class code your teacher shared, and your name.' }),
-        form,
-      ]),
+      card,
     ]),
   );
-  (presetCode ? name : code).focus();
+
+  if (presetCode) {
+    card.append(el('p', { class: 'app-muted', text: 'Loading…' }));
+    getAula(presetCode).then((data) => {
+      if (data.error) { showCodeStep(presetCode, JOIN_ERRORS[data.error] || ''); return; }
+      info = { code: presetCode, ...data };
+      showNameStep();
+    });
+  } else {
+    showCodeStep();
+  }
 }
 
 /* ---------------- home (worksheet list) ---------------- */
