@@ -32,11 +32,19 @@ export const DOC_PAGES = [
   { group: 'Reference', pages: [
     { slug: 'worksheet-schema', title: 'Worksheet schema', blurb: 'The worksheet JSON document: sections, activities, validation rules and versioning.' },
     { slug: 'rendering-and-embedding', title: 'Rendering & embedding', blurb: 'How worksheets render anywhere — the embed API and the token-efficient analog print export.' },
+  ]},
+  { group: 'Teacher platform', pages: [
+    { slug: 'platform-overview', title: 'Teacher platform', blurb: 'The logged-in workspace — classrooms, students, resources, live sessions and the knowledge graph — and how it differs from the worksheet builder.' },
+    { slug: 'dashboard', title: 'Dashboard', blurb: "The platform's home page — classes and knowledge base at a glance." },
+    { slug: 'classrooms-and-students', title: 'Classrooms & Students', blurb: 'Rosters and per-class/per-student context, manual entry with notion-style relation pickers, and Google Classroom import.' },
+    { slug: 'resources-knowledge-base', title: 'Resources', blurb: 'The linked knowledge repository — teaching materials, guidelines, external links and captured context — entered by hand or seeded from files.' },
+    { slug: 'worksheets-library', title: 'Worksheets', blurb: "The platform's worksheet library — create in-app, deploy live, export for print or Moodle." },
+    { slug: 'knowledge-graph', title: 'Knowledge graph', blurb: 'Every classroom, student, worksheet and resource as one connected, filterable graph.' },
+    { slug: 'live-classroom', title: 'Live classroom', blurb: 'Deploy worksheets to a class as a live session, watch progress in real time, and validate student work.' },
+    { slug: 'profile-and-vault', title: 'Profile', blurb: 'Your teacher profile, plus workspace-wide exports and imports.' },
     { slug: 'obsidian-vault', title: 'Using with Obsidian', blurb: 'The workspace exported as linked markdown notes — for Obsidian, or for handing to an AI agent.' },
     { slug: 'knowledge-seeding', title: 'Seeding the knowledge base', blurb: 'Bulk-seed the knowledge base: local-agent prompts, Google Classroom import, and front-facing summary notes (llm.wiki).' },
     { slug: 'mcp-connect', title: 'Connect your AI (MCP)', blurb: 'The EnsinoLibre MCP server: agent keys plus tools for reading workspace context and creating worksheets and knowledge notes directly.' },
-  ]},
-  { group: 'Imports', pages: [
     { slug: 'google-classroom-import', title: 'Import from Google Classroom', blurb: 'No-technical-background walkthrough: export your data with Google Takeout, then bring classes, rosters and materials into EnsinoLibre.' },
   ]},
   { group: 'Core activities', pages: [

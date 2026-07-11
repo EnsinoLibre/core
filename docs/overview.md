@@ -11,6 +11,9 @@ status: stable
 > [!note] The core idea
 > You describe your lesson in a simple form. The form produces a **prompt** you paste into any AI assistant (Claude, ChatGPT, Gemini…). The assistant replies with worksheet **JSON** in the EnsinoLibre format. You paste that back and get an interactive worksheet you can use on screen or print on paper.
 
+> [!tip] Looking for the logged-in workspace instead?
+> Everything below is about the free, no-account **worksheet builder**. If you mean the **teacher platform** — classrooms, students, a knowledge base, live sessions, the knowledge graph — that's a separate, persistent workspace behind a real login. Start at [[platform-overview]].
+
 ## The three pieces
 
 1. **The worksheet format** — a small, strict JSON shape with six activity types. See [[worksheet-schema]].

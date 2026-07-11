@@ -17,11 +17,19 @@ export const DOC_PAGES = [
   { group: 'Reference', pages: [
     { slug: 'worksheet-schema', title: 'Worksheet schema' },
     { slug: 'rendering-and-embedding', title: 'Rendering & embedding' },
+  ]},
+  { group: 'Teacher platform', pages: [
+    { slug: 'platform-overview', title: 'Teacher platform' },
+    { slug: 'dashboard', title: 'Dashboard' },
+    { slug: 'classrooms-and-students', title: 'Classrooms & Students' },
+    { slug: 'resources-knowledge-base', title: 'Resources' },
+    { slug: 'worksheets-library', title: 'Worksheets' },
+    { slug: 'knowledge-graph', title: 'Knowledge graph' },
+    { slug: 'live-classroom', title: 'Live classroom' },
+    { slug: 'profile-and-vault', title: 'Profile' },
     { slug: 'obsidian-vault', title: 'Using with Obsidian' },
     { slug: 'knowledge-seeding', title: 'Seeding the knowledge base' },
     { slug: 'mcp-connect', title: 'Connect your AI (MCP)' },
-  ]},
-  { group: 'Imports', pages: [
     { slug: 'google-classroom-import', title: 'Import from Google Classroom' },
   ]},
   { group: 'Core activities', pages: [
