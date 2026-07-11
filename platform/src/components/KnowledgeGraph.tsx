@@ -243,11 +243,13 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
           context.arc(data.x, data.y, data.size + 4, 0, Math.PI * 2);
           context.stroke();
         } else if (data.wip) {
-          // Slim dashed ring in a distinct "in progress" amber/gold — static,
-          // not animated, so it reads as a state rather than an alert.
+          // Slim dashed ring in a distinct "in progress" amber/gold, slowly
+          // rotating (one full turn every ~14s) — a quiet ambient cue rather
+          // than the fast "marching ants" look.
           context.strokeStyle = '#d9a548';
           context.lineWidth = 1.5;
           context.setLineDash([4, 3]);
+          context.lineDashOffset = -(Date.now() / 2000) % 7;
           context.globalAlpha = 0.75;
           context.beginPath();
           context.arc(data.x, data.y, data.size + 5, 0, Math.PI * 2);
@@ -363,11 +365,18 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
         const sType = g.getNodeAttribute(s, 'ntype'); const tType = g.getNodeAttribute(t, 'ntype');
         const ghosts = (isDocType(sType) !== docLayer ? 1 : 0) + (isDocType(tType) !== docLayer ? 1 : 0);
         const suppressed = hiddenRef.current.has(legendKeyOf(sType)) || hiddenRef.current.has(legendKeyOf(tType));
-        // An "agent-touch" edge glows for as long as its target node does.
+        // An "agent-touch" edge glows for as long as its target node does: a
+        // brief decaying flash for a plain read, or a sustained gentle pulse
+        // for the whole WIP window while the target is still "being written".
         const otherEnd = sType === 'agent' ? t : tType === 'agent' ? s : null;
+        const otherWip = otherEnd ? wipRef.current.has(otherEnd) : false;
         const touchedAt = otherEnd ? touchesRef.current.get(otherEnd) : undefined;
         const touchAge = touchedAt ? Date.now() - touchedAt : Infinity;
-        const glow = d.kind === 'agent-touch' && touchAge < TOUCH_GLOW_MS ? 1 - touchAge / TOUCH_GLOW_MS : 0;
+        let glow = 0;
+        if (d.kind === 'agent-touch') {
+          if (otherWip) glow = 0.4 + ((Math.sin(Date.now() / 320) + 1) / 2) * 0.35;
+          else if (touchAge < TOUCH_GLOW_MS) glow = (1 - touchAge / TOUCH_GLOW_MS) * 0.7;
+        }
         let color = paletteRef.current.edge;
         if (ghosts === 2) color = mix(color, paletteRef.current.bg, 0.82);
         else if (ghosts === 1) color = mix(color, paletteRef.current.bg, 0.55); // cross-layer "uses" tether
@@ -626,7 +635,8 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
       }
       for (const [nid, ts] of wipRef.current) if (now - ts > WIP_GRACE_MS) wipRef.current.delete(nid);
 
-      const anyActive = agentsRef.current.size > 0 || [...touchesRef.current.values()].some((ts) => now - ts < TOUCH_GLOW_MS);
+      const anyActive = agentsRef.current.size > 0 || wipRef.current.size > 0
+        || [...touchesRef.current.values()].some((ts) => now - ts < TOUCH_GLOW_MS);
       if (anyActive && !pulseRafRef.current) {
         const tick = () => { sigmaRef.current?.refresh(); pulseRafRef.current = requestAnimationFrame(tick); };
         pulseRafRef.current = requestAnimationFrame(tick);
