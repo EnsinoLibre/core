@@ -5,7 +5,7 @@ import {
   store, onLiveUpdate,
   exportAnalogPDF, exportMoodle, exportMarkdown, moodleQuestionCount, download,
 } from '../lib/api';
-import { PageHead, Avatar, Progress } from '../components/bits';
+import { PageHead, Avatar, Progress, KebabMenu } from '../components/bits';
 import { DeployModal, joinLink } from '../components/DeployModal';
 import { CopyButton } from '../components/SeedKB';
 
@@ -29,6 +29,12 @@ export function Live() {
   const [validating, setValidating] = useState<{ aulaId: string; enr: string; ws: string } | null>(null);
   const [drilling, setDrilling] = useState<{ aulaId: string; enr: string } | null>(null);
   const [deploying, setDeploying] = useState(false);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const toggleCollapsed = (id: string) => setCollapsed((prev) => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
   const aulas = store.aulas();
 
   return (
@@ -52,84 +58,105 @@ export function Live() {
         const rows = store.exportRows(a.id);
         const complete = rows.filter((r: any) => r.status === 'complete').length;
         const avg = rows.length ? Math.round(rows.reduce((s: number, r: any) => s + r.scorePct, 0) / rows.length) : 0;
+        const open = !collapsed.has(a.id);
 
         return (
-          <section key={a.id} className="app-side-section">
-            <div className="app-share-strip">
-              <strong style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem' }}>{a.title}</strong>
-              <span className="app-muted"> · {cls ? cls.name : 'Public link'} · join code </span><strong className="app-code">{a.code}</strong>
-              {a.hasPassword && <span className="el-badge el-badge--neutral" title="Password required to join">🔒 password</span>}
-              <CopyButton text={joinLink(a.code)} label="⧉ Copy link" small />
-              <a className="knw-open-link" href={`../aula.html?code=${a.code}`} target="_blank" rel="noopener" style={{ marginLeft: 8 }}>open ↗</a>
-              <span className="app-spacer" />
-              <span className={a.status === 'live' ? 'app-live-dot' : 'el-badge el-badge--neutral'}>{a.status === 'live' ? '● Live' : 'Closed'}</span>
-              <button className="el-button el-button--ghost el-button--small" onClick={() => { store.setAulaStatus(a.id, a.status === 'live' ? 'closed' : 'live'); rerender(); }}>
-                {a.status === 'live' ? 'Close class' : 'Reopen'}
+          <div key={a.id} className="el-card app-aula-card">
+            <div className="app-aula-head">
+              <button type="button" className="app-accordion-toggle app-aula-toggle" onClick={() => toggleCollapsed(a.id)} aria-expanded={open}>
+                <span className={`app-accordion-chevron${open ? ' app-accordion-chevron--open' : ''}`}>▸</span>
+                <span className="app-aula-title">
+                  <strong>{a.title}</strong>
+                  <span className="app-muted"> · {cls ? cls.name : 'Public link'} · </span>
+                  <strong className="app-code">{a.code}</strong>
+                </span>
+                {a.hasPassword && <span className="el-badge el-badge--neutral" title="Password required to join">🔒</span>}
+                <span className={a.status === 'live' ? 'app-live-dot' : 'el-badge el-badge--neutral'}>{a.status === 'live' ? '● Live' : 'Closed'}</span>
               </button>
-              <button className="el-button el-button--ghost el-button--small" onClick={() => download(`aula-${a.code}.csv`, toCSV(store.exportRows(a.id)), 'text/csv')}>⬇ CSV</button>
-              <button className="el-button el-button--ghost el-button--small" onClick={() => download(`aula-${a.code}.json`, JSON.stringify(store.exportRows(a.id), null, 2), 'application/json')}>⬇ JSON</button>
-              <button className="el-button el-button--ghost el-button--small" title="Remove this deployment" onClick={() => { if (confirm(`Remove the live class "${a.title}"? Student progress for it will be discarded.`)) { store.removeAula(a.id); rerender(); } }}>Remove</button>
+              <span className="app-spacer" />
+              <CopyButton text={joinLink(a.code)} label="⧉ Copy link" small />
+              <KebabMenu items={[
+                { label: a.status === 'live' ? 'Close class' : 'Reopen', onClick: () => { store.setAulaStatus(a.id, a.status === 'live' ? 'closed' : 'live'); rerender(); } },
+                { label: '↗ Open class page', onClick: () => window.open(`../aula.html?code=${a.code}`, '_blank', 'noopener') },
+                { label: '⬇ Export CSV', onClick: () => download(`aula-${a.code}.csv`, toCSV(store.exportRows(a.id)), 'text/csv') },
+                { label: '⬇ Export JSON', onClick: () => download(`aula-${a.code}.json`, JSON.stringify(store.exportRows(a.id), null, 2), 'application/json') },
+                {
+                  label: 'Remove', danger: true, onClick: () => {
+                    if (confirm(`Remove the live class "${a.title}"? Student progress for it will be discarded.`)) { store.removeAula(a.id); rerender(); }
+                  },
+                },
+              ]} />
             </div>
 
-            <div className="app-stats app-stats--tight">
-              <div className="el-card app-stat"><span className="app-stat-value">{students.length}</span><span className="app-stat-label">Students joined</span></div>
-              <div className="el-card app-stat"><span className="app-stat-value">{complete}/{rows.length}</span><span className="app-stat-label">Worksheets complete</span></div>
-              <div className="el-card app-stat"><span className="app-stat-value">{avg}%</span><span className="app-stat-label">Average score</span></div>
-            </div>
-
-            {students.length === 0 ? (
-              <p className="app-muted">Waiting for students — share code <strong>{a.code}</strong> (students open the class page).</p>
-            ) : (
-              <div className="app-table-wrap">
-                <table className="app-table app-monitor-table">
-                  <thead><tr><th>Student</th>{worksheets.map((w: any) => <th key={w.id}>{w.title}</th>)}<th>Overall</th></tr></thead>
-                  <tbody>
-                    {students.map((st: any) => {
-                      let att = 0; let tot = 0;
-                      const cells = worksheets.map((w: any) => {
-                        const p = store.getProgress(a.id, st.id, w.id);
-                        if (p) { att += p.attempted; tot += p.total; }
-                        const pct = p && p.total ? Math.round((p.attempted / p.total) * 100) : 0;
-                        const badge = p?.validated ? VBADGE[p.validated] : null;
-                        return (
-                          <td key={w.id}>
-                            {p && (p.attempted || p.validated) ? (
-                              <button className="app-cell-prog" onClick={() => setValidating({ aulaId: a.id, enr: st.id, ws: w.id })}>
-                                <Progress pct={pct} label={`${p.done ? '✓ ' : ''}${Math.round((p.score || 0) * 100)}%`} />
-                                {badge && <span className={badge[0]}>{badge[1]}</span>}
-                              </button>
-                            ) : <span className="app-muted app-cell-empty">–</span>}
-                          </td>
-                        );
-                      });
-                      const overall = tot ? Math.round((att / tot) * 100) : 0;
-                      return <tr key={st.id}><td><button className="app-cell-user-btn" onClick={() => setDrilling({ aulaId: a.id, enr: st.id })} title="Open this student’s progress"><Avatar name={st.name} size={30} /><span>{st.name}</span></button></td>{cells}<td><Progress pct={overall} label={`${overall}%`} /></td></tr>;
-                    })}
-                  </tbody>
-                </table>
-              </div>
+            {!open && (
+              <p className="app-muted app-accordion-preview">
+                {students.length} student{students.length === 1 ? '' : 's'} joined · {complete}/{rows.length} worksheets complete · {avg}% average score
+              </p>
             )}
 
-            {/* teacher-only worksheet exports */}
-            <h2 className="app-section-title">Deployed worksheets</h2>
-            <p className="app-muted">Export the materials for printing, Moodle import or your records. (Students never see export options.)</p>
-            <div className="app-list" style={{ gap: 'var(--space-3)' }}>
-              {worksheets.map((w: any) => (
-                <div key={w.id} className="el-card app-deployed-ws">
-                  <div>
-                    <h3 className="el-card__title">{w.title}</h3>
-                    <p className="app-muted">{w.subject} · {w.doc.sections.flatMap((s: any) => s.activities).length} activities</p>
-                  </div>
-                  <span className="app-spacer" />
-                  <div className="app-ws-exports">
-                    <button className="el-button el-button--ghost el-button--small" onClick={() => exportAnalogPDF(w.doc)}>📄 PDF</button>
-                    <button className="el-button el-button--ghost el-button--small" title={`${moodleQuestionCount(w.doc)} auto-gradeable questions`} onClick={() => exportMoodle(w.doc)}>🎓 Moodle ({moodleQuestionCount(w.doc)})</button>
-                    <button className="el-button el-button--ghost el-button--small" onClick={() => exportMarkdown(w.doc)}>⬇ MD</button>
-                  </div>
+            {open && (
+              <>
+                <div className="app-stats app-stats--tight">
+                  <div className="el-card app-stat"><span className="app-stat-value">{students.length}</span><span className="app-stat-label">Students joined</span></div>
+                  <div className="el-card app-stat"><span className="app-stat-value">{complete}/{rows.length}</span><span className="app-stat-label">Worksheets complete</span></div>
+                  <div className="el-card app-stat"><span className="app-stat-value">{avg}%</span><span className="app-stat-label">Average score</span></div>
                 </div>
-              ))}
-            </div>
-          </section>
+
+                {students.length === 0 ? (
+                  <p className="app-muted">Waiting for students — share code <strong>{a.code}</strong> (students open the class page).</p>
+                ) : (
+                  <div className="app-table-wrap">
+                    <table className="app-table app-monitor-table">
+                      <thead><tr><th>Student</th>{worksheets.map((w: any) => <th key={w.id}>{w.title}</th>)}<th>Overall</th></tr></thead>
+                      <tbody>
+                        {students.map((st: any) => {
+                          let att = 0; let tot = 0;
+                          const cells = worksheets.map((w: any) => {
+                            const p = store.getProgress(a.id, st.id, w.id);
+                            if (p) { att += p.attempted; tot += p.total; }
+                            const pct = p && p.total ? Math.round((p.attempted / p.total) * 100) : 0;
+                            const badge = p?.validated ? VBADGE[p.validated] : null;
+                            return (
+                              <td key={w.id}>
+                                {p && (p.attempted || p.validated) ? (
+                                  <button className="app-cell-prog" onClick={() => setValidating({ aulaId: a.id, enr: st.id, ws: w.id })}>
+                                    <Progress pct={pct} label={`${p.done ? '✓ ' : ''}${Math.round((p.score || 0) * 100)}%`} />
+                                    {badge && <span className={badge[0]}>{badge[1]}</span>}
+                                  </button>
+                                ) : <span className="app-muted app-cell-empty">–</span>}
+                              </td>
+                            );
+                          });
+                          const overall = tot ? Math.round((att / tot) * 100) : 0;
+                          return <tr key={st.id}><td><button className="app-cell-user-btn" onClick={() => setDrilling({ aulaId: a.id, enr: st.id })} title="Open this student’s progress"><Avatar name={st.name} size={30} /><span>{st.name}</span></button></td>{cells}<td><Progress pct={overall} label={`${overall}%`} /></td></tr>;
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* teacher-only worksheet exports */}
+                <h2 className="app-section-title">Deployed worksheets</h2>
+                <p className="app-muted">Export the materials for printing, Moodle import or your records. (Students never see export options.)</p>
+                <div className="app-list" style={{ gap: 'var(--space-3)' }}>
+                  {worksheets.map((w: any) => (
+                    <div key={w.id} className="el-card app-deployed-ws">
+                      <div>
+                        <h3 className="el-card__title">{w.title}</h3>
+                        <p className="app-muted">{w.subject} · {w.doc.sections.flatMap((s: any) => s.activities).length} activities</p>
+                      </div>
+                      <span className="app-spacer" />
+                      <div className="app-ws-exports">
+                        <button className="el-button el-button--ghost el-button--small" onClick={() => exportAnalogPDF(w.doc)}>📄 PDF</button>
+                        <button className="el-button el-button--ghost el-button--small" title={`${moodleQuestionCount(w.doc)} auto-gradeable questions`} onClick={() => exportMoodle(w.doc)}>🎓 Moodle ({moodleQuestionCount(w.doc)})</button>
+                        <button className="el-button el-button--ghost el-button--small" onClick={() => exportMarkdown(w.doc)}>⬇ MD</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         );
       })}
 

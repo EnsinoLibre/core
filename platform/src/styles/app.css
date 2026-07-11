@@ -101,6 +101,13 @@ a:hover { text-decoration: underline; }
 .app-accordion-chevron--open { transform: rotate(90deg); }
 .app-accordion-preview { margin: var(--space-1) 0 0; }
 
+/* ---------- live classroom (aula) accordion cards ---------- */
+
+.app-aula-card + .app-aula-card { margin-top: var(--space-5); }
+.app-aula-head { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.app-aula-toggle { flex-wrap: wrap; flex: 1 1 auto; }
+.app-aula-title { font-family: var(--font-display); font-size: 1.05rem; }
+
 /* ---------- filter bar ---------- */
 
 .app-filterbar { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-4); }
@@ -399,8 +406,12 @@ a:hover { text-decoration: underline; }
   .app-body { grid-template-columns: 1fr; }
   .app-sidebar { position: static; height: auto; flex-direction: row; overflow-x: auto; border-right: none; border-bottom: 1px solid var(--color-border); }
   .app-nav { flex-direction: row; }
-  .app-stats { grid-template-columns: 1fr; }
+  .app-stats { gap: var(--space-3); }
+  .app-stats .app-stat { padding: var(--space-3) var(--space-4); }
+  .app-stats .app-stat-value { font-size: 1.7rem; }
   .app-content { padding: var(--space-5) var(--space-4); }
+  .app-card-grid { grid-template-columns: 1fr; gap: var(--space-3); }
+  .app-card-grid .el-card { padding: var(--space-4); }
 
   /* ---- reclaim vertical space: compact the two mobile bars ---- */
   /* topbar */
@@ -416,6 +427,14 @@ a:hover { text-decoration: underline; }
   .app-sidebar::-webkit-scrollbar { display: none; }
   .app-nav { gap: 0; }
   .app-nav-link { padding: var(--space-1) var(--space-3); font-size: 0.85rem; border-radius: 0; white-space: nowrap; }
+}
+
+@media (max-width: 480px) {
+  .app-stats { gap: var(--space-2); }
+  .app-stats .app-stat { padding: var(--space-2) var(--space-3); }
+  .app-stats .app-stat-value { font-size: 1.35rem; }
+  .app-stats .app-stat-label { font-size: 0.72rem; }
+  .app-page-title { font-size: 1.5rem; }
 }
 
 /* ============ global content panel (side panel / bottom drawer) ============ */
