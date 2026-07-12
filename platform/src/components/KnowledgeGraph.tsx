@@ -56,7 +56,7 @@ const isDocType = (t: string | undefined) => t === 'doc' || t === 'doc-group' ||
 type Layer = 'workspace' | 'docs';
 
 /** Camera zoom bounds — kept in sync with the Sigma constructor's min/maxCameraRatio. */
-const CAMERA_RATIO = { min: 0.35, max: 3 };
+const CAMERA_RATIO = { min: 0.35, max: 6 };
 
 /** Legend rows double as visibility filters; each maps one or more node types to a toggle key. */
 const LEGEND_ITEMS: { label: string; key: string; colorType: string; types: string[] }[] = [
@@ -355,10 +355,14 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
     // graphology graph
     const g = new Graph({ multi: false });
     graphRef.current = g;
+    // Keep initial density roughly constant as the graph grows (e.g. a full
+    // Google Classroom import) so a big import starts pre-spread instead of
+    // piling into the same small circle the force sim then has to untangle.
+    const spread = Math.max(1, Math.sqrt(data.nodes.length / 40));
     data.nodes.forEach((n, i) => {
       const a = (i / data.nodes.length) * Math.PI * 2;
       // docs constellation starts on a wider ring so it settles around the workspace
-      const r = isDocType(n.type) ? 430 : 200;
+      const r = (isDocType(n.type) ? 430 : 200) * spread;
       g.addNode(n.id, { x: Math.cos(a) * r + (Math.random() - 0.5) * 40, y: Math.sin(a) * r + (Math.random() - 0.5) * 40, size: SIZE[n.type] || 8, label: n.label, ntype: n.type });
     });
     for (const e of data.edges) {
@@ -392,21 +396,25 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
     simLinksRef.current = simLinks;
     // Docs-tree edges pull tight (a constellation of sections); "uses" edges
     // tether activity docs loosely to the worksheets built with them.
-    const linkDistance = (l: any) => (l.kind === 'docs' ? 55 : l.kind === 'uses' ? 150 : l.kind === 'agent-touch' ? 70 : 90);
-    const linkStrength = (l: any) => (l.kind === 'docs' ? 0.45 : l.kind === 'uses' ? 0.04 : l.kind === 'agent-touch' ? 0.08 : 0.12);
+    const linkDistance = (l: any) => (l.kind === 'docs' ? 55 : l.kind === 'uses' ? 190 : l.kind === 'agent-touch' ? 90 : 130);
+    const linkStrength = (l: any) => (l.kind === 'docs' ? 0.45 : l.kind === 'uses' ? 0.03 : l.kind === 'agent-touch' ? 0.06 : 0.09);
     // Live agent nodes aren't in `data.nodes` (the static snapshot) — read
     // their type off the live graphology graph first, falling back to it.
     const typeOf = (id: string) => (g.hasNode(id) ? g.getNodeAttribute(id, 'ntype') : nodeById.get(id)?.type);
     const nodeCharge = (d: any) => {
       const t = typeOf(d.id);
-      return t === 'doc-hub' ? -150 : isDocType(t) ? -60 : -260;
+      return t === 'doc-hub' ? -220 : isDocType(t) ? -90 : -420;
     };
     const sim = forceSimulation(simNodes)
-      .force('charge', forceManyBody().strength(nodeCharge).distanceMax(500))
+      // Stronger repulsion reaching further out (distanceMax) is what lets a
+      // large import (e.g. a full Google Classroom export) spread outward
+      // instead of clumping; a light centering pull (x/y strength) keeps the
+      // graph from drifting off-screen without fighting that spread.
+      .force('charge', forceManyBody().strength(nodeCharge).distanceMax(900))
       .force('link', forceLink(simLinks).id((d: any) => d.id).distance(linkDistance).strength(linkStrength))
-      .force('collide', forceCollide().radius((d: any) => (SIZE[typeOf(d.id) || ''] || 8) + 8))
-      .force('x', forceX(0).strength(0.03))
-      .force('y', forceY(0).strength(0.03));
+      .force('collide', forceCollide().radius((d: any) => (SIZE[typeOf(d.id) || ''] || 8) + 18))
+      .force('x', forceX(0).strength(0.015))
+      .force('y', forceY(0).strength(0.015));
     simRef.current = sim;
 
     // sigma
@@ -505,12 +513,12 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
       for (const n of simNodes) { if (n.id === id) { n.fx = 0; n.fy = 0; } else if (n.id !== dragRef.current) { n.fx = null; n.fy = null; } }
       if (id) {
         sim.force('radial', forceRadial((d: any) => RING(distRef.current!.get(d.id)), 0, 0).strength((d: any) => RING_STRENGTH(distRef.current!.get(d.id))));
-        (sim.force('x') as any).strength(0.008); (sim.force('y') as any).strength(0.008);
-        (sim.force('charge') as any).strength(-160);
+        (sim.force('x') as any).strength(0.004); (sim.force('y') as any).strength(0.004);
+        (sim.force('charge') as any).strength(-260);
       } else {
         sim.force('radial', null as any);
-        (sim.force('x') as any).strength(0.03); (sim.force('y') as any).strength(0.03);
-        (sim.force('charge') as any).strength(-260);
+        (sim.force('x') as any).strength(0.015); (sim.force('y') as any).strength(0.015);
+        (sim.force('charge') as any).strength(nodeCharge);
       }
       sim.alpha(0.9).restart();
       renderer.refresh();
@@ -660,7 +668,10 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
       }
       simRef.current?.nodes(simNodesRef.current);
       (simRef.current?.force('link') as any)?.links(simLinksRef.current);
-      simRef.current?.alpha(0.6).restart();
+      // Full restart, not a mild reheat — a bulk import (e.g. a whole Google
+      // Classroom export) can graft in dozens of nodes at once, all spawned
+      // near the same anchor, and needs the full run to fully untangle.
+      simRef.current?.alpha(1).restart();
       sigmaRef.current?.refresh();
     };
     mergeFreshNodesRef.current = mergeFreshNodes;
