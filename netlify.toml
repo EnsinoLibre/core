@@ -1,9 +1,17 @@
 # EnsinoLibre core — Netlify config.
 # The repo root is published so the docs viewer (site/docs.html) can fetch
 # ../docs/*.md; the root redirects to the app entry page.
+#
+# The teacher platform (platform/) is a Vite app built here and synced into
+# site/app/ — the path the published site serves it from. See
+# scripts/sync-app.mjs for the copy step.
 
 [build]
+  command = "npm --prefix platform ci && npm --prefix platform run build && node scripts/sync-app.mjs"
   publish = "."
+
+[build.environment]
+  NODE_VERSION = "22"
 
 [[redirects]]
   from = "/"

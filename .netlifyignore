@@ -1,0 +1,8 @@
+# Excluded from the Netlify deploy upload (publish = "."). These exist on
+# disk during the build (installed deps, source, local tooling) but aren't
+# part of the served site.
+.git/
+.runtime/
+node_modules/
+platform/node_modules/
+platform/src/
