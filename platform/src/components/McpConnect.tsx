@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { motion } from 'framer-motion';
 import { CopyButton } from './SeedKB';
 import { listAgentKeys, createAgentKey, revokeAgentKey, connectionSnippets, MCP_ENDPOINT, type AgentKey } from '../lib/agentkeys';
 
@@ -119,5 +120,35 @@ export function McpConnectTab({ intro, tools, checkLabel, onCheck }: {
         {checkResult && <span className="app-muted">{checkResult}</span>}
       </div>
     </div>
+  );
+}
+
+/** Standalone "Connect your AI" modal — just McpConnectTab in the standard
+ * modal chrome, for surfaces (like the Knowledge graph's AI node) that want
+ * the connect flow on its own rather than as one tab of a bigger modal. */
+export function McpConnectModal({ onClose }: { onClose: () => void }) {
+  return (
+    <motion.div className="app-modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
+      <motion.div className="app-modal app-seed-modal" onClick={(e) => e.stopPropagation()}
+        initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12, scale: 0.98 }}>
+        <div className="app-modal-head">
+          <h2 className="app-modal-title">Connect your AI</h2>
+          <button className="app-icon-btn" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        <McpConnectTab
+          intro={<>
+            Connect Claude (or any MCP client) straight to your workspace. Generate a key, hand the
+            snippet to your local agent, and it can read your classes and context, create worksheets and
+            knowledge notes directly — no copy-paste.
+          </>}
+          tools={['get_workspace_context', 'get_worksheet_contract', 'create_worksheet', 'list_worksheets', 'add_resource']}
+          checkLabel="↻ Refresh"
+          onCheck={async () => {
+            const r = await listAgentKeys();
+            return r.keys.length > 0 ? `✓ ${r.keys.length} agent key${r.keys.length === 1 ? '' : 's'} active.` : 'No agent keys yet — generate one above.';
+          }}
+        />
+      </motion.div>
+    </motion.div>
   );
 }

@@ -63,6 +63,7 @@
 .knw-agent-activity li { display: flex; justify-content: space-between; gap: var(--space-2); font-size: 0.82rem; padding: 2px 0; }
 
 /* AI hub action menu — same floating-panel look, stacked full-width buttons. */
+.knw-agent-popover-head-actions { display: flex; align-items: center; gap: var(--space-1); }
 .knw-ai-actions { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); }
 .knw-ai-actions .el-button { justify-content: flex-start; }
 

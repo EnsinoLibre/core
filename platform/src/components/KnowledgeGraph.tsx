@@ -8,9 +8,11 @@ import {
 import { drawDiscNodeLabel } from 'sigma/rendering';
 import { store, deriveGraph, buildAdjacency, bfsDistances, hydrate, download } from '../lib/api';
 import { useContent } from './ContentPanel';
-import { listRecentActivity, type ActivityRow } from '../lib/agentkeys';
+import { listRecentActivity, listAgentKeys, type ActivityRow, type AgentKey } from '../lib/agentkeys';
 import { CreateWorksheetModal } from './CreateWorksheet';
 import { AddResourceModal } from './AddEntity';
+import { McpConnectModal } from './McpConnect';
+import { KebabMenu } from './bits';
 
 /* ---------- palette ---------- */
 
@@ -176,8 +178,15 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
   const [agentPopover, setAgentPopover] = useState<{ id: string; label: string; recent: ActivityRow[] } | null>(null);
   // Click on the persistent "ai-hub" node opens a menu of downstream actions
   // (also not a workspace entity — no shared content panel for it either).
+  // The menu itself is connection-aware: no agent key yet → just "Connect
+  // your AI"; at least one key → connection info + the 3 actions.
   const [aiMenuOpen, setAiMenuOpen] = useState(false);
   const [aiAction, setAiAction] = useState<'worksheet' | 'context' | null>(null);
+  const [aiConnectOpen, setAiConnectOpen] = useState(false);
+  const [aiKeys, setAiKeys] = useState<{ loading: boolean; keys: AgentKey[] }>({ loading: true, keys: [] });
+  const refreshAiKeys = () => {
+    listAgentKeys().then((r) => setAiKeys({ loading: false, keys: r.keys })).catch(() => setAiKeys({ loading: false, keys: [] }));
+  };
 
   // Open the deep-linked node once on mount (?focus=<id>).
   useEffect(() => { if (initialFocus) open(initialFocus); /* eslint-disable-next-line */ }, []);
@@ -527,7 +536,11 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
       // menu of downstream actions instead of the shared content panel.
       if (node === 'ai-hub') {
         setAgentPopover(null);
-        setAiMenuOpen((o) => !o);
+        setAiMenuOpen((o) => {
+          const next = !o;
+          if (next) refreshAiKeys();
+          return next;
+        });
         return;
       }
       setAgentPopover(null);
@@ -873,7 +886,11 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
       {agentPopover && <AgentPopover info={agentPopover} onClose={() => setAgentPopover(null)} />}
       {aiMenuOpen && (
         <AiMenu
+          loading={aiKeys.loading}
+          connected={aiKeys.keys.length > 0}
+          keyCount={aiKeys.keys.length}
           onClose={() => setAiMenuOpen(false)}
+          onConnect={() => { setAiMenuOpen(false); setAiConnectOpen(true); }}
           onCreateWorksheet={() => { setAiAction('worksheet'); setAiMenuOpen(false); }}
           onAddContext={() => { setAiAction('context'); setAiMenuOpen(false); }}
           onGenerateReport={generateReport}
@@ -899,6 +916,9 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
             onClose={() => setAiAction(null)}
             onAdded={() => { setAiAction(null); mergeFreshNodesRef.current(); }}
           />
+        )}
+        {aiConnectOpen && (
+          <McpConnectModal onClose={() => { setAiConnectOpen(false); refreshAiKeys(); }} />
         )}
       </AnimatePresence>
     </div>
@@ -941,22 +961,44 @@ function timeAgo(iso: string) {
   return `${Math.round(s / 60)}m ago`;
 }
 
-/** Downstream actions off the persistent AI hub node. */
-function AiMenu({ onClose, onCreateWorksheet, onAddContext, onGenerateReport }: {
-  onClose: () => void; onCreateWorksheet: () => void; onAddContext: () => void; onGenerateReport: () => void;
+/**
+ * Downstream actions off the persistent AI hub node — connection-aware:
+ * no agent key yet → just "Connect your AI"; at least one key → connection
+ * info (with a kebab to manage/change it) plus the 3 quick actions.
+ */
+function AiMenu({ loading, connected, keyCount, onClose, onConnect, onCreateWorksheet, onAddContext, onGenerateReport }: {
+  loading: boolean; connected: boolean; keyCount: number;
+  onClose: () => void; onConnect: () => void;
+  onCreateWorksheet: () => void; onAddContext: () => void; onGenerateReport: () => void;
 }) {
   return (
     <div className="knw-legend knw-agent-popover">
       <div className="knw-agent-popover-head">
         <h4>✨ AI Assistant</h4>
-        <button className="app-icon-btn" aria-label="Close" onClick={onClose}>✕</button>
+        <div className="knw-agent-popover-head-actions">
+          {connected && <KebabMenu items={[{ label: '🔌 Change connection', onClick: onConnect }]} />}
+          <button className="app-icon-btn" aria-label="Close" onClick={onClose}>✕</button>
+        </div>
       </div>
-      <p className="app-muted">What would you like to do?</p>
-      <div className="knw-ai-actions">
-        <button className="el-button el-button--ghost el-button--small" onClick={onCreateWorksheet}>📝 Create worksheet</button>
-        <button className="el-button el-button--ghost el-button--small" onClick={onAddContext}>🌱 Add context</button>
-        <button className="el-button el-button--ghost el-button--small" onClick={onGenerateReport}>📊 Generate report</button>
-      </div>
+      {loading ? (
+        <p className="app-muted">Checking connection…</p>
+      ) : !connected ? (
+        <>
+          <p className="app-muted">Not connected yet — link an AI agent to read your workspace and create worksheets and notes directly.</p>
+          <div className="knw-ai-actions">
+            <button className="el-button el-button--small" onClick={onConnect}>🔌 Connect your AI</button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="app-muted">✓ Connected · {keyCount} agent key{keyCount === 1 ? '' : 's'}</p>
+          <div className="knw-ai-actions">
+            <button className="el-button el-button--ghost el-button--small" onClick={onCreateWorksheet}>📝 Create worksheet</button>
+            <button className="el-button el-button--ghost el-button--small" onClick={onAddContext}>🌱 Add context</button>
+            <button className="el-button el-button--ghost el-button--small" onClick={onGenerateReport}>📊 Generate report</button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
