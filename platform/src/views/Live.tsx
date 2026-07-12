@@ -39,6 +39,30 @@ export function Live() {
   });
   const aulas = store.aulas();
 
+  // Import an offline "answers" file (from the self-contained worksheet) into
+  // this class, so the student shows up in the monitor for validation.
+  const importAnswers = (a: any) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json,.json';
+    input.onchange = async () => {
+      const file = input.files && input.files[0];
+      if (!file) return;
+      let data: any;
+      try { data = JSON.parse(await file.text()); } catch { alert('That file is not valid JSON.'); return; }
+      if (!data || data.kind !== 'ensinolibre-answers') { alert('That does not look like an EnsinoLibre answers file.'); return; }
+      if (!a.worksheetIds.includes(data.worksheetId)) {
+        alert(`These answers are for "${data.worksheetTitle || 'a worksheet'}", which isn’t deployed to this class. Add that worksheet to this class first.`);
+        return;
+      }
+      await store.importSubmission(a.id, data.name || 'Student', data.worksheetId, {
+        total: data.total | 0, attempted: data.attempted | 0, correct: data.correct | 0, done: !!data.done, score: Number(data.score) || 0,
+      });
+      rerender();
+    };
+    input.click();
+  };
+
   return (
     <div>
       <PageHead title="Live classroom" subtitle="Deploy worksheets to a class or a public link, then watch progress in real time, validate and export."
@@ -80,6 +104,7 @@ export function Live() {
               <KebabMenu items={[
                 { label: a.status === 'live' ? 'Close class' : 'Reopen', onClick: () => { store.setAulaStatus(a.id, a.status === 'live' ? 'closed' : 'live'); rerender(); } },
                 { label: '↗ Open class page', onClick: () => window.open(`../aula.html?code=${a.code}`, '_blank', 'noopener') },
+                { label: '⬆ Import answers', onClick: () => importAnswers(a) },
                 { label: '⬇ Export CSV', onClick: () => download(`aula-${a.code}.csv`, toCSV(store.exportRows(a.id)), 'text/csv') },
                 { label: '⬇ Export JSON', onClick: () => download(`aula-${a.code}.json`, JSON.stringify(store.exportRows(a.id), null, 2), 'application/json') },
                 {

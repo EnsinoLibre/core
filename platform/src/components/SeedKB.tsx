@@ -240,11 +240,11 @@ export function ClassroomImportModal({ onClose, onApplied }: { onClose: () => vo
     setPrompt(null); // staged set changed → prompt is stale
   };
 
-  const integrate = () => {
+  const integrate = async () => {
     setError('');
     try {
       const classes = parseClassroomImport(reply);
-      setCounts(applyClassroomImport(classes));
+      setCounts(await applyClassroomImport(classes));
       onApplied?.();
     } catch (e: any) {
       setError(e?.message || String(e));

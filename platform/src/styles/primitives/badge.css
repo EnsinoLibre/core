@@ -38,3 +38,19 @@
   background-color: var(--color-danger-bg);
   color: var(--color-danger-fg);
 }
+
+/* Dark mode: the coloured chips use fixed-light scale tokens above, which read
+   as bright pills on a dark UI. Re-tint them so they sit in the dark theme.
+   (--neutral and --danger already use flipping semantic tokens.) */
+:root[data-theme='dark'] .el-badge {
+  background-color: color-mix(in srgb, var(--color-teal-400) 22%, transparent);
+  color: var(--color-teal-300);
+}
+:root[data-theme='dark'] .el-badge--secondary {
+  background-color: color-mix(in srgb, var(--color-terracotta-400) 22%, transparent);
+  color: var(--color-terracotta-300);
+}
+:root[data-theme='dark'] .el-badge--accent {
+  background-color: color-mix(in srgb, var(--color-gold-500) 28%, transparent);
+  color: var(--color-gold-400);
+}

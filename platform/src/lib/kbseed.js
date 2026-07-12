@@ -317,8 +317,14 @@ export function parseClassroomImport(text) {
  * Merge parsed Google Classroom data into the workspace. Existing classrooms
  * (matched by name, case-insensitive) are reused: context is filled if empty,
  * only missing students/materials are added. Returns counts for the summary.
+ *
+ * Async: a newly-created classroom's insert is awaited (store.importClassroom,
+ * not the fire-and-forget addClassroom) before its students/resources are
+ * fired, since those rows' class_id FK needs the classroom to exist first —
+ * with nothing but a tight loop between them, there's no wall-clock gap for
+ * an un-awaited insert to land first the way there is in normal manual use.
  */
-export function applyClassroomImport(classes) {
+export async function applyClassroomImport(classes) {
   const counts = { classroomsCreated: 0, classroomsMerged: 0, students: 0, resources: 0 };
   for (const c of classes) {
     let cls = store.classrooms().find((x) => x.name.trim().toLowerCase() === c.name.toLowerCase());
@@ -329,7 +335,7 @@ export function applyClassroomImport(classes) {
       if (!cls.description && c.description) patch.description = c.description;
       if (Object.keys(patch).length) store.updateClassroom(cls.id, patch);
     } else {
-      cls = store.addClassroom({
+      cls = await store.importClassroom({
         name: c.name, subject: c.subject, level: c.level, term: c.term,
         description: c.description, context: c.context,
       });

@@ -27,21 +27,11 @@ async function sha256hex(s) {
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/**
- * Fire a Supabase write and log (but don't throw) on failure.
- * Writes are serialized in call order: supabase builders are lazy thenables,
- * so chaining defers each request until the previous one lands — parent rows
- * (classroom) commit before children (students, resources) and FK constraints
- * hold during bulk operations like the Google Classroom import.
- */
-let writeChain = Promise.resolve();
+/** Fire a Supabase write and log (but don't throw) on failure. */
 function fire(builder, label) {
-  writeChain = writeChain
-    .then(() => builder)
-    .then(({ error }) => {
-      if (error) console.error(`[store] ${label} failed:`, error.message || error);
-    })
-    .catch((e) => console.error(`[store] ${label} threw:`, e));
+  Promise.resolve(builder).then(({ error }) => {
+    if (error) console.error(`[store] ${label} failed:`, error.message || error);
+  }).catch((e) => console.error(`[store] ${label} threw:`, e));
 }
 
 /* ---------------- in-memory state ---------------- */
@@ -204,6 +194,22 @@ export const store = {
     }), 'addClassroom');
     return c;
   },
+  /**
+   * Like addClassroom, but AWAITS the insert. Bulk imports (Google Classroom)
+   * fire students/resources referencing this classroom's id immediately
+   * after creating it — those inserts' RLS/FK checks need the parent row to
+   * exist first, so this can't be fire-and-forget the way addClassroom is.
+   */
+  async importClassroom(data) {
+    const c = { id: uuid(), createdAt: nowISO(), subject: '', level: '', term: '', description: '', context: '', ...data };
+    state.classrooms.unshift(c);
+    const { error } = await supabase.from('classrooms').insert({
+      id: c.id, teacher_id: teacherId, name: c.name, subject: c.subject, level: c.level,
+      term: c.term, description: c.description, context: c.context,
+    });
+    if (error) console.error('[store] importClassroom failed:', error.message);
+    return c;
+  },
   updateClassroom(id, patch) {
     const c = this.classroom(id);
     if (c) {
@@ -309,6 +315,16 @@ export const store = {
     fire(supabase.from('worksheets').insert({ id: w.id, teacher_id: teacherId, title: w.title, subject: w.subject, doc }), 'addWorksheet');
     return w;
   },
+  updateWorksheet(id, doc) {
+    const w = this.worksheet(id);
+    if (w) {
+      w.title = doc.title || w.title;
+      w.subject = doc.subject || '';
+      w.doc = doc;
+      fire(supabase.from('worksheets').update({ title: w.title, subject: w.subject, doc }).eq('id', id), 'updateWorksheet');
+    }
+    return w;
+  },
   removeWorksheet(id) {
     state.worksheets = state.worksheets.filter((w) => w.id !== id);
     for (const a of state.aulas) a.worksheetIds = a.worksheetIds.filter((wid) => wid !== id);
@@ -328,7 +344,8 @@ export const store = {
     const a = { id: uuid(), classId: classId || null, title, code, status: 'live', hasPassword: !!passwordHash, worksheetIds: worksheetIds.slice(), createdAt: nowISO() };
     state.aulas.unshift(a);
     // Await the parent row before firing the worksheet links: aula_worksheets'
-    // RLS check looks up this aula by id, so the parent must be committed first.
+    // RLS check looks up this aula by id, so it must exist first (fire() no
+    // longer serializes writes in call order).
     const { error } = await supabase.from('aulas').insert({ id: a.id, teacher_id: teacherId, class_id: classId || null, title, code, status: 'live', password_hash: passwordHash });
     if (error) { console.error('[store] createAula failed:', error.message); return a; }
     if (a.worksheetIds.length) {
@@ -355,6 +372,33 @@ export const store = {
     const e = { id: uuid(), aulaId, name: name.trim(), joinedAt: nowISO() };
     state.enrollments.push(e);
     fire(supabase.from('enrollments').insert({ id: e.id, aula_id: aulaId, name: e.name }), 'enroll');
+    return e;
+  },
+
+  /**
+   * Import an OFFLINE submission (an `ensinolibre-answers` file) into an aula:
+   * enrol the student by name, then write their progress row. Async so the
+   * enrolment insert commits before the progress insert (FK). Teachers may write
+   * enrolments/progress for their own aulas (RLS).
+   */
+  async importSubmission(aulaId, name, worksheetId, snap) {
+    const nm = String(name || '').trim() || 'Student';
+    let e = state.enrollments.find((x) => x.aulaId === aulaId && x.name.toLowerCase() === nm.toLowerCase());
+    if (!e) {
+      e = { id: uuid(), aulaId, name: nm, joinedAt: nowISO() };
+      state.enrollments.push(e);
+      const { error } = await supabase.from('enrollments').insert({ id: e.id, aula_id: aulaId, name: nm });
+      if (error) console.error('[store] importSubmission enrol failed:', error.message);
+    }
+    const key = progressKey(aulaId, e.id, worksheetId);
+    const existed = !!state.progress[key];
+    const prevValidated = existed ? (state.progress[key].validated ?? null) : null;
+    const row = { total: snap.total, attempted: snap.attempted, correct: snap.correct, done: snap.done, score: snap.score };
+    state.progress[key] = { ...row, validated: prevValidated, updatedAt: nowISO() };
+    const res = existed
+      ? await supabase.from('progress').update(row).eq('aula_id', aulaId).eq('enrollment_id', e.id).eq('worksheet_id', worksheetId)
+      : await supabase.from('progress').insert({ aula_id: aulaId, enrollment_id: e.id, worksheet_id: worksheetId, ...row });
+    if (res.error) console.error('[store] importSubmission progress failed:', res.error.message);
     return e;
   },
 

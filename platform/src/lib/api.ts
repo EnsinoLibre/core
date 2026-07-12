@@ -50,7 +50,7 @@ export const parseSeedResult: (text: string) => any[] = _psr;
 export const applySeedResult: (entries: any[], scope?: any) => { created: any[]; linked: number; unresolved: string[] } = _asr;
 export const buildClassroomImportPrompt: () => string = _bcp;
 export const parseClassroomImport: (text: string) => any[] = _pci;
-export const applyClassroomImport: (classes: any[]) => { classroomsCreated: number; classroomsMerged: number; students: number; resources: number } = _aci;
+export const applyClassroomImport: (classes: any[]) => Promise<{ classroomsCreated: number; classroomsMerged: number; students: number; resources: number }> = _aci;
 
 export interface GraphNode { id: string; type: string; label: string; subtitle?: string; body?: string; url?: string; }
 export interface GraphEdge { source: string; target: string; kind: string; }
