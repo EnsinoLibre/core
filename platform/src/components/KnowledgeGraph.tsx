@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import Graph from 'graphology';
 import Sigma from 'sigma';
 import {
   forceSimulation, forceManyBody, forceLink, forceCollide, forceX, forceY, forceRadial,
 } from 'd3-force';
 import { drawDiscNodeLabel } from 'sigma/rendering';
-import { deriveGraph, buildAdjacency, bfsDistances, hydrate } from '../lib/api';
+import { store, deriveGraph, buildAdjacency, bfsDistances, hydrate, download } from '../lib/api';
 import { useContent } from './ContentPanel';
 import { listRecentActivity, type ActivityRow } from '../lib/agentkeys';
+import { CreateWorksheetModal } from './CreateWorksheet';
+import { AddResourceModal } from './AddEntity';
 
 /* ---------- palette ---------- */
 
@@ -25,14 +28,18 @@ const TYPE_VAR: Record<string, string> = {
   'doc-hub': '--color-text',
   'doc-group': '--color-text-muted',
   doc: '--color-text-muted',
-  // Violet is reserved for this one type — never used for workspace content —
-  // so an agent node reads as categorically different at a glance.
+  // Violet is reserved for these two AI-related types — never used for
+  // workspace content — so they read as categorically different at a glance.
+  // 'ai' (persistent launcher) gets a lighter shade than 'agent' (a live,
+  // currently-connected MCP session) so the two don't get confused.
   agent: '--color-violet-500',
+  ai: '--color-violet-400',
 };
 const SIZE: Record<string, number> = {
   teacher: 16, class: 13, aula: 12, worksheet: 10, student: 10, 'resource-guideline': 10,
   'doc-hub': 14, 'doc-group': 9, doc: 7,
   agent: 15, // on par with the other hub-ish nodes — distinct colour does the differentiating, not size
+  ai: 16,
 };
 
 /** How long an agent node / touch glow / WIP ring survive after their last activity row. */
@@ -61,6 +68,7 @@ const LEGEND_ITEMS: { label: string; key: string; colorType: string; types: stri
   { label: 'Context', key: 'resource-context', colorType: 'resource-context', types: ['resource-context'] },
   { label: 'Teacher', key: 'teacher', colorType: 'teacher', types: ['teacher'] },
   { label: 'EnsinoLibre docs', key: 'docs', colorType: 'doc', types: ['doc', 'doc-group', 'doc-hub'] },
+  { label: 'AI assistant', key: 'ai', colorType: 'ai', types: ['ai'] },
   { label: 'Connected agent', key: 'agent', colorType: 'agent', types: ['agent'] },
 ];
 const LEGEND_KEY_OF: Record<string, string> = {};
@@ -85,6 +93,65 @@ function mix(a: string, b: string, t: number) {
 const RING = (d: number | undefined) => (d == null ? 430 : [0, 130, 250, 360][d] ?? 420);
 const RING_STRENGTH = (d: number | undefined) => (d == null ? 0.3 : [1, 0.6, 0.5, 0.35][d] ?? 0.3);
 
+/** Instant workspace summary — no AI round-trip, just what's already local. */
+function buildWorkspaceReport() {
+  const t = store.teacher();
+  const classes = store.classrooms();
+  const students = store.students();
+  const resources = store.resources();
+  const worksheets = store.worksheetsAll();
+  const aulas = store.aulas();
+  const date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  const lines = [
+    `# Workspace report — ${t.name}`,
+    `_Generated ${date}_`,
+    '',
+    '## Overview',
+    `- ${classes.length} classroom${classes.length === 1 ? '' : 's'}`,
+    `- ${students.length} student${students.length === 1 ? '' : 's'}`,
+    `- ${resources.length} knowledge-base note${resources.length === 1 ? '' : 's'}`,
+    `- ${worksheets.length} worksheet${worksheets.length === 1 ? '' : 's'}`,
+    `- ${aulas.length} live deployment${aulas.length === 1 ? '' : 's'}`,
+  ];
+
+  if (classes.length) {
+    lines.push('', '## Classrooms');
+    for (const c of classes) {
+      const roster = store.studentsIn(c.id);
+      lines.push(`- **${c.name}** — ${[c.subject, c.level, c.term].filter(Boolean).join(' · ') || 'no details'} — ${roster.length} student${roster.length === 1 ? '' : 's'}`);
+    }
+  }
+
+  if (aulas.length) {
+    lines.push('', '## Live classes');
+    for (const a of aulas) {
+      const rows = store.exportRows(a.id);
+      const complete = rows.filter((r: any) => r.status === 'complete').length;
+      const avg = rows.length ? Math.round(rows.reduce((s: number, r: any) => s + r.scorePct, 0) / rows.length) : 0;
+      const cls = store.classroom(a.classId);
+      lines.push(`- **${a.title}** (${cls ? cls.name : 'public link'}, code ${a.code}, ${a.status}) — ${store.enrollments(a.id).length} joined, ${complete}/${rows.length} worksheets complete, ${avg}% average score`);
+    }
+  }
+
+  if (worksheets.length) {
+    lines.push('', '## Worksheets');
+    for (const w of worksheets) {
+      const count = (w.doc?.sections || []).reduce((n: number, s: any) => n + (s.activities?.length || 0), 0);
+      lines.push(`- **${w.title}** — ${w.subject || 'no subject'} · ${count} activities`);
+    }
+  }
+
+  if (resources.length) {
+    lines.push('', '## Knowledge base');
+    const byKind = new Map<string, number>();
+    for (const r of resources) byKind.set(r.kind || 'material', (byKind.get(r.kind || 'material') || 0) + 1);
+    for (const [kind, n] of byKind) lines.push(`- ${n} ${kind}`);
+  }
+
+  return lines.join('\n');
+}
+
 export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null }) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -107,6 +174,10 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
   // Click on an "agent:<id>" node opens a lightweight popover (live/ephemeral
   // data, not a workspace entity — doesn't go through the shared content panel).
   const [agentPopover, setAgentPopover] = useState<{ id: string; label: string; recent: ActivityRow[] } | null>(null);
+  // Click on the persistent "ai-hub" node opens a menu of downstream actions
+  // (also not a workspace entity — no shared content panel for it either).
+  const [aiMenuOpen, setAiMenuOpen] = useState(false);
+  const [aiAction, setAiAction] = useState<'worksheet' | 'context' | null>(null);
 
   // Open the deep-linked node once on mount (?focus=<id>).
   useEffect(() => { if (initialFocus) open(initialFocus); /* eslint-disable-next-line */ }, []);
@@ -152,6 +223,9 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
   const hoverRef = useRef<string | null>(null);
   const paletteRef = useRef<any>({});
   const applyFocusRef = useRef<(id: string | null) => void>(() => {});
+  // Lets a manual "+Add" action (AI hub menu) graft its new node into the live
+  // graph immediately, the same way the MCP-activity poll does for agent writes.
+  const mergeFreshNodesRef = useRef<() => void>(() => {});
   // d3-force's own node list — the live-agent overlay pushes/removes entries
   // here directly so new nodes join the simulation without resetting it.
   const simNodesRef = useRef<any[]>([]);
@@ -285,12 +359,27 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
     }
     adjRef.current = buildAdjacency(data);
 
+    // Persistent, non-animated "AI Assistant" launcher — always present,
+    // unlike the ephemeral "agent:<id>" nodes tied to a live MCP connection.
+    // Anchored right next to the teacher hub so it never drifts into empty space.
+    if (g.hasNode('teacher')) {
+      const tx = g.getNodeAttribute('teacher', 'x'), ty = g.getNodeAttribute('teacher', 'y');
+      const angle = Math.random() * Math.PI * 2;
+      const aiX = tx + Math.cos(angle) * 70, aiY = ty + Math.sin(angle) * 70;
+      g.addNode('ai-hub', { x: aiX, y: aiY, size: SIZE.ai, label: '✨ AI Assistant', ntype: 'ai' });
+      g.addEdge('ai-hub', 'teacher', { kind: 'ai-hub', size: 1 });
+      adjRef.current.set('ai-hub', new Set(['teacher']));
+      adjRef.current.get('teacher')!.add('ai-hub');
+    }
+
     // d3-force
     const simNodes: any[] = data.nodes.map((n) => ({ id: n.id, x: g.getNodeAttribute(n.id, 'x'), y: g.getNodeAttribute(n.id, 'y') }));
+    if (g.hasNode('ai-hub')) simNodes.push({ id: 'ai-hub', x: g.getNodeAttribute('ai-hub', 'x'), y: g.getNodeAttribute('ai-hub', 'y') });
     const idToSim = new Map(simNodes.map((n) => [n.id, n]));
     simNodesRef.current = simNodes;
     idToSimRef.current = idToSim;
     const simLinks: any[] = data.edges.map((e) => ({ source: e.source, target: e.target, kind: e.kind }));
+    if (g.hasEdge('ai-hub', 'teacher')) simLinks.push({ source: 'ai-hub', target: 'teacher', kind: 'ai-hub' });
     simLinksRef.current = simLinks;
     // Docs-tree edges pull tight (a constellation of sections); "uses" edges
     // tether activity docs loosely to the worksheets built with them.
@@ -422,7 +511,7 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
     // interactions
     renderer.on('enterNode', ({ node }: any) => { hoverRef.current = node; container.style.cursor = 'pointer'; renderer.refresh(); });
     renderer.on('leaveNode', () => { hoverRef.current = null; container.style.cursor = 'default'; renderer.refresh(); });
-    renderer.on('clickStage', () => setAgentPopover(null));
+    renderer.on('clickStage', () => { setAgentPopover(null); setAiMenuOpen(false); });
     renderer.on('clickNode', ({ node }: any) => {
       // Agent nodes are live/ephemeral, not a workspace entity with a markdown
       // note — show a small popover instead of routing through the shared
@@ -431,9 +520,18 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
         const agentKeyId = node.slice('agent:'.length);
         const info = agentsRef.current.get(agentKeyId);
         setAgentPopover({ id: agentKeyId, label: info?.label || 'Agent', recent: activityByAgentRef.current.get(agentKeyId) || [] });
+        setAiMenuOpen(false);
+        return;
+      }
+      // The persistent AI hub isn't a workspace entity either — it opens a
+      // menu of downstream actions instead of the shared content panel.
+      if (node === 'ai-hub') {
+        setAgentPopover(null);
+        setAiMenuOpen((o) => !o);
         return;
       }
       setAgentPopover(null);
+      setAiMenuOpen(false);
       openRef.current(node);
     });
     renderer.on('downNode', ({ node }: any) => {
@@ -550,7 +648,9 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
       simRef.current?.nodes(simNodesRef.current);
       (simRef.current?.force('link') as any)?.links(simLinksRef.current);
       simRef.current?.alpha(0.6).restart();
+      sigmaRef.current?.refresh();
     };
+    mergeFreshNodesRef.current = mergeFreshNodes;
 
     const ensureAgentNode = (agentKeyId: string, label: string) => {
       const g = graphRef.current; if (!g || !simRef.current) return;
@@ -654,6 +754,7 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
       stopped = true;
       clearTimeout(timer);
       if (pulseRafRef.current) { cancelAnimationFrame(pulseRafRef.current); pulseRafRef.current = 0; }
+      mergeFreshNodesRef.current = () => {};
     };
   }, []);
 
@@ -736,6 +837,11 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
   const toggleSearch = () => { if (searchOpen) setQuery(''); setSearchOpen((o) => !o); };
   const submitSearch = (e: React.FormEvent) => { doSearch(e); setSearchOpen(false); };
 
+  const generateReport = () => {
+    download(`workspace-report-${new Date().toISOString().slice(0, 10)}.md`, buildWorkspaceReport(), 'text/markdown');
+    setAiMenuOpen(false);
+  };
+
   return (
     <div className="knw" ref={rootRef}>
       <div className="knw-stage" ref={stageRef} />
@@ -765,6 +871,14 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
 
       {legendOpen && <Legend hidden={hiddenTypes} onToggle={toggleLegend} />}
       {agentPopover && <AgentPopover info={agentPopover} onClose={() => setAgentPopover(null)} />}
+      {aiMenuOpen && (
+        <AiMenu
+          onClose={() => setAiMenuOpen(false)}
+          onCreateWorksheet={() => { setAiAction('worksheet'); setAiMenuOpen(false); }}
+          onAddContext={() => { setAiAction('context'); setAiMenuOpen(false); }}
+          onGenerateReport={generateReport}
+        />
+      )}
       {!focus && (
         <div className="knw-hint">
           {layer === 'docs'
@@ -772,6 +886,21 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
             : 'Tip: search or click any node to open its content'}
         </div>
       )}
+      <AnimatePresence>
+        {aiAction === 'worksheet' && (
+          <CreateWorksheetModal
+            onClose={() => setAiAction(null)}
+            onAdded={() => { setAiAction(null); mergeFreshNodesRef.current(); }}
+          />
+        )}
+        {aiAction === 'context' && (
+          <AddResourceModal
+            defaultKind="context"
+            onClose={() => setAiAction(null)}
+            onAdded={() => { setAiAction(null); mergeFreshNodesRef.current(); }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -810,6 +939,26 @@ function timeAgo(iso: string) {
   if (s < 5) return 'just now';
   if (s < 60) return `${s}s ago`;
   return `${Math.round(s / 60)}m ago`;
+}
+
+/** Downstream actions off the persistent AI hub node. */
+function AiMenu({ onClose, onCreateWorksheet, onAddContext, onGenerateReport }: {
+  onClose: () => void; onCreateWorksheet: () => void; onAddContext: () => void; onGenerateReport: () => void;
+}) {
+  return (
+    <div className="knw-legend knw-agent-popover">
+      <div className="knw-agent-popover-head">
+        <h4>✨ AI Assistant</h4>
+        <button className="app-icon-btn" aria-label="Close" onClick={onClose}>✕</button>
+      </div>
+      <p className="app-muted">What would you like to do?</p>
+      <div className="knw-ai-actions">
+        <button className="el-button el-button--ghost el-button--small" onClick={onCreateWorksheet}>📝 Create worksheet</button>
+        <button className="el-button el-button--ghost el-button--small" onClick={onAddContext}>🌱 Add context</button>
+        <button className="el-button el-button--ghost el-button--small" onClick={onGenerateReport}>📊 Generate report</button>
+      </div>
+    </div>
+  );
 }
 
 /** Live/ephemeral info about a connected MCP agent — not a workspace entity,

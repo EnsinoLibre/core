@@ -119,9 +119,9 @@ const KIND_OPTIONS = [
   { value: 'context', label: 'Context' },
 ];
 
-export function AddResourceModal({ onClose, onAdded }: { onClose: () => void; onAdded?: () => void }) {
+export function AddResourceModal({ onClose, onAdded, defaultKind = 'material' }: { onClose: () => void; onAdded?: () => void; defaultKind?: string }) {
   const [title, setTitle] = useState('');
-  const [kind, setKind] = useState('material');
+  const [kind, setKind] = useState(defaultKind);
   const [subject, setSubject] = useState('');
   const [url, setUrl] = useState('');
   const [note, setNote] = useState('');
