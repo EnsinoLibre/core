@@ -13,7 +13,7 @@
  */
 
 import { parseGaps } from './validator.js';
-import { warmAnime, enterTiles, exitTiles, popTiles, pulseWave, flyInMorphemes, drawPaths, flipCard, shakeTiles } from './anim.js';
+import { warmAnime, enterTiles, exitTiles, popTiles, pulseWave, flyInMorphemes, drawPaths, flipCard, shakeTiles, flashCorrect } from './anim.js';
 
 let uid = 0;
 const nextId = (p) => `oc-${p}-${++uid}`;
@@ -85,11 +85,13 @@ function makeFeedback(card, activity, revealText) {
       box.className = 'oc-feedback oc-feedback--correct';
       const explain = extra ?? activity.explanation;
       box.textContent = explain ? `Correct! ${explain}` : 'Correct!';
+      flashCorrect(card); // shared across all 13 check-based types (#14)
     },
     wrong() {
       attempts += 1;
       card.dataset.state = 'wrong';
       box.className = 'oc-feedback oc-feedback--wrong';
+      shakeTiles([card]); // shared "not quite" shake (#14)
       if (attempts >= 3) {
         box.textContent = `The answer is: ${revealText()}` + (activity.explanation ? ` — ${activity.explanation}` : '');
         card.dataset.state = 'revealed';

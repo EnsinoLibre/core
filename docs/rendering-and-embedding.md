@@ -32,10 +32,13 @@ The four visual-grammar types ([[activities/grammar-forms|grammar-forms]], [[act
 - **`pulseWave`** — a travelling highlight across a row of tiles.
 - **`drawPaths`** — translation-compare's SVG connector curves draw themselves in.
 - **`flipCard`** — a 3D card flip (`rotateY` to edge-on, swap the content at the invisible midpoint, rotate the new face back to flat) used by [[activities/flashdeck|flashcards]] (tap-to-flip and prev/next) and [[activities/memory-game|memory game]] (reveal).
-- **`shakeTiles`** — a quick horizontal shake to signal a wrong/mismatched action (memory-game mismatch, before the cards flip back).
+- **`flashCorrect`** — a soft scale-pop affirming a correct answer.
+- **`shakeTiles`** — a quick horizontal shake to signal a wrong/mismatched action (memory-game mismatch; the shared wrong-answer feedback).
 - **`warmAnime`** — a cheap warm-up so the first real animation doesn't jank.
 
 Beyond the four visual-grammar types, the **flashcard** deck and the **memory game** are animated too: cards flip on reveal, matched pairs `popTiles`, and a mismatch `shakeTiles` before flipping back.
+
+**Check feedback is animated engine-wide.** The shared `makeFeedback()` control point calls `flashCorrect` on a correct answer and `shakeTiles` on a wrong one, so all thirteen check-based types (mcq, true-false, gap-fill, matching, ordering, quiz, single-choice-set, question-set, reading-comp, translation, summary, crossword, mark-words) get the same distinct correct-pop / wrong-shake for free.
 
 Every helper is a **graceful no-op** under `prefers-reduced-motion` (or where `Element.animate` is unavailable), so animation is never required for correctness. Enter animations fill **backwards only**, so elements always come to rest at their stylesheet state — content is never left invisible. A `settle()` safety net force-finishes animations after a capped timeout, so a throttled/backgrounded tab (where `requestAnimationFrame` stalls at 0) can't leave tiles stuck hidden.
 

@@ -133,6 +133,15 @@ export async function flipCard(node, updateContent) {
   // which is visually identical, and the next flip cancels it.
 }
 
+/** Soft scale-pop to affirm a correct answer (paired with shakeTiles for wrong). */
+export async function flashCorrect(node) {
+  if (!node || typeof node.animate !== 'function' || reduceMotion()) return;
+  node.animate(
+    [{ transform: 'scale(1)' }, { transform: 'scale(1.03)', offset: 0.4 }, { transform: 'scale(1)' }],
+    { duration: 320, easing: EASE.outBack },
+  );
+}
+
 /** Quick horizontal shake to signal a wrong/mismatched action. No-op when reduced. */
 export async function shakeTiles(nodes) {
   if (!canAnimate(nodes)) return;
