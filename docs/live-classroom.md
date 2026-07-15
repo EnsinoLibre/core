@@ -17,6 +17,12 @@ Each deployed session shows its join code, a live/closed status toggle, and thre
 
 **Validating** an attempt marks it **✓ Validated** or **⚑ Needs review** (or clears the mark) — a teacher-only annotation students never see, useful for flagging work you want to look at more closely or confirming grades.
 
+## Password protection
+
+A deployment can require a password to join — required for class deployments, optional for public links (see [[worksheets-library|Deploy]]). The password is set once, server-side: the teacher's plaintext never leaves the request that creates or changes it, and it's hashed with bcrypt in Postgres (`set_aula_password`), never computed or uploaded as a hash by the client.
+
+Joining checks the password inside `join_aula` itself — the same function students call directly (no app server sits in front of it) — and rate-limits: **5 wrong guesses lock the join code for 15 minutes**, after which it self-heals on the next attempt. A locked code returns `locked` (with the unlock time) to every attempt, correct password or not, so the lockout can't be probed around. Codes created before this hardening carry an older hash format that upgrades to bcrypt automatically the first time someone joins with the correct password — nothing to migrate by hand.
+
 ## Importing offline work
 
 A worksheet's **Interactive (offline)** export is a self-contained HTML file a student can complete without any connection, producing an `ensinolibre-answers` file when they're done. **⬆ Import answers** on a live session reads that file back in and enrols the student (by name) so their progress shows up in the monitor exactly as if they'd joined online.

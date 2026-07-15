@@ -22,10 +22,6 @@ import { supabase } from './supabase';
 
 const nowISO = () => new Date().toISOString();
 const uuid = () => (crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
-async function sha256hex(s) {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
-  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
-}
 
 /* ---------------- write-error surfacing (issue #17) ----------------
  * Writes are optimistic: state mutates first, then the Supabase write is fired.
@@ -369,14 +365,19 @@ export const store = {
     const used = new Set(state.aulas.map((a) => a.code));
     let code;
     do { code = 'A' + Math.random().toString(36).slice(2, 6).toUpperCase(); } while (used.has(code));
-    const passwordHash = password ? await sha256hex(password) : null;
-    const a = { id: uuid(), classId: classId || null, title, code, status: 'live', hasPassword: !!passwordHash, worksheetIds: worksheetIds.slice(), createdAt: nowISO() };
+    const a = { id: uuid(), classId: classId || null, title, code, status: 'live', hasPassword: !!password, worksheetIds: worksheetIds.slice(), createdAt: nowISO() };
     state.aulas.unshift(a);
     // Await the parent row before firing the worksheet links: aula_worksheets'
     // RLS check looks up this aula by id, so it must exist first (fire() no
     // longer serializes writes in call order).
-    const { error } = await supabase.from('aulas').insert({ id: a.id, teacher_id: teacherId, class_id: classId || null, title, code, status: 'live', password_hash: passwordHash });
+    const { error } = await supabase.from('aulas').insert({ id: a.id, teacher_id: teacherId, class_id: classId || null, title, code, status: 'live' });
     if (error) { console.error('[store] createAula failed:', error.message); return a; }
+    if (password) {
+      // Hashed server-side with bcrypt (set_aula_password RPC) — the client
+      // never computes or uploads a password hash itself (issue #46).
+      const { error: pwErr } = await supabase.rpc('set_aula_password', { p_aula_id: a.id, p_password: password });
+      if (pwErr) { a.hasPassword = false; reportWriteError('createAula.password', pwErr); }
+    }
     if (a.worksheetIds.length) {
       fire(supabase.from('aula_worksheets').insert(a.worksheetIds.map((wid, i) => ({ aula_id: a.id, worksheet_id: wid, position: i }))), 'createAula.worksheets');
     }
