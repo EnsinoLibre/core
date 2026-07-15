@@ -333,10 +333,16 @@ R['open-response'] = (a, index) => {
   card.appendChild(ta);
   const counter = el('p', 'oc-word-count', a.minWords ? `0 words (aim for at least ${a.minWords})` : '0 words');
   card.appendChild(counter);
+  let wasMet = false;
   ta.addEventListener('input', () => {
     const words = ta.value.trim() ? ta.value.trim().split(/\s+/).length : 0;
     counter.textContent = a.minWords ? `${words} words (aim for at least ${a.minWords})` : `${words} words`;
-    if (a.minWords) counter.classList.toggle('oc-word-count--met', words >= a.minWords);
+    if (a.minWords) {
+      const met = words >= a.minWords;
+      counter.classList.toggle('oc-word-count--met', met);
+      if (met && !wasMet) popTiles([counter]); // celebrate crossing the target (#16)
+      wasMet = met;
+    }
   });
   if (a.sampleAnswer) {
     const details = el('details', 'oc-sample');
@@ -860,6 +866,7 @@ R['word-search'] = (a, index) => {
     if (hit) {
       found.add(hit.word);
       lineCells.forEach((lc) => lc.classList.add('oc-ws-cell--found'));
+      popTiles(lineCells); // pulse the found word (#16)
       listEl.textContent = 'Find: ' + placedWords.filter((w) => !found.has(w)).join(', ');
       if (found.size === placed.length) listEl.textContent = 'All words found! 🎉';
     }
@@ -1124,6 +1131,7 @@ R['image-hotspot'] = (a, index) => {
     dot.addEventListener('click', () => {
       info.className = 'oc-feedback oc-feedback--correct';
       info.textContent = `${i + 1}: ${h.label}` + (h.description ? ` — ${h.description}` : '');
+      popTiles([dot]); // pulse the tapped hotspot (#16)
     });
     frame.appendChild(dot);
   });
@@ -1177,6 +1185,7 @@ R['survey'] = (a, index) => {
         const input = document.createElement('input');
         input.type = 'radio';
         input.name = name;
+        input.addEventListener('change', () => popTiles([label])); // confirm the pick (#16)
         label.appendChild(input);
         label.appendChild(el('span', null, String(i)));
         row.appendChild(label);
@@ -1191,6 +1200,7 @@ R['survey'] = (a, index) => {
         const input = document.createElement('input');
         input.type = 'radio';
         input.name = name;
+        input.addEventListener('change', () => popTiles([label])); // confirm the pick (#16)
         label.appendChild(input);
         label.appendChild(el('span', null, o));
         list.appendChild(label);
@@ -1224,6 +1234,7 @@ R['poll'] = (a, index) => {
       btn.classList.add('oc-option--picked');
       info.className = 'oc-feedback oc-feedback--correct';
       info.textContent = o.followUp || 'Noted — there are no wrong answers here.';
+      popTiles([btn]); // confirm the pick (#16)
     });
     list.appendChild(btn);
   });

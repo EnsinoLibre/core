@@ -40,6 +40,8 @@ Beyond the four visual-grammar types, the **flashcard** deck and the **memory ga
 
 **Check feedback is animated engine-wide.** The shared `makeFeedback()` control point calls `flashCorrect` on a correct answer and `shakeTiles` on a wrong one, so all thirteen check-based types (mcq, true-false, gap-fill, matching, ordering, quiz, single-choice-set, question-set, reading-comp, translation, summary, crossword, mark-words) get the same distinct correct-pop / wrong-shake for free.
 
+**Micro-interactions** across the remaining types get a short `popTiles` pulse at their single interactive moment: a found word in the **word search**, the tapped dot in a **picture-labelling** (image-hotspot) activity, a picked **poll**/**survey** option, and the **open-writing** word counter the moment it first crosses `minWords`.
+
 Every helper is a **graceful no-op** under `prefers-reduced-motion` (or where `Element.animate` is unavailable), so animation is never required for correctness. Enter animations fill **backwards only**, so elements always come to rest at their stylesheet state — content is never left invisible. A `settle()` safety net force-finishes animations after a capped timeout, so a throttled/backgrounded tab (where `requestAnimationFrame` stalls at 0) can't leave tiles stuck hidden.
 
 
