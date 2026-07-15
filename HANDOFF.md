@@ -163,6 +163,20 @@ local `force`/`useState` counter. `api.ts` re‑exports `store`, `auth`,
 `onLiveUpdate`, `refresh`, `validateWorksheet`, the exporters, `buildVault`,
 `makeZip`, and the graph helpers.
 
+> **Note (this table row is stale — see #48):** the teacher platform is now on
+> **Supabase**, not localStorage. Writes are optimistic and fire-and-forget.
+
+**Write-error surfacing (issue #17).** `store.js` writes mutate in-memory state
+first, then fire the Supabase write. A failed write (RLS, network, FK) no longer
+just `console.error`s — `fire()` calls `reportWriteError()`, which increments a
+counter and notifies `onWriteError(handler)` subscribers. `api.ts` re-exports
+`onWriteError` / `writeErrorTotal`; `Shell.tsx`'s `WriteErrorBanner` subscribes
+and shows a persistent banner with **Reload from server** (`store.reset()` →
+`location.reload()`), reconciling optimistic state with DB truth. Known gap left
+for a follow-up: plain `UPDATE`s in `setValidation`/`setProgress` that match **0
+rows** return no error, so they aren't caught by this hook (they'd need a
+`.select()` + row-count check per call site).
+
 ---
 
 ## 7. First tasks (prioritised)

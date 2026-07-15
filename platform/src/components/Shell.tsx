@@ -1,7 +1,7 @@
-import type { ReactNode } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import { useEffect, useState, type ReactNode } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { supabase, store } from '../lib/api';
+import { supabase, store, onWriteError, type WriteError } from '../lib/api';
 import { useTheme } from '../lib/theme';
 import { Avatar } from './bits';
 import { ContentProvider, ContentSidePanel, ContentSheet, useContent, useMobileLayout } from './ContentPanel';
@@ -58,6 +58,7 @@ function ShellChrome({ children }: { children: ReactNode }) {
         </button>
         <button className="el-button el-button--ghost el-button--small" onClick={async () => { await supabase.auth.signOut(); nav('/login'); }}>Sign out</button>
       </header>
+      <WriteErrorBanner />
       <div className="app-body">
         <aside className="app-sidebar">
           <nav className="app-nav">
@@ -76,5 +77,39 @@ function ShellChrome({ children }: { children: ReactNode }) {
       {/* Mobile: a non-modal bottom drawer overlay (content behind stays usable) */}
       <AnimatePresence>{panelOpen && mobile && <ContentSheet key="sheet" />}</AnimatePresence>
     </div>
+  );
+}
+
+/**
+ * Surfaces failed Supabase writes (issue #17). Optimistic state can diverge
+ * from the database silently; when a write fails we show a persistent banner so
+ * the teacher knows their change wasn't saved, and offer "Reload from server"
+ * which re-hydrates from DB truth (discarding the un-persisted optimistic edit).
+ */
+function WriteErrorBanner() {
+  const [errors, setErrors] = useState<WriteError[]>([]);
+  const [reloading, setReloading] = useState(false);
+
+  useEffect(() => onWriteError((e) => setErrors((prev) => [...prev.slice(-4), e])), []);
+
+  if (errors.length === 0) return null;
+  const last = errors[errors.length - 1];
+
+  const reload = async () => {
+    setReloading(true);
+    try { await store.reset(); } catch { /* fall through to a hard reload */ }
+    location.reload();
+  };
+
+  return (
+    <motion.div className="app-write-error" role="alert" initial={{ y: -8, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
+      <span className="app-write-error-icon" aria-hidden="true">⚠</span>
+      <span className="app-write-error-text">
+        <strong>{errors.length === 1 ? 'A change wasn’t saved.' : `${errors.length} changes weren’t saved.`}</strong>{' '}
+        Your workspace may be out of sync with the server{last?.message ? ` (${last.message})` : ''}. Reload to restore the saved state.
+      </span>
+      <button className="el-button el-button--small" disabled={reloading} onClick={reload}>{reloading ? 'Reloading…' : 'Reload from server'}</button>
+      <button className="app-icon-btn" aria-label="Dismiss" title="Dismiss" onClick={() => setErrors([])}>✕</button>
+    </motion.div>
   );
 }

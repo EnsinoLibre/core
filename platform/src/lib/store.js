@@ -27,11 +27,40 @@ async function sha256hex(s) {
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** Fire a Supabase write and log (but don't throw) on failure. */
+/* ---------------- write-error surfacing (issue #17) ----------------
+ * Writes are optimistic: state mutates first, then the Supabase write is fired.
+ * If that write fails (RLS, network, FK) we must NOT swallow it — the teacher
+ * would keep working on data the database never accepted and lose it on the
+ * next hydrate, and an agent reading via MCP would see a different world than
+ * the teacher's screen. fire() therefore notifies subscribers so the Shell can
+ * surface the failure and offer a reload that reconciles state with DB truth.
+ */
+const writeErrorHandlers = new Set();
+let writeErrorCount = 0;
+
+/** Subscribe to write failures. handler({ label, message, count }). Returns an unsubscribe. */
+export function onWriteError(handler) {
+  writeErrorHandlers.add(handler);
+  return () => writeErrorHandlers.delete(handler);
+}
+/** Total write failures observed this session (for a "N changes unsaved" badge). */
+export const writeErrorTotal = () => writeErrorCount;
+
+function reportWriteError(label, error) {
+  writeErrorCount += 1;
+  const message = (error && (error.message || String(error))) || 'unknown error';
+  console.error(`[store] ${label} failed:`, message);
+  const detail = { label, message, count: writeErrorCount };
+  for (const h of writeErrorHandlers) {
+    try { h(detail); } catch (e) { console.error('[store] onWriteError handler threw', e); }
+  }
+}
+
+/** Fire a Supabase write; surface failures (issue #17) instead of swallowing them. */
 function fire(builder, label) {
   Promise.resolve(builder).then(({ error }) => {
-    if (error) console.error(`[store] ${label} failed:`, error.message || error);
-  }).catch((e) => console.error(`[store] ${label} threw:`, e));
+    if (error) reportWriteError(label, error);
+  }).catch((e) => reportWriteError(label, e));
 }
 
 /* ---------------- in-memory state ---------------- */

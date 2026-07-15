@@ -4,7 +4,7 @@
  * single source of truth; the platform imports them here and (for now) as any.
  */
 // @ts-ignore - plain JS module, no d.ts
-import { store as _store, auth as _auth, studentAuth as _studentAuth, onLiveUpdate as _onLive, refresh as _refresh, hydrate as _hydrate, isHydrated as _isHydrated } from './store.js';
+import { store as _store, auth as _auth, studentAuth as _studentAuth, onLiveUpdate as _onLive, refresh as _refresh, hydrate as _hydrate, isHydrated as _isHydrated, onWriteError as _onWriteError, writeErrorTotal as _writeErrorTotal } from './store.js';
 // @ts-ignore
 import { deriveGraph as _derive, buildAdjacency as _adj, bfsDistances as _bfs, NODE_TYPES as _NT } from './graph.js';
 export { supabase } from './supabase';
@@ -16,6 +16,9 @@ export const onLiveUpdate: (fn: (m: any) => void) => (() => void) = _onLive;
 export const refresh: () => void = _refresh;
 export const hydrate: () => Promise<any> = _hydrate;
 export const isHydrated: () => boolean = _isHydrated;
+export interface WriteError { label: string; message: string; count: number }
+export const onWriteError: (fn: (e: WriteError) => void) => (() => void) = _onWriteError;
+export const writeErrorTotal: () => number = _writeErrorTotal;
 
 export const deriveGraph: (opts?: { includeDocs?: boolean }) => { nodes: GraphNode[]; edges: GraphEdge[] } = _derive;
 export const buildAdjacency: (g: any) => Map<string, Set<string>> = _adj;

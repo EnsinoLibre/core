@@ -34,6 +34,12 @@ The platform lives behind a real account (Supabase Auth — email + password, wi
 
 **Everything is a linked knowledge base.** Classrooms, students, worksheets and resources are all nodes with markdown notes behind them, connected by explicit wikilinks and structural relationships (a student belongs to a class, a worksheet is deployed to a class, and so on). The [[knowledge-graph|Knowledge view]] visualises this directly; the same graph is what an AI agent gets hold of via [[knowledge-seeding|seeding]], [[mcp-connect|MCP]], or an [[obsidian-vault|Obsidian vault export]].
 
+## How your changes are saved
+
+The platform saves **optimistically**: when you add or edit something, the change shows up on screen immediately while the write to the database happens in the background. This keeps the interface fast and means normal use never waits on the network.
+
+If a background write ever fails — you lose connection, your session expires, or the server rejects the change — the platform **tells you instead of pretending it worked**: a banner appears at the top ("A change wasn't saved…") with a **Reload from server** button. Reloading re-fetches the authoritative state from the database, so anything that didn't actually save is dropped and your screen matches what's really stored. This prevents the silent trap of carrying on against data the database never accepted (which also matters for AI agents, since they read the *database* truth, not your screen). If you see the banner, reload before doing more work you care about.
+
 ## Bringing in existing material
 
 - **Bulk-seed from files** — turn any files you already have into linked knowledge-base notes. See [[knowledge-seeding]].
