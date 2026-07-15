@@ -60,8 +60,8 @@ export interface SeedScope { kind?: string; classId?: string; studentId?: string
  * 1. pick files (bulk) → 2. copy prompt for the local agent → 3. paste the
  * agent's JSON back to create one front-facing summary note per file.
  */
-export function SeedModal({ scope = {}, onClose, onApplied }: { scope?: SeedScope; onClose: () => void; onApplied?: () => void }) {
-  const [tab, setTab] = useState<'files' | 'mcp'>('files');
+export function SeedModal({ scope = {}, onClose, onApplied, initialTab = 'files' }: { scope?: SeedScope; onClose: () => void; onApplied?: () => void; initialTab?: 'files' | 'mcp' }) {
+  const [tab, setTab] = useState<'files' | 'mcp'>(initialTab);
   const [staged, setStaged] = useState<any[]>([]);
   const [prompt, setPrompt] = useState<string | null>(null);
   const [reply, setReply] = useState('');
@@ -229,8 +229,8 @@ export function SeedButton({ scope, label = '⬆ Seed files', small = false, onA
  * JSON back. Step 1 links out to the docs page with the exact Takeout steps,
  * since most teachers have never used Takeout before.
  */
-export function ClassroomImportModal({ onClose, onApplied }: { onClose: () => void; onApplied?: () => void }) {
-  const [tab, setTab] = useState<'files' | 'mcp'>('files');
+export function ClassroomImportModal({ onClose, onApplied, initialTab = 'files' }: { onClose: () => void; onApplied?: () => void; initialTab?: 'files' | 'mcp' }) {
+  const [tab, setTab] = useState<'files' | 'mcp'>(initialTab);
   const [staged, setStaged] = useState<any[]>([]);
   const [prompt, setPrompt] = useState<string | null>(null);
   const [reply, setReply] = useState('');

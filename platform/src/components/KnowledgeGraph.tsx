@@ -10,7 +10,7 @@ import { store, deriveGraph, buildAdjacency, bfsDistances, hydrate, download } f
 import { useContent } from './ContentPanel';
 import { listRecentActivity, listAgentKeys, type ActivityRow, type AgentKey } from '../lib/agentkeys';
 import { CreateWorksheetModal } from './CreateWorksheet';
-import { AddResourceModal } from './AddEntity';
+import { SeedModal, ClassroomImportModal } from './SeedKB';
 import { McpConnectModal } from './McpConnect';
 import { KebabMenu } from './bits';
 
@@ -179,9 +179,11 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
   // Click on the persistent "ai-hub" node opens a menu of downstream actions
   // (also not a workspace entity — no shared content panel for it either).
   // The menu itself is connection-aware: no agent key yet → just "Connect
-  // your AI"; at least one key → connection info + the 3 actions.
+  // your AI"; at least one key → connection info + the quick actions, each
+  // opening its modal straight on the "Connect via MCP" tab (the agent is
+  // already connected, so skip the copy-paste tab it'd otherwise default to).
   const [aiMenuOpen, setAiMenuOpen] = useState(false);
-  const [aiAction, setAiAction] = useState<'worksheet' | 'context' | null>(null);
+  const [aiAction, setAiAction] = useState<'worksheet' | 'seed' | 'classroom' | null>(null);
   const [aiConnectOpen, setAiConnectOpen] = useState(false);
   const [aiKeys, setAiKeys] = useState<{ loading: boolean; keys: AgentKey[] }>({ loading: true, keys: [] });
   const refreshAiKeys = () => {
@@ -903,7 +905,8 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
           onClose={() => setAiMenuOpen(false)}
           onConnect={() => { setAiMenuOpen(false); setAiConnectOpen(true); }}
           onCreateWorksheet={() => { setAiAction('worksheet'); setAiMenuOpen(false); }}
-          onAddContext={() => { setAiAction('context'); setAiMenuOpen(false); }}
+          onSeedKnowledgeBase={() => { setAiAction('seed'); setAiMenuOpen(false); }}
+          onImportClassroom={() => { setAiAction('classroom'); setAiMenuOpen(false); }}
           onGenerateReport={generateReport}
         />
       )}
@@ -917,15 +920,23 @@ export function KnowledgeGraph({ initialFocus }: { initialFocus?: string | null 
       <AnimatePresence>
         {aiAction === 'worksheet' && (
           <CreateWorksheetModal
+            initialTab="mcp"
             onClose={() => setAiAction(null)}
             onAdded={() => { setAiAction(null); mergeFreshNodesRef.current(); }}
           />
         )}
-        {aiAction === 'context' && (
-          <AddResourceModal
-            defaultKind="context"
+        {aiAction === 'seed' && (
+          <SeedModal
+            initialTab="mcp"
             onClose={() => setAiAction(null)}
-            onAdded={() => { setAiAction(null); mergeFreshNodesRef.current(); }}
+            onApplied={() => { mergeFreshNodesRef.current(); }}
+          />
+        )}
+        {aiAction === 'classroom' && (
+          <ClassroomImportModal
+            initialTab="mcp"
+            onClose={() => setAiAction(null)}
+            onApplied={() => { mergeFreshNodesRef.current(); }}
           />
         )}
         {aiConnectOpen && (
@@ -963,6 +974,8 @@ const TOOL_LABEL: Record<string, string> = {
   create_worksheet: 'created a worksheet',
   list_worksheets: 'listed worksheets',
   add_resource: 'added a knowledge note',
+  upsert_classroom: 'created/updated a classroom',
+  upsert_student: 'created/updated a student',
 };
 
 function timeAgo(iso: string) {
@@ -974,13 +987,16 @@ function timeAgo(iso: string) {
 
 /**
  * Downstream actions off the persistent AI hub node — connection-aware:
- * no agent key yet → just "Connect your AI"; at least one key → connection
- * info (with a kebab to manage/change it) plus the 3 quick actions.
+ * no agent key yet → a short pitch for what connecting unlocks, plus
+ * "Connect your AI" (the modal it opens still works without a key, via its
+ * own copy-paste tab); at least one key → connection info (with a kebab to
+ * manage/change it) plus the 4 quick actions, each jumping straight to that
+ * modal's "Connect via MCP" tab since the agent is already wired up.
  */
-function AiMenu({ loading, connected, keyCount, onClose, onConnect, onCreateWorksheet, onAddContext, onGenerateReport }: {
+function AiMenu({ loading, connected, keyCount, onClose, onConnect, onCreateWorksheet, onSeedKnowledgeBase, onImportClassroom, onGenerateReport }: {
   loading: boolean; connected: boolean; keyCount: number;
   onClose: () => void; onConnect: () => void;
-  onCreateWorksheet: () => void; onAddContext: () => void; onGenerateReport: () => void;
+  onCreateWorksheet: () => void; onSeedKnowledgeBase: () => void; onImportClassroom: () => void; onGenerateReport: () => void;
 }) {
   return (
     <div className="knw-legend knw-agent-popover">
@@ -995,7 +1011,11 @@ function AiMenu({ loading, connected, keyCount, onClose, onConnect, onCreateWork
         <p className="app-muted">Checking connection…</p>
       ) : !connected ? (
         <>
-          <p className="app-muted">Not connected yet — link an AI agent to read your workspace and create worksheets and notes directly.</p>
+          <p className="app-muted">
+            Not connected yet. A connected agent can create worksheets, seed your knowledge base and
+            import a whole Google Classroom export directly — file by file, with no copy-paste and no
+            size limit.
+          </p>
           <div className="knw-ai-actions">
             <button className="el-button el-button--small" onClick={onConnect}>🔌 Connect your AI</button>
           </div>
@@ -1005,7 +1025,8 @@ function AiMenu({ loading, connected, keyCount, onClose, onConnect, onCreateWork
           <p className="app-muted">✓ Connected · {keyCount} agent key{keyCount === 1 ? '' : 's'}</p>
           <div className="knw-ai-actions">
             <button className="el-button el-button--ghost el-button--small" onClick={onCreateWorksheet}>📝 Create worksheet</button>
-            <button className="el-button el-button--ghost el-button--small" onClick={onAddContext}>🌱 Add context</button>
+            <button className="el-button el-button--ghost el-button--small" onClick={onSeedKnowledgeBase}>🌱 Seed knowledge base</button>
+            <button className="el-button el-button--ghost el-button--small" onClick={onImportClassroom}>🏫 Import classroom</button>
             <button className="el-button el-button--ghost el-button--small" onClick={onGenerateReport}>📊 Generate report</button>
           </div>
         </>

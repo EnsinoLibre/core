@@ -15,8 +15,8 @@ import { buildPrompt, ACTIVITY_TYPES } from '../../../site/assets/js/prompt-buil
  *   for the `mcp` edge function, so Claude (or any MCP client) can create
  *   worksheets directly in the workspace.
  */
-export function CreateWorksheetModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
-  const [tab, setTab] = useState<'prompt' | 'mcp'>('prompt');
+export function CreateWorksheetModal({ onClose, onAdded, initialTab = 'prompt' }: { onClose: () => void; onAdded: () => void; initialTab?: 'prompt' | 'mcp' }) {
+  const [tab, setTab] = useState<'prompt' | 'mcp'>(initialTab);
   return (
     <motion.div className="app-modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
       <motion.div className="app-modal app-seed-modal" onClick={(e) => e.stopPropagation()}
