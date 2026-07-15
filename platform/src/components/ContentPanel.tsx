@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { marked } from 'marked';
 // @ts-ignore - plain JS content model
 import { entityContent, resolveWikilink } from '../lib/content.js';
+import { store } from '../lib/api';
 
 /* ---------------- context ---------------- */
 
@@ -69,7 +70,8 @@ const maxW = () => Math.min(820, Math.round(window.innerWidth * 0.6));
  *  resizing it reflows the page (not an overlay). */
 export function ContentSidePanel() {
   const { current, close } = useContent();
-  const doc = useMemo(() => (current ? entityContent(current) : null), [current]);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const doc = useMemo(() => (current ? entityContent(current) : null), [current, refreshKey]);
 
   const [width, setWidth] = useState(() => {
     const saved = Number(localStorage.getItem(WIDTH_KEY));
@@ -108,7 +110,7 @@ export function ContentSidePanel() {
   return (
     <aside className="content-panel content-panel--side" style={{ flex: `0 0 ${width}px`, width }} aria-label="Content panel">
       <div className="content-resize" onMouseDown={startResize} title="Drag to resize" role="separator" aria-orientation="vertical" />
-      <ContentBody doc={doc} onClose={close} />
+      <ContentBody doc={doc} onClose={close} onRefresh={() => setRefreshKey((k) => k + 1)} />
     </aside>
   );
 }
@@ -119,7 +121,8 @@ const INSET_VAR = '--content-bottom-inset';
 
 export function ContentSheet() {
   const { current, close } = useContent();
-  const doc = useMemo(() => (current ? entityContent(current) : null), [current]);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const doc = useMemo(() => (current ? entityContent(current) : null), [current, refreshKey]);
   const [height, setHeight] = useState(() => Math.round(window.innerHeight * 0.5));
   const dragging = useRef(false);
 
@@ -170,7 +173,7 @@ export function ContentSheet() {
       >
         <span className="content-grab-bar" />
       </div>
-      <ContentBody doc={doc} onClose={close} />
+      <ContentBody doc={doc} onClose={close} onRefresh={() => setRefreshKey((k) => k + 1)} />
     </motion.aside>
   );
 }
@@ -195,7 +198,34 @@ function renderMarkdown(md: string) {
   return marked.parse(withLinks, { async: false, breaks: false }) as string;
 }
 
-function ContentBody({ doc, onClose }: { doc: any; onClose: () => void }) {
+/** Small inline form on a student's content panel — the only place
+ *  store.addStudentNote is called from the UI (the MCP add_student_note tool
+ *  writes the same table). */
+function StudentNoteForm({ studentId, onAdded }: { studentId: string; onAdded: () => void }) {
+  const [value, setValue] = useState('');
+  const [saving, setSaving] = useState(false);
+  const submit = () => {
+    const t = value.trim();
+    if (!t || saving) return;
+    setSaving(true);
+    store.addStudentNote(studentId, t);
+    setValue('');
+    setSaving(false);
+    onAdded();
+  };
+  return (
+    <div className="content-note-form">
+      <textarea
+        className="el-input" rows={2} placeholder="Add an observation…" value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); } }}
+      />
+      <button className="el-button el-button--small" disabled={!value.trim() || saving} onClick={submit}>+ Add observation</button>
+    </div>
+  );
+}
+
+function ContentBody({ doc, onClose, onRefresh }: { doc: any; onClose: () => void; onRefresh: () => void }) {
   const { open, back, canBack } = useContent();
   const nav = useNavigate();
   const html = useMemo(() => renderMarkdown(doc.markdown), [doc.markdown]);
@@ -230,6 +260,8 @@ function ContentBody({ doc, onClose }: { doc: any; onClose: () => void }) {
         )}
 
         <div className="content-md" onClick={onBodyClick} dangerouslySetInnerHTML={{ __html: html }} />
+
+        {doc.type === 'student' && <StudentNoteForm studentId={doc.id.slice('student:'.length)} onAdded={onRefresh} />}
 
         {doc.connections.length > 0 && (
           <div className="content-conn">
