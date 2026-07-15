@@ -15,7 +15,11 @@ The prompt builder's copy-paste loop works with any AI. But if your AI speaks th
 | `get_worksheet_contract` | The worksheet JSON contract: envelope, quality rules, and the exact shapes of the activity types it plans to use. |
 | `create_worksheet` | Validates a worksheet document and adds it straight to your library. Rejections return the validation problems verbatim, so the agent can fix and retry. |
 | `list_worksheets` | What's already in the library. |
-| `add_resource` | Files an llm.wiki-style summary note into your knowledge base — optionally scoped to a classroom/student by name. |
+| `add_resource` | Files an llm.wiki-style summary note into your knowledge base — optionally scoped to a classroom/student by name. Idempotent: re-running it with the same title (and scope) updates that note instead of duplicating it. |
+| `get_resource` | Reads one note in FULL, by id or title — `get_workspace_context` and `search_resources` only preview note text. |
+| `search_resources` | Full-text search over the knowledge base (title/note/subject), filterable by kind/classroom/student/tags — the targeted alternative to reading everything. |
+| `update_resource` | Revises an existing note in place — pass only the fields that changed. |
+| `append_resource_note` | Adds a dated addendum to an existing note without touching what's already there. |
 | `upsert_classroom` | Create a classroom, or merge into an existing one matched by name. Safe to call repeatedly. |
 | `upsert_student` | Create a student under a classroom (by name), or merge into an existing one. Safe to call repeatedly. |
 
@@ -38,6 +42,12 @@ need to work out the procedure by hand — install the bundled
 skill with `npx skills add EnsinoLibre/core` and just point it at a folder or
 an unzipped Takeout export. See [`skills/`](https://github.com/EnsinoLibre/core/tree/main/skills)
 in the repo for the full list and install notes.
+
+## Reading and revising memory at scale
+
+`get_workspace_context` is a **preview**, not the whole knowledge base: it shows your most recent notes (with tags and links) and, once there are more than it can show, says so explicitly and points at `search_resources` instead of silently dropping the rest. That matters once a workspace has hundreds of notes — reading everything on every call doesn't scale, and a truncated dump the agent doesn't know is truncated is worse than no dump at all.
+
+The read/write loop this enables: `search_resources` to find the relevant note(s), `get_resource` to read one in full, then `update_resource` (rewrite) or `append_resource_note` (dated addendum) to revise it — the same tools a teacher's own future agent session uses to keep long-lived context (a classroom's running notes, a student's profile) accurate instead of write-once.
 
 ## Connecting
 

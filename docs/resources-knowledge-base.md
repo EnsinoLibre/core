@@ -22,3 +22,7 @@ Every seedable kind (Teaching materials, Guidelines, External resources, Context
 ## Opening a resource
 
 Clicking a card opens the shared content panel: class/student context line, the resource's note (rendered as markdown, including any wikilinks to other entities), its link if it has one, and its tags. Seeded resources show the AI-written front-facing summary here directly — the same note is what an [[mcp-connect|MCP agent]]'s `add_resource` tool writes, and what ends up in the [[obsidian-vault|Obsidian vault export]] and the [[knowledge-graph|knowledge graph]].
+
+## Revising a note later
+
+Notes aren't write-once. A connected agent can search the knowledge base (`search_resources`), pull one up in full (`get_resource`), and either rewrite it (`update_resource`) or tack on a dated addendum (`append_resource_note`) — see [[mcp-connect]] for the full read/write loop. Re-seeding the same source (same title, same classroom/student scope) also updates the existing note in place rather than filing a duplicate.

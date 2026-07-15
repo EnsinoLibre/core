@@ -106,7 +106,7 @@ const TOOLS = [
   },
   {
     name: 'add_resource',
-    description: "Add a note to the teacher's knowledge base. Follow the llm.wiki style: `note` is a front-facing summarizing markdown (~200 words + key points) that stands in for the source material. Pass `classroom` and/or `student` (by name) to scope it — same match-or-create-by-name rule as upsert_classroom/upsert_student.",
+    description: "Add a note to the teacher's knowledge base. Follow the llm.wiki style: `note` is a front-facing summarizing markdown (~200 words + key points) that stands in for the source material. Pass `classroom` and/or `student` (by name) to scope it — same match-or-create-by-name rule as upsert_classroom/upsert_student. Idempotent: calling this again with the same title (and same classroom/student scope) UPDATES that note instead of duplicating it, so re-running an import or a seeding pass is always safe.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -120,6 +120,54 @@ const TOOLS = [
         student: { type: 'string', description: 'Student name to link this resource to (looked up within `classroom` if given, otherwise across the teacher\'s roster).' },
       },
       required: ['title', 'note'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'get_resource',
+    description: "Read one knowledge-base note in FULL (get_workspace_context and search_resources both only preview note text). Pass `id` or `title` (case-insensitive exact match).",
+    inputSchema: {
+      type: 'object',
+      properties: { id: { type: 'string' }, title: { type: 'string' } },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'search_resources',
+    description: "Full-text search over the knowledge base — the targeted alternative to reading everything via get_workspace_context. `query` searches title/note/subject; narrow further with kind/classroom/student/tags. Returns previews; follow up with get_resource for the full text of a hit.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Free-text search, e.g. "phrasal verbs B1". Omit to just filter by kind/classroom/student/tags.' },
+        kind: { type: 'string', enum: ['material', 'guideline', 'external', 'context'] },
+        classroom: { type: 'string' },
+        student: { type: 'string' },
+        tags: { type: 'array', items: { type: 'string' } },
+        limit: { type: 'number', description: 'Max results, default 15, max 50.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'update_resource',
+    description: "Revise an existing knowledge-base note in place (id or title). Pass only the fields you want to change; the rest are left as-is. Use this for a correction or rewrite; use append_resource_note instead for a dated addendum.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' }, title: { type: 'string' },
+        note: { type: 'string' }, kind: { type: 'string', enum: ['material', 'guideline', 'external', 'context'] },
+        subject: { type: 'string' }, url: { type: 'string' }, tags: { type: 'array', items: { type: 'string' } },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'append_resource_note',
+    description: "Add a dated addendum to an existing note (id or title) without touching the existing text — the right tool for 'here's a new observation' on a note that already has content, as opposed to update_resource's full rewrite.",
+    inputSchema: {
+      type: 'object',
+      properties: { id: { type: 'string' }, title: { type: 'string' }, addition: { type: 'string' } },
+      required: ['addition'],
       additionalProperties: false,
     },
   },
@@ -162,12 +210,20 @@ const TOOLS = [
 const text = (t: string, isError = false) => ({ content: [{ type: 'text', text: t }], isError });
 const activityCount = (doc: any) => (doc?.sections || []).reduce((n: number, s: any) => n + (s.activities?.length || 0), 0);
 
+// How many recent notes to preview in the default context dump, and how much
+// of each note's body to show. This is a PREVIEW, not the whole memory: past
+// this count the summary tells the agent the true total and points it at
+// search_resources / get_resource instead of silently dropping the rest.
+const CONTEXT_NOTE_LIMIT = 120;
+const CONTEXT_NOTE_PREVIEW_CHARS = 280;
+
 async function getWorkspaceContext(teacherId: string) {
-  const [prof, cls, stu, res, ws] = await Promise.all([
+  const [prof, cls, stu, resCount, res, ws] = await Promise.all([
     supa.from('profiles').select('name,school,subjects,bio').eq('id', teacherId).maybeSingle(),
     supa.from('classrooms').select('id,name,subject,level,term,description,context').eq('teacher_id', teacherId),
     supa.from('students').select('class_id,name,level,goals,needs').eq('teacher_id', teacherId),
-    supa.from('resources').select('title,kind,subject,note').eq('teacher_id', teacherId).order('created_at', { ascending: false }).limit(60),
+    supa.from('resources').select('id', { count: 'exact', head: true }).eq('teacher_id', teacherId),
+    supa.from('resources').select('title,kind,subject,note,tags,links').eq('teacher_id', teacherId).order('created_at', { ascending: false }).limit(CONTEXT_NOTE_LIMIT),
     supa.from('worksheets').select('title,subject').eq('teacher_id', teacherId),
   ]);
   const p = prof.data;
@@ -183,8 +239,20 @@ async function getWorkspaceContext(teacherId: string) {
       c.description || '', c.context ? `Context: ${c.context}` : '',
       roster.length ? `Students: ${roster.map((s) => `${s.name}${s.level ? ` (${s.level})` : ''}${s.needs ? ` — needs: ${s.needs}` : ''}`).join('; ')}` : '');
   }
-  const notes = (res.data || []).map((r) => `- [${r.kind}] ${r.title}${r.subject ? ` (${r.subject})` : ''}${r.note ? ` — ${String(r.note).replace(/\s+/g, ' ').slice(0, 140)}` : ''}`);
-  if (notes.length) lines.push(`\n## Knowledge-base notes (${notes.length})`, ...notes);
+  const rows = res.data || [];
+  const total = resCount.count ?? rows.length;
+  const notes = rows.map((r) => {
+    const tags = r.tags?.length ? ` {${r.tags.join(', ')}}` : '';
+    const links = r.links?.length ? ` → ${r.links.join(', ')}` : '';
+    const preview = r.note ? String(r.note).replace(/\s+/g, ' ').slice(0, CONTEXT_NOTE_PREVIEW_CHARS) : '';
+    return `- [${r.kind}] ${r.title}${r.subject ? ` (${r.subject})` : ''}${tags}${links}${preview ? ` — ${preview}` : ''}`;
+  });
+  if (notes.length) {
+    const heading = total > notes.length
+      ? `\n## Knowledge-base notes (showing ${notes.length} most recent of ${total} total — call search_resources to find something specific, or get_resource for a note's full text)`
+      : `\n## Knowledge-base notes (${notes.length})`;
+    lines.push(heading, ...notes);
+  }
   const sheets = (ws.data || []).map((w) => `- ${w.title}${w.subject ? ` (${w.subject})` : ''}`);
   if (sheets.length) lines.push(`\n## Existing worksheets (${sheets.length})`, ...sheets);
   return lines.filter((l) => l !== '').join('\n');
@@ -240,6 +308,15 @@ async function listWorksheets(teacherId: string) {
   return text(data.map((w) => `- ${w.title} (${w.subject || 'no subject'}, ${activityCount(w.doc)} activities) — id ${w.id}`).join('\n'));
 }
 
+/** Find a resource by title within the same classroom/student scope (both must match, including "unscoped") — the identity a re-run of the same import/seed reproduces. */
+async function findResourceByScopedTitle(teacherId: string, title: string, classId: string | null, studentId: string | null) {
+  let q = supa.from('resources').select('*').eq('teacher_id', teacherId).ilike('title', title);
+  q = classId ? q.eq('class_id', classId) : q.is('class_id', null);
+  q = studentId ? q.eq('student_id', studentId) : q.is('student_id', null);
+  const { data } = await q.maybeSingle();
+  return data;
+}
+
 async function addResource(teacherId: string, args: any) {
   const title = String(args?.title || '').trim();
   const note = String(args?.note || '').trim();
@@ -260,6 +337,20 @@ async function addResource(teacherId: string, args: any) {
     studentId = data?.id ?? null;
   }
 
+  // Idempotent by (title, classroom, student): re-running the same seed or
+  // import updates the note it already filed instead of duplicating it.
+  const existing = await findResourceByScopedTitle(teacherId, title, classId, studentId);
+  if (existing) {
+    const patch: Record<string, unknown> = {
+      note, kind, subject: String(args?.subject ?? existing.subject ?? ''),
+      url: args?.url ? String(args.url) : existing.url,
+      tags: Array.isArray(args?.tags) ? args.tags.map(String) : existing.tags,
+    };
+    const { error } = await supa.from('resources').update(patch).eq('id', existing.id);
+    if (error) return text(`Update failed: ${error.message}`, true);
+    return { ...text(`Updated existing ${kind} note "${title}" (${existing.id}) — re-running this import didn't duplicate it.`), createdId: existing.id };
+  }
+
   const id = crypto.randomUUID();
   const { error } = await supa.from('resources').insert({
     id, teacher_id: teacherId, title, kind, type: 'mcp', subject: String(args?.subject || ''),
@@ -270,6 +361,89 @@ async function addResource(teacherId: string, args: any) {
   if (error) return text(`Insert failed: ${error.message}`, true);
   const scope = [classId ? 'classroom' : null, studentId ? 'student' : null].filter(Boolean).join('+');
   return { ...text(`Added ${kind} note "${title}" (${id}) to the knowledge base${scope ? ` (linked to ${scope})` : ''}.`), createdId: id };
+}
+
+/** Resolve a resource by id or (case-insensitive) title, for the read/update/append tools. */
+async function resolveResource(teacherId: string, args: any): Promise<{ row: any } | { err: string }> {
+  const id = args?.id ? String(args.id).trim() : '';
+  const title = args?.title ? String(args.title).trim() : '';
+  if (!id && !title) return { err: 'Pass "id" or "title".' };
+  let q = supa.from('resources').select('*').eq('teacher_id', teacherId);
+  q = id ? q.eq('id', id) : q.ilike('title', title);
+  const { data, error } = await q.maybeSingle();
+  if (error) return { err: `Query failed: ${error.message}` };
+  if (!data) return { err: `No resource found matching ${id ? `id "${id}"` : `title "${title}"`}.` };
+  return { row: data };
+}
+
+async function getResource(teacherId: string, args: any) {
+  const r = await resolveResource(teacherId, args);
+  if ('err' in r) return text(r.err, true);
+  const { row } = r;
+  const meta = [`[${row.kind}]`, row.subject || null, row.url ? `link: ${row.url}` : null].filter(Boolean).join(' · ');
+  const tags = row.tags?.length ? `Tags: ${row.tags.join(', ')}` : '';
+  const links = row.links?.length ? `Links: ${row.links.join(', ')}` : '';
+  return text([`# ${row.title}`, meta, [tags, links].filter(Boolean).join(' · '), '', row.note || '(empty note)'].filter((l) => l !== '').join('\n'));
+}
+
+async function updateResource(teacherId: string, args: any) {
+  const r = await resolveResource(teacherId, args);
+  if ('err' in r) return text(r.err, true);
+  const { row } = r;
+  const patch: Record<string, unknown> = {};
+  if (args?.note != null) patch.note = String(args.note);
+  if (args?.subject != null) patch.subject = String(args.subject);
+  if (args?.url != null) patch.url = String(args.url) || null;
+  if (args?.kind && ['material', 'guideline', 'external', 'context'].includes(args.kind)) patch.kind = args.kind;
+  if (Array.isArray(args?.tags)) patch.tags = args.tags.map(String);
+  if (!Object.keys(patch).length) return text('Nothing to update — pass at least one of note, kind, subject, url, tags.', true);
+  const { error } = await supa.from('resources').update(patch).eq('id', row.id);
+  if (error) return text(`Update failed: ${error.message}`, true);
+  return { ...text(`Updated "${row.title}" (${row.id}).`), createdId: row.id };
+}
+
+async function appendResourceNote(teacherId: string, args: any) {
+  const addition = String(args?.addition || '').trim();
+  if (!addition) return text('"addition" is required.', true);
+  const r = await resolveResource(teacherId, args);
+  if ('err' in r) return text(r.err, true);
+  const { row } = r;
+  const stamp = new Date().toISOString().slice(0, 10);
+  const note = `${row.note || ''}\n\n---\n**Update ${stamp}:** ${addition}`.trim();
+  const { error } = await supa.from('resources').update({ note }).eq('id', row.id);
+  if (error) return text(`Append failed: ${error.message}`, true);
+  return { ...text(`Appended a dated update to "${row.title}" (${row.id}).`), createdId: row.id };
+}
+
+async function searchResources(teacherId: string, args: any) {
+  const query = args?.query ? String(args.query).trim() : '';
+  const limit = Math.min(Math.max(Number(args?.limit) || 15, 1), 50);
+
+  let classId: string | null = null;
+  if (args?.classroom) {
+    const { data } = await supa.from('classrooms').select('id').eq('teacher_id', teacherId).ilike('name', String(args.classroom).trim()).maybeSingle();
+    classId = data?.id ?? null;
+  }
+  let studentId: string | null = null;
+  if (args?.student) {
+    let q = supa.from('students').select('id').eq('teacher_id', teacherId).ilike('name', String(args.student).trim());
+    if (classId) q = q.eq('class_id', classId);
+    const { data } = await q.maybeSingle();
+    studentId = data?.id ?? null;
+  }
+
+  let q = supa.from('resources').select('id,title,kind,subject,note,tags').eq('teacher_id', teacherId);
+  if (query) q = q.textSearch('search_vector', query, { type: 'websearch', config: 'simple' });
+  if (args?.kind && ['material', 'guideline', 'external', 'context'].includes(args.kind)) q = q.eq('kind', args.kind);
+  if (classId) q = q.eq('class_id', classId);
+  if (studentId) q = q.eq('student_id', studentId);
+  if (Array.isArray(args?.tags) && args.tags.length) q = q.contains('tags', args.tags.map(String));
+  q = q.order('created_at', { ascending: false }).limit(limit);
+
+  const { data, error } = await q;
+  if (error) return text(`Search failed: ${error.message}`, true);
+  if (!data?.length) return text('No matching resources.');
+  return text(data.map((r) => `- [${r.kind}] ${r.title}${r.subject ? ` (${r.subject})` : ''} — id ${r.id}${r.note ? `\n  ${String(r.note).replace(/\s+/g, ' ').slice(0, 200)}` : ''}`).join('\n'));
 }
 
 /** Find a classroom by name (case-insensitive) for this teacher, or null. */
@@ -347,7 +521,7 @@ async function handleMessage(msg: any, who: Auth) {
         protocolVersion: params?.protocolVersion || '2025-03-26',
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: 'ensinolibre', version: '1.0.0' },
-        instructions: 'EnsinoLibre teacher workspace. Typical flow: get_workspace_context → get_worksheet_contract (with the types you plan to use) → create_worksheet. add_resource files llm.wiki-style summary notes into the knowledge base. For bulk imports (a roster file, a Google Classroom export, a folder of materials), call get_workspace_context first to see what already exists, then upsert_classroom / upsert_student / add_resource once per item — all three match-or-create by name, so re-running an import is safe and nothing is duplicated.',
+        instructions: 'EnsinoLibre teacher workspace. Typical flow: get_workspace_context → get_worksheet_contract (with the types you plan to use) → create_worksheet. add_resource files llm.wiki-style summary notes into the knowledge base. For bulk imports (a roster file, a Google Classroom export, a folder of materials), call get_workspace_context first to see what already exists, then upsert_classroom / upsert_student / add_resource once per item — all three match-or-create by name, so re-running an import is safe and nothing is duplicated. get_workspace_context only PREVIEWS the knowledge base (most recent notes, truncated) — once it reports more notes exist than it showed, use search_resources to find the relevant ones and get_resource to read one in full. To revise what you already know, update_resource rewrites a note and append_resource_note adds a dated addendum.',
       });
     case 'ping':
       return rpcResult(id, {});
@@ -377,6 +551,24 @@ async function handleMessage(msg: any, who: Auth) {
         }
         if (name === 'add_resource') {
           const result = await addResource(who.teacherId, args);
+          if (!result.isError) logActivity(who, name, 'resource:' + result.createdId);
+          return rpcResult(id, result);
+        }
+        if (name === 'get_resource') {
+          logActivity(who, name, null);
+          return rpcResult(id, await getResource(who.teacherId, args));
+        }
+        if (name === 'search_resources') {
+          logActivity(who, name, null);
+          return rpcResult(id, await searchResources(who.teacherId, args));
+        }
+        if (name === 'update_resource') {
+          const result = await updateResource(who.teacherId, args);
+          if (!result.isError) logActivity(who, name, 'resource:' + result.createdId);
+          return rpcResult(id, result);
+        }
+        if (name === 'append_resource_note') {
+          const result = await appendResourceNote(who.teacherId, args);
           if (!result.isError) logActivity(who, name, 'resource:' + result.createdId);
           return rpcResult(id, result);
         }

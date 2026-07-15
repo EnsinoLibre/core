@@ -294,7 +294,12 @@ Supabase Edge Function that implements the Model Context Protocol
   hashes stored in `agent_keys` (RLS teacher-scoped). The function maps
   key -> teacher_id and writes with the service role, always teacher-scoped.
 - Tools: get_workspace_context, get_worksheet_contract, create_worksheet
-  (validated with the shared validator), list_worksheets, add_resource.
+  (validated with the shared validator), list_worksheets, add_resource
+  (idempotent by title+scope), get_resource, search_resources (full-text via
+  a `search_vector` generated column + GIN index on `resources`),
+  update_resource, append_resource_note, upsert_classroom, upsert_student.
+  get_workspace_context previews recent notes only and says so once there
+  are more — search_resources/get_resource are the read path past that.
 - `validator.js` / `prompt-builder.js` inside the function dir are verbatim
   copies of `site/assets/js/*` - keep in sync.
 - Deploy (needs a Supabase access token for project edgdxuvzyhwqidjjbidq):
@@ -302,3 +307,7 @@ Supabase Edge Function that implements the Model Context Protocol
     supabase db push
     supabase functions deploy mcp --no-verify-jwt
   (`--no-verify-jwt` is required: the function does its own key auth.)
+- Live aula passwords (`join_aula`) are bcrypt-hashed server-side
+  (`set_aula_password` RPC, teacher-owned) with a 5-attempt/15-minute
+  lockout inside `join_aula` itself — see [[live-classroom]] and
+  `supabase/migrations/20260715130000_aula_password_bcrypt_rate_limit.sql`.
