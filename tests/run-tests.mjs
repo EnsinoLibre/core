@@ -395,10 +395,21 @@ test('word-search: rejects multi-word entries and too-long words', () => {
   assert.ok(validateActivity({ type: 'word-search', words: ['two words', 'ok', 'fine', 'good'] }).length >= 1);
   assert.ok(validateActivity({ type: 'word-search', words: ['extraordinarily', 'ok', 'fine', 'good'], gridSize: 8 }).length >= 1);
 });
-test('buildWordSearch places every word deterministically', () => {
-  const a = buildWordSearch(['apple', 'pear', 'plum', 'fig'], 10);
-  const b = buildWordSearch(['apple', 'pear', 'plum', 'fig'], 10);
-  assert.equal(a.placed.length, 4);
+test('word-search: rejects a set that cannot all fit the grid together (#5)', () => {
+  // Eight 6-letter words fill a 6×6 grid's rows; the rest cannot be placed.
+  const words = ['PLANET', 'ROCKET', 'GALAXY', 'METEOR', 'COMETS', 'ORBITS', 'SATURN', 'URANUS'];
+  const errs = validateActivity({ type: 'word-search', words, gridSize: 6 });
+  assert.ok(errs.some((e) => /fit a 6×6 grid together/.test(e)), 'must reject an overpacked grid: ' + JSON.stringify(errs));
+  // And the renderer's builder agrees — some words genuinely don't place.
+  assert.ok(buildWordSearch(words, 6).unplaced.length > 0);
+});
+test('buildWordSearch places every word of an accepted worksheet, deterministically (#5)', () => {
+  const words = ['apple', 'pear', 'plum', 'fig', 'grape'];
+  assert.deepEqual(validateActivity({ type: 'word-search', words, gridSize: 10 }), []);
+  const a = buildWordSearch(words, 10);
+  const b = buildWordSearch(words, 10);
+  assert.equal(a.placed.length, words.length);
+  assert.equal(a.unplaced.length, 0, 'an accepted worksheet must leave nothing unplaced');
   assert.deepEqual(a.grid, b.grid);
 });
 

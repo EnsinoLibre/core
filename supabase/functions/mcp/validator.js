@@ -56,6 +56,37 @@ function vGapCore(a, at, e) {
   if (!str(a.text)) e.push(`${at}: missing "text".`);
   else if (!hasGap(a.text)) e.push(`${at}: "text" must contain at least one gap written as {{answer}}.`);
 }
+/**
+ * Which of `words` can't be placed in a size×size grid — the IDENTICAL
+ * deterministic greedy placement renderer.js `buildWordSearch` uses (longest
+ * first, first free fit scanning row-major across →/↓/↘, overlaps only where
+ * letters match). Because it matches the renderer exactly, "validator accepts"
+ * guarantees "renderer places every word". Self-contained so the copies of this
+ * file stay dependency-free.
+ */
+function wordSearchUnplaced(words, size) {
+  const grid = Array.from({ length: size }, () => Array(size).fill(''));
+  const dirs = [[0, 1], [1, 0], [1, 1]];
+  const unplaced = [];
+  const fits = (w, row, col, dr, dc) => {
+    if (row + dr * (w.length - 1) >= size || col + dc * (w.length - 1) >= size) return false;
+    for (let i = 0; i < w.length; i++) { const cell = grid[row + dr * i][col + dc * i]; if (cell && cell !== w[i]) return false; }
+    return true;
+  };
+  for (const raw of [...words].sort((x, y) => y.trim().length - x.trim().length)) {
+    const w = raw.trim().toUpperCase();
+    let done = false;
+    for (const [dr, dc] of dirs) {
+      for (let row = 0; row < size && !done; row++) for (let col = 0; col < size && !done; col++) {
+        if (fits(w, row, col, dr, dc)) { for (let i = 0; i < w.length; i++) grid[row + dr * i][col + dc * i] = w[i]; done = true; }
+      }
+      if (done) break;
+    }
+    if (!done) unplaced.push(raw);
+  }
+  return unplaced;
+}
+
 function vPairs(a, at, e, min = 2, max = 8) {
   if (!arr(a.pairs, min, max)) { e.push(`${at}: "pairs" must be ${min}–${max} {left, right} objects.`); return; }
   a.pairs.forEach((p, i) => {
@@ -171,10 +202,20 @@ const V = {
     if (!arr(a.words, 4, 14)) { e.push(`${at} (word-search): "words" must be 4–14 words.`); return; }
     const size = a.gridSize ?? 12;
     if (a.gridSize != null && (!int(a.gridSize, 6) || a.gridSize > 16)) e.push(`${at} (word-search): "gridSize" must be 6–16.`);
+    const before = e.length;
     a.words.forEach((w, i) => {
       if (!str(w) || !/^[\p{L}]+$/u.test(w.trim())) e.push(`${at} (word-search): word ${i + 1} must be letters only (no spaces or hyphens).`);
       else if (w.trim().length > size) e.push(`${at} (word-search): "${w}" is longer than the grid size (${size}).`);
     });
+    // Only worth checking collective placement once every word is individually
+    // valid — otherwise reject the whole set if they can't all fit the grid
+    // (a per-word length check alone doesn't guarantee the SET fits).
+    if (e.length === before) {
+      const unplaced = wordSearchUnplaced(a.words, size);
+      if (unplaced.length) {
+        e.push(`${at} (word-search): these words don't all fit a ${size}×${size} grid together — use fewer/shorter words or a larger "gridSize": ${unplaced.join(', ')}.`);
+      }
+    }
   },
 
   /* Audio exercises (dictation, listen-mcq) are out of scope until a

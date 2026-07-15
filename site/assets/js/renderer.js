@@ -751,36 +751,53 @@ function mulberry32(seedStr) {
   };
 }
 
-/** Place words into a letter grid (shared with the analog emitter). */
+/**
+ * Place words into a letter grid (shared with the analog emitter).
+ *
+ * Deterministic greedy placement: longest words first, first free fit scanning
+ * row-major across the three directions (→, ↓, ↘), allowing overlaps only where
+ * letters match. Being deterministic, the validator (`wordSearchUnplaced` in
+ * validator.js) runs the IDENTICAL placement and rejects any set this can't fully
+ * place — so the learner is never shown "find X" for a word that isn't in the
+ * grid. `unplaced` lists any words that didn't fit (empty for a valid worksheet).
+ */
 export function buildWordSearch(words, gridSize) {
   const size = gridSize ?? 12;
   const rnd = mulberry32(words.join('|') + size);
   const grid = Array.from({ length: size }, () => Array(size).fill(''));
   const placed = [];
+  const unplaced = [];
   const dirs = [[0, 1], [1, 0], [1, 1]];
-  for (const raw of [...words].sort((x, y) => y.length - x.length)) {
+  const fits = (w, row, col, dr, dc) => {
+    if (row + dr * (w.length - 1) >= size || col + dc * (w.length - 1) >= size) return false;
+    for (let i = 0; i < w.length; i++) {
+      const cell = grid[row + dr * i][col + dc * i];
+      if (cell && cell !== w[i]) return false;
+    }
+    return true;
+  };
+  for (const raw of [...words].sort((x, y) => y.trim().length - x.trim().length)) {
     const w = raw.trim().toUpperCase();
     let done = false;
-    for (let attempt = 0; attempt < 200 && !done; attempt++) {
-      const [dr, dc] = dirs[Math.floor(rnd() * dirs.length)];
-      const row = Math.floor(rnd() * (size - (dr ? w.length : 0)));
-      const col = Math.floor(rnd() * (size - (dc ? w.length : 0)));
-      let ok = true;
-      for (let i = 0; i < w.length; i++) {
-        const cell = grid[row + dr * i][col + dc * i];
-        if (cell && cell !== w[i]) { ok = false; break; }
+    for (const [dr, dc] of dirs) {
+      for (let row = 0; row < size && !done; row++) {
+        for (let col = 0; col < size && !done; col++) {
+          if (fits(w, row, col, dr, dc)) {
+            for (let i = 0; i < w.length; i++) grid[row + dr * i][col + dc * i] = w[i];
+            placed.push({ word: raw, row, col, dr, dc });
+            done = true;
+          }
+        }
       }
-      if (!ok) continue;
-      for (let i = 0; i < w.length; i++) grid[row + dr * i][col + dc * i] = w[i];
-      placed.push({ word: raw, row, col, dr, dc });
-      done = true;
+      if (done) break;
     }
+    if (!done) unplaced.push(raw);
   }
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) {
     if (!grid[r][c]) grid[r][c] = alphabet[Math.floor(rnd() * 26)];
   }
-  return { grid, placed, size };
+  return { grid, placed, unplaced, size };
 }
 
 R['word-search'] = (a, index) => {
@@ -798,7 +815,11 @@ R['word-search'] = (a, index) => {
     table.appendChild(cell);
   }
   card.appendChild(table);
-  const listEl = el('p', 'oc-word-count', 'Find: ' + a.words.join(', '));
+  // List only words actually hidden in the grid. A valid worksheet places every
+  // word (the validator enforces it), so this equals a.words; it's defensive so
+  // the learner is never asked to find a word that isn't there.
+  const placedWords = placed.map((p) => p.word);
+  const listEl = el('p', 'oc-word-count', 'Find: ' + placedWords.join(', '));
   card.appendChild(listEl);
   const found = new Set();
   let start = null;
@@ -833,7 +854,7 @@ R['word-search'] = (a, index) => {
     if (hit) {
       found.add(hit.word);
       lineCells.forEach((lc) => lc.classList.add('oc-ws-cell--found'));
-      listEl.textContent = 'Find: ' + a.words.filter((w) => !found.has(w)).join(', ');
+      listEl.textContent = 'Find: ' + placedWords.filter((w) => !found.has(w)).join(', ');
       if (found.size === placed.length) listEl.textContent = 'All words found! 🎉';
     }
   });

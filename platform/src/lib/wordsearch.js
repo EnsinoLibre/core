@@ -15,33 +15,43 @@ function mulberry32(seedStr) {
   };
 }
 
+// Deterministic greedy placement — identical to renderer.js buildWordSearch so
+// the learner grid and this answer key match, and the validator can reproduce it.
 export function buildWordSearch(words, gridSize) {
   const size = gridSize ?? 12;
   const rnd = mulberry32(words.join('|') + size);
   const grid = Array.from({ length: size }, () => Array(size).fill(''));
   const placed = [];
+  const unplaced = [];
   const dirs = [[0, 1], [1, 0], [1, 1]];
-  for (const raw of [...words].sort((x, y) => y.length - x.length)) {
+  const fits = (w, row, col, dr, dc) => {
+    if (row + dr * (w.length - 1) >= size || col + dc * (w.length - 1) >= size) return false;
+    for (let i = 0; i < w.length; i++) {
+      const cell = grid[row + dr * i][col + dc * i];
+      if (cell && cell !== w[i]) return false;
+    }
+    return true;
+  };
+  for (const raw of [...words].sort((x, y) => y.trim().length - x.trim().length)) {
     const w = raw.trim().toUpperCase();
     let done = false;
-    for (let attempt = 0; attempt < 200 && !done; attempt++) {
-      const [dr, dc] = dirs[Math.floor(rnd() * dirs.length)];
-      const row = Math.floor(rnd() * (size - (dr ? w.length : 0)));
-      const col = Math.floor(rnd() * (size - (dc ? w.length : 0)));
-      let ok = true;
-      for (let i = 0; i < w.length; i++) {
-        const cell = grid[row + dr * i][col + dc * i];
-        if (cell && cell !== w[i]) { ok = false; break; }
+    for (const [dr, dc] of dirs) {
+      for (let row = 0; row < size && !done; row++) {
+        for (let col = 0; col < size && !done; col++) {
+          if (fits(w, row, col, dr, dc)) {
+            for (let i = 0; i < w.length; i++) grid[row + dr * i][col + dc * i] = w[i];
+            placed.push({ word: raw, row, col, dr, dc });
+            done = true;
+          }
+        }
       }
-      if (!ok) continue;
-      for (let i = 0; i < w.length; i++) grid[row + dr * i][col + dc * i] = w[i];
-      placed.push({ word: raw, row, col, dr, dc });
-      done = true;
+      if (done) break;
     }
+    if (!done) unplaced.push(raw);
   }
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) {
     if (!grid[r][c]) grid[r][c] = alphabet[Math.floor(rnd() * 26)];
   }
-  return { grid, placed, size };
+  return { grid, placed, unplaced, size };
 }
