@@ -7,6 +7,13 @@ description: The teacher platform's worksheet library — create in-app, deploy 
 
 The **Worksheets** page in the [[platform-overview|teacher platform]] is your saved worksheet library, separate from the [creator page](index.html)'s one-off, no-account generator. A filter bar searches by title and narrows by **subject** and **deployment status**.
 
+## Saving from the public generator
+
+The no-account [creator page](index.html) can also save straight into this library. After you render a worksheet there, **Save to my library**:
+
+- **If you're signed in as a teacher** (same account as the platform — the generator reuses the platform's session), the worksheet is written to your Supabase library and a link appears to open it here for deployment. It shows up on this page immediately (refresh if a tab was already open).
+- **If you're not signed in**, the generator says so rather than pretending to save: it offers **Download the JSON** (import it here later) or a link to sign in and save directly. It never silently drops the worksheet.
+
 ## Creating a worksheet
 
 **+ Create worksheet** opens a modal with two tabs — both end the same way: a worksheet lands in your library.

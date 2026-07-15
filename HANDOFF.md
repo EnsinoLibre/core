@@ -166,6 +166,16 @@ local `force`/`useState` counter. `api.ts` re‑exports `store`, `auth`,
 > **Note (this table row is stale — see #48):** the teacher platform is now on
 > **Supabase**, not localStorage. Writes are optimistic and fire-and-forget.
 
+**Public generator save (issue #18).** The zero-build generator's "Save to my
+library" now writes to the real `worksheets` table via
+`site/assets/js/app/supabase-save.js` — a Supabase client that reuses the
+platform's persisted session (same `storageKey: 'ensinolibre.teacher.auth'`,
+same origin in production). Signed in → real insert scoped to `teacher_id`;
+signed out → honest message + JSON download (no more misleading "saved" into a
+localStorage store the platform never read). `app.js` no longer imports the
+`app/store.js` localStorage boilerplate. (The topbar avatar in `nav.js` still
+reads the old fake session — separate boilerplate, out of scope for #18.)
+
 **Write-error surfacing (issue #17).** `store.js` writes mutate in-memory state
 first, then fire the Supabase write. A failed write (RLS, network, FK) no longer
 just `console.error`s — `fire()` calls `reportWriteError()`, which increments a

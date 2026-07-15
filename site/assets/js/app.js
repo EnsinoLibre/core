@@ -5,7 +5,7 @@ import { validateWorksheet } from './validator.js';
 import { renderWorksheet } from './renderer.js';
 import { exportMarkdown, exportAnalogPDF, exportMoodle, exportJSON } from './exporters.js';
 import { initTopbar } from './nav.js';
-import { store, auth } from './app/store.js';
+import { saveWorksheetToLibrary } from './app/supabase-save.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -155,14 +155,51 @@ function renderFromText(raw) {
 
 $('#oc-render-btn').addEventListener('click', () => renderFromText($('#oc-json-input').value));
 
-/* ---- save to the teacher library (shared workspace localStorage) ---- */
-$('#oc-save-library').addEventListener('click', () => {
+/* ---- save to the teacher library (real Supabase, issue #18) ---- */
+const saveBtn = $('#oc-save-library');
+const saveNote = $('#oc-save-note');
+
+/** Render the save note from DOM nodes (no innerHTML — the title is user JSON). */
+function showSaveNote(nodes) {
+  saveNote.textContent = '';
+  saveNote.classList.remove('oc-hidden');
+  for (const n of nodes) saveNote.append(n);
+}
+const el = (tag, text, attrs = {}) => { const n = document.createElement(tag); if (text != null) n.textContent = text; Object.assign(n, attrs); return n; };
+function downloadLink(label) {
+  const b = el('button', label, { type: 'button', className: 'oc-linklike' });
+  b.addEventListener('click', () => currentWorksheet && exportJSON(currentWorksheet));
+  return b;
+}
+
+saveBtn.addEventListener('click', async () => {
   if (!currentWorksheet) return;
-  const w = store.addWorksheet(currentWorksheet);
-  const note = $('#oc-save-note');
-  const dest = auth.isAuthed() ? 'app/#/worksheets' : 'app/';
-  note.classList.remove('oc-hidden');
-  note.innerHTML = `✓ Saved “${w.title}” to your library. <a href="${dest}">Open the platform to deploy it →</a>`;
+  saveBtn.disabled = true;
+  showSaveNote([el('span', 'Saving to your library…')]);
+  try {
+    const w = await saveWorksheetToLibrary(currentWorksheet);
+    const link = el('a', 'Open the platform to deploy it →', { href: 'app/#/worksheets' });
+    showSaveNote([el('span', `✓ Saved “${w.title}” to your library. `), link]);
+  } catch (e) {
+    if (e.code === 'NO_SESSION') {
+      // Do NOT claim success when unauthenticated — offer a working alternative.
+      showSaveNote([
+        el('span', 'You’re not signed in, so there’s no library to save to yet. '),
+        downloadLink('Download the JSON'),
+        el('span', ' and import it in the platform, or '),
+        el('a', 'sign in', { href: 'app/' }),
+        el('span', ' to save directly.'),
+      ]);
+    } else {
+      showSaveNote([
+        el('span', `Couldn’t save: ${e.message}. `),
+        downloadLink('Download the JSON'),
+        el('span', ' instead.'),
+      ]);
+    }
+  } finally {
+    saveBtn.disabled = false;
+  }
 });
 
 /* ---- exports (author-side only) ---- */

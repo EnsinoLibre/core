@@ -32,6 +32,7 @@ The assistant replies with a block of JSON (text starting with `{`). Copy its wh
 
 - If something is wrong with the JSON, you get a plain-English list of problems — usually pasting the message *"please fix these issues: …"* back to the assistant sorts it out.
 - If all is well, your interactive worksheet appears, and the **Print / save as PDF** button gives you a paper version.
+- If you have a teacher account, **Save to my library** puts the worksheet straight into your [[worksheets-library|platform library]] to deploy to a class. Signed out, it offers a JSON download to import later instead — it won't silently lose your work.
 
 Try it right now with this ready-made activity:
 
