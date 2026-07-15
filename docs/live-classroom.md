@@ -23,6 +23,10 @@ A deployment can require a password to join — required for class deployments, 
 
 Joining checks the password inside `join_aula` itself — the same function students call directly (no app server sits in front of it) — and rate-limits: **5 wrong guesses lock the join code for 15 minutes**, after which it self-heals on the next attempt. A locked code returns `locked` (with the unlock time) to every attempt, correct password or not, so the lockout can't be probed around. Codes created before this hardening carry an older hash format that upgrades to bcrypt automatically the first time someone joins with the correct password — nothing to migrate by hand.
 
+## Deploying via an agent
+
+An [[mcp-connect|MCP agent]] can finish the job itself rather than dead-ending at a saved worksheet: `deploy_worksheets` creates the live session (class-gated or a public link, password included if asked) and returns the join code; `set_aula_status` opens or closes it; `get_progress` reads results back — student, worksheet, score, status — filterable by join code, classroom or student name, scoped strictly to that teacher's own deployments.
+
 ## Importing offline work
 
 A worksheet's **Interactive (offline)** export is a self-contained HTML file a student can complete without any connection, producing an `ensinolibre-answers` file when they're done. **⬆ Import answers** on a live session reads that file back in and enrols the student (by name) so their progress shows up in the monitor exactly as if they'd joined online.

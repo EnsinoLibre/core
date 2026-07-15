@@ -20,10 +20,16 @@ The prompt builder's copy-paste loop works with any AI. But if your AI speaks th
 | `search_resources` | Full-text search over the knowledge base (title/note/subject), filterable by kind/classroom/student/tags — the targeted alternative to reading everything. |
 | `update_resource` | Revises an existing note in place — pass only the fields that changed. |
 | `append_resource_note` | Adds a dated addendum to an existing note without touching what's already there. |
-| `upsert_classroom` | Create a classroom, or merge into an existing one matched by name. Safe to call repeatedly. |
-| `upsert_student` | Create a student under a classroom (by name), or merge into an existing one. Safe to call repeatedly. |
+| `upsert_classroom` | Create a classroom, or merge into an existing one matched by name. Safe to call repeatedly. `overwrite: true` replaces existing fields instead of only filling gaps — reserved for an explicit teacher instruction to update context. |
+| `upsert_student` | Create a student under a classroom (by name), or merge into an existing one. Safe to call repeatedly. Same `overwrite` rule as upsert_classroom. |
+| `update_worksheet` | Revises an existing worksheet's content in place — same validation as create_worksheet. |
+| `delete_worksheet` | Removes a worksheet from the library. Refuses if it's deployed to a live class. |
+| `add_student_note` | Adds a dated observation to a student's record. Recent notes surface automatically in get_workspace_context. |
+| `deploy_worksheets` | Deploys one or more worksheets as a live session with a join code — the agent-native last step of create → deploy. |
+| `set_aula_status` | Opens or closes a live deployment by its join code. |
+| `get_progress` | Reads student results across live deployments, filterable by aula code/classroom/student — the starting point for any progress review or report. |
 
-A typical run: *"Make a B1 worksheet on phrasal verbs for my Tuesday class"* → the agent reads your workspace context, fetches the contract for the activity types it wants, generates the document, and `create_worksheet` validates and files it. Refresh the platform and it's there, ready to deploy.
+A typical run: *"Make a B1 worksheet on phrasal verbs for my Tuesday class"* → the agent reads your workspace context, fetches the contract for the activity types it wants, generates the document, `create_worksheet` validates and files it, and — if you ask it to put the sheet in front of the class — `deploy_worksheets` puts a join code in your hands without a trip to the UI.
 
 ## Bulk import (classrooms, rosters, files)
 

@@ -50,7 +50,7 @@ Paste the agent's JSON reply into the last box and click **Import into workspace
 ## Good to know
 
 - **Privacy**: the Takeout archive and its contents never leave your computer except as the short summaries you choose to paste back.
-- **Re-running the import is safe**: matching is by class name, so importing the same Takeout export twice won't create duplicates.
+- **Re-running the import is safe**: matching is by class name, so importing the same Takeout export twice won't create duplicates. The same is true on the MCP path — `upsert_classroom`/`upsert_student` match-or-create by name, and `add_resource` matches by (title, classroom, student) scope, so a re-run updates what's already there instead of duplicating it. It's also the only way to *revise* imported context later: by default these tools only fill in what was empty, so ask your agent to pass `overwrite: true` when you want it to actually update stale context, not just top it up.
 - **No agent yet?** You can still use this flow by typing your class/roster details directly into the reply box in the shape shown in the placeholder text — it's just more typing than letting an agent read the files for you.
 
 ## Related

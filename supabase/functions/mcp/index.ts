@@ -118,6 +118,7 @@ const TOOLS = [
         tags: { type: 'array', items: { type: 'string' } },
         classroom: { type: 'string', description: 'Classroom name to link this resource to. Matched case-insensitively; left unresolved (not created) if no such classroom exists.' },
         student: { type: 'string', description: 'Student name to link this resource to (looked up within `classroom` if given, otherwise across the teacher\'s roster).' },
+        links: { type: 'array', items: { type: 'string' }, description: 'Names of other entities this note relates to — classrooms, students, worksheets, other resources, or live deployments — resolved to real knowledge-graph edges. Names that don\'t match anything are reported back unresolved, not created.' },
       },
       required: ['title', 'note'],
       additionalProperties: false,
@@ -173,7 +174,7 @@ const TOOLS = [
   },
   {
     name: 'upsert_classroom',
-    description: "Create a classroom, or merge into an existing one matched by name (case-insensitive) — exactly the rule the platform's own Google Classroom import uses: a new name creates, a matching name fills in only the fields that were empty. Safe to call repeatedly for the same class without duplicating it. Returns the classroom id.",
+    description: "Create a classroom, or merge into an existing one matched by name (case-insensitive) — exactly the rule the platform's own Google Classroom import uses: a new name creates, a matching name fills in only the fields that were empty. Safe to call repeatedly for the same class without duplicating it. Pass `overwrite: true` ONLY on an explicit teacher instruction to update existing context (e.g. \"update the B1 class context: we finished unit 4\") — it replaces the fields you pass instead of only filling gaps. Returns the classroom id.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -183,6 +184,7 @@ const TOOLS = [
         term: { type: 'string' },
         description: { type: 'string' },
         context: { type: 'string', description: 'Free-text notes that flow into worksheet generation — write a real sentence or two, not a placeholder.' },
+        overwrite: { type: 'boolean', description: 'Replace existing field values with the ones passed here, instead of only filling in what was empty. Default false.' },
       },
       required: ['name'],
       additionalProperties: false,
@@ -190,7 +192,7 @@ const TOOLS = [
   },
   {
     name: 'upsert_student',
-    description: "Create a student, or merge into an existing one matched by name within their classroom (case-insensitive) — same match-or-create rule as upsert_classroom. If `classroom` doesn't exist yet it is created bare (call upsert_classroom first if you have more detail for it). Safe to call repeatedly without duplicating the student. Returns the student id.",
+    description: "Create a student, or merge into an existing one matched by name within their classroom (case-insensitive) — same match-or-create rule as upsert_classroom. If `classroom` doesn't exist yet it is created bare (call upsert_classroom first if you have more detail for it). Safe to call repeatedly without duplicating the student. Pass `overwrite: true` ONLY on an explicit teacher instruction to update existing fields (e.g. goals/needs) — it replaces them instead of only filling gaps. Returns the student id.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -200,8 +202,81 @@ const TOOLS = [
         pronouns: { type: 'string' },
         goals: { type: 'string' },
         needs: { type: 'string', description: 'Needs and context — flows into worksheet generation and get_workspace_context.' },
+        overwrite: { type: 'boolean', description: 'Replace existing field values with the ones passed here, instead of only filling in what was empty. Default false.' },
       },
       required: ['name', 'classroom'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'update_worksheet',
+    description: "Revise an existing worksheet's content in place (same validation as create_worksheet — rejections return the problems verbatim so you can fix and retry).",
+    inputSchema: {
+      type: 'object',
+      properties: { id: { type: 'string' }, doc: { type: 'object', description: 'The complete, revised worksheet JSON document.' } },
+      required: ['id', 'doc'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'delete_worksheet',
+    description: "Remove a worksheet from the library. Refuses if it's currently deployed to a live class — close or remove that deployment first.",
+    inputSchema: {
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      required: ['id'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'add_student_note',
+    description: "Add a dated observation to a student's record (e.g. \"struggled with past perfect on Tuesday\") — the highest-value persistent memory for lesson planning. Recent notes surface automatically in get_workspace_context.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        student: { type: 'string' },
+        classroom: { type: 'string', description: 'Narrows the student lookup if the name exists in more than one class.' },
+        text: { type: 'string' },
+      },
+      required: ['student', 'text'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'deploy_worksheets',
+    description: "Deploy one or more worksheets as a live session with a join code — the last step of the create → deploy loop. Omit `classroom` for a public link anyone with the code (and password, if set) can join under any name; set it for a class deployment gated to that class's roster.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        classroom: { type: 'string', description: 'Classroom to gate this deployment to. Omit for a public link.' },
+        title: { type: 'string', description: 'Session title. Defaults to a dated placeholder.' },
+        worksheet_ids: { type: 'array', items: { type: 'string' }, description: 'Ids from create_worksheet/list_worksheets, in the order students should see them.' },
+        password: { type: 'string', description: 'Optional join password (required in the platform UI for class deployments, but left to your judgement here). Hashed server-side; never echoed back.' },
+      },
+      required: ['worksheet_ids'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'set_aula_status',
+    description: "Open or close a live deployment by its join code — 'closed' stops new joins/submissions without deleting progress.",
+    inputSchema: {
+      type: 'object',
+      properties: { code: { type: 'string' }, status: { type: 'string', enum: ['live', 'closed'] } },
+      required: ['code', 'status'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'get_progress',
+    description: "Read student results across live deployments — the starting point for any progress review, remedial worksheet, or report. Scoped to this teacher's own deployments only. Filter by aula_code, classroom, and/or student; omit all three for everything.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        aula_code: { type: 'string' },
+        classroom: { type: 'string' },
+        student: { type: 'string' },
+      },
       additionalProperties: false,
     },
   },
@@ -218,13 +293,15 @@ const CONTEXT_NOTE_LIMIT = 120;
 const CONTEXT_NOTE_PREVIEW_CHARS = 280;
 
 async function getWorkspaceContext(teacherId: string) {
-  const [prof, cls, stu, resCount, res, ws] = await Promise.all([
+  const [prof, cls, stu, obs, resCount, res, ws, aulas] = await Promise.all([
     supa.from('profiles').select('name,school,subjects,bio').eq('id', teacherId).maybeSingle(),
     supa.from('classrooms').select('id,name,subject,level,term,description,context').eq('teacher_id', teacherId),
-    supa.from('students').select('class_id,name,level,goals,needs').eq('teacher_id', teacherId),
+    supa.from('students').select('id,class_id,name,level,goals,needs').eq('teacher_id', teacherId),
+    supa.from('student_notes').select('student_id,text,created_at').eq('teacher_id', teacherId).order('created_at', { ascending: false }).limit(300),
     supa.from('resources').select('id', { count: 'exact', head: true }).eq('teacher_id', teacherId),
     supa.from('resources').select('title,kind,subject,note,tags,links').eq('teacher_id', teacherId).order('created_at', { ascending: false }).limit(CONTEXT_NOTE_LIMIT),
     supa.from('worksheets').select('title,subject').eq('teacher_id', teacherId),
+    supa.from('aulas').select('class_id,title,code,status').eq('teacher_id', teacherId),
   ]);
   const p = prof.data;
   const lines = [
@@ -232,12 +309,23 @@ async function getWorkspaceContext(teacherId: string) {
     [p?.school, p?.subjects].filter(Boolean).join(' · '),
     p?.bio || '',
   ];
+  // Most recent 3 observations per student — obs.data is already ordered
+  // newest-first globally, so the first 3 seen per student ARE their 3 most recent.
+  const obsByStudent = new Map<string, { text: string; created_at: string }[]>();
+  for (const o of obs.data || []) {
+    const list = obsByStudent.get(o.student_id) || [];
+    if (list.length < 3) { list.push(o); obsByStudent.set(o.student_id, list); }
+  }
   for (const c of cls.data || []) {
     const roster = (stu.data || []).filter((s) => s.class_id === c.id);
     lines.push(`\n## Classroom: ${c.name}`,
       [c.subject, c.level, c.term].filter(Boolean).join(' · '),
       c.description || '', c.context ? `Context: ${c.context}` : '',
-      roster.length ? `Students: ${roster.map((s) => `${s.name}${s.level ? ` (${s.level})` : ''}${s.needs ? ` — needs: ${s.needs}` : ''}`).join('; ')}` : '');
+      roster.length ? `Students: ${roster.map((s) => {
+        const notes = obsByStudent.get(s.id);
+        const obsStr = notes?.length ? ` [recent notes: ${notes.map((n) => `${n.created_at.slice(0, 10)} — ${String(n.text).replace(/\s+/g, ' ').slice(0, 100)}`).join(' | ')}]` : '';
+        return `${s.name}${s.level ? ` (${s.level})` : ''}${s.needs ? ` — needs: ${s.needs}` : ''}${obsStr}`;
+      }).join('; ')}` : '');
   }
   const rows = res.data || [];
   const total = resCount.count ?? rows.length;
@@ -255,6 +343,9 @@ async function getWorkspaceContext(teacherId: string) {
   }
   const sheets = (ws.data || []).map((w) => `- ${w.title}${w.subject ? ` (${w.subject})` : ''}`);
   if (sheets.length) lines.push(`\n## Existing worksheets (${sheets.length})`, ...sheets);
+  const classNameById = new Map((cls.data || []).map((c) => [c.id, c.name]));
+  const deployments = (aulas.data || []).map((a) => `- ${a.title} (code ${a.code}, ${a.status}${a.class_id ? `, class: ${classNameById.get(a.class_id) || '?'}` : ', public link'})`);
+  if (deployments.length) lines.push(`\n## Live deployments (${deployments.length})`, ...deployments);
   return lines.filter((l) => l !== '').join('\n');
 }
 
@@ -308,6 +399,31 @@ async function listWorksheets(teacherId: string) {
   return text(data.map((w) => `- ${w.title} (${w.subject || 'no subject'}, ${activityCount(w.doc)} activities) — id ${w.id}`).join('\n'));
 }
 
+/** Resolve entity names (classroom/student/resource/worksheet/aula) to knowledge-graph node ids, the same id shapes content.js's nameIndex() builds — { resolved: string[], unresolved: string[] }. */
+async function resolveEntityLinks(teacherId: string, names: string[]): Promise<{ resolved: string[]; unresolved: string[] }> {
+  const wanted = names.map((n) => String(n).trim()).filter(Boolean);
+  if (!wanted.length) return { resolved: [], unresolved: [] };
+  const [cls, stu, resr, ws, aulas] = await Promise.all([
+    supa.from('classrooms').select('id,name').eq('teacher_id', teacherId),
+    supa.from('students').select('id,name').eq('teacher_id', teacherId),
+    supa.from('resources').select('id,title').eq('teacher_id', teacherId),
+    supa.from('worksheets').select('id,title').eq('teacher_id', teacherId),
+    supa.from('aulas').select('id,title').eq('teacher_id', teacherId),
+  ]);
+  const index = new Map<string, string>();
+  for (const c of cls.data || []) index.set(c.name.trim().toLowerCase(), 'class:' + c.id);
+  for (const s of stu.data || []) index.set(s.name.trim().toLowerCase(), 'student:' + s.id);
+  for (const w of ws.data || []) index.set(w.title.trim().toLowerCase(), 'worksheet:' + w.id);
+  for (const r of resr.data || []) index.set(r.title.trim().toLowerCase(), 'resource:' + r.id);
+  for (const a of aulas.data || []) index.set(a.title.trim().toLowerCase(), 'aula:' + a.id);
+  const resolved: string[] = []; const unresolved: string[] = [];
+  for (const n of wanted) {
+    const id = index.get(n.toLowerCase());
+    if (id) resolved.push(id); else unresolved.push(n);
+  }
+  return { resolved, unresolved };
+}
+
 /** Find a resource by title within the same classroom/student scope (both must match, including "unscoped") — the identity a re-run of the same import/seed reproduces. */
 async function findResourceByScopedTitle(teacherId: string, title: string, classId: string | null, studentId: string | null) {
   let q = supa.from('resources').select('*').eq('teacher_id', teacherId).ilike('title', title);
@@ -337,18 +453,26 @@ async function addResource(teacherId: string, args: any) {
     studentId = data?.id ?? null;
   }
 
+  let linkResolved: string[] = []; let linkUnresolved: string[] = [];
+  if (Array.isArray(args?.links) && args.links.length) {
+    ({ resolved: linkResolved, unresolved: linkUnresolved } = await resolveEntityLinks(teacherId, args.links));
+  }
+  const unresolvedNote = linkUnresolved.length ? ` Couldn't resolve these link names (skipped — retry with a corrected name): ${linkUnresolved.join(', ')}.` : '';
+
   // Idempotent by (title, classroom, student): re-running the same seed or
   // import updates the note it already filed instead of duplicating it.
   const existing = await findResourceByScopedTitle(teacherId, title, classId, studentId);
   if (existing) {
+    const mergedLinks = Array.from(new Set([...(existing.links || []), ...linkResolved]));
     const patch: Record<string, unknown> = {
       note, kind, subject: String(args?.subject ?? existing.subject ?? ''),
       url: args?.url ? String(args.url) : existing.url,
       tags: Array.isArray(args?.tags) ? args.tags.map(String) : existing.tags,
+      links: mergedLinks,
     };
     const { error } = await supa.from('resources').update(patch).eq('id', existing.id);
     if (error) return text(`Update failed: ${error.message}`, true);
-    return { ...text(`Updated existing ${kind} note "${title}" (${existing.id}) — re-running this import didn't duplicate it.`), createdId: existing.id };
+    return { ...text(`Updated existing ${kind} note "${title}" (${existing.id}) — re-running this import didn't duplicate it.${unresolvedNote}`), createdId: existing.id };
   }
 
   const id = crypto.randomUUID();
@@ -356,11 +480,11 @@ async function addResource(teacherId: string, args: any) {
     id, teacher_id: teacherId, title, kind, type: 'mcp', subject: String(args?.subject || ''),
     class_id: classId, student_id: studentId,
     url: args?.url ? String(args.url) : null, note,
-    tags: Array.isArray(args?.tags) ? args.tags.map(String) : [], links: [],
+    tags: Array.isArray(args?.tags) ? args.tags.map(String) : [], links: linkResolved,
   });
   if (error) return text(`Insert failed: ${error.message}`, true);
   const scope = [classId ? 'classroom' : null, studentId ? 'student' : null].filter(Boolean).join('+');
-  return { ...text(`Added ${kind} note "${title}" (${id}) to the knowledge base${scope ? ` (linked to ${scope})` : ''}.`), createdId: id };
+  return { ...text(`Added ${kind} note "${title}" (${id}) to the knowledge base${scope ? ` (linked to ${scope})` : ''}.${unresolvedNote}`), createdId: id };
 }
 
 /** Resolve a resource by id or (case-insensitive) title, for the read/update/append tools. */
@@ -459,16 +583,20 @@ async function upsertClassroom(teacherId: string, args: any) {
   const patch: Record<string, string> = {};
   for (const f of fields) if (args?.[f] != null) patch[f] = String(args[f]);
 
+  const overwrite = args?.overwrite === true;
   const existing = await findClassroomByName(teacherId, name);
   if (existing) {
-    // Merge rule: fill in only fields that were empty, never overwrite existing content.
+    // Default merge rule: fill in only fields that were empty, never overwrite
+    // existing content. overwrite:true (explicit teacher instruction only)
+    // replaces every field that was passed, regardless of current value.
     const fill: Record<string, string> = {};
-    for (const f of fields) if (patch[f] && !existing[f]) fill[f] = patch[f];
+    for (const f of fields) if (patch[f] && (overwrite || !existing[f])) fill[f] = patch[f];
     if (Object.keys(fill).length) {
       const { error } = await supa.from('classrooms').update(fill).eq('id', existing.id);
       if (error) return text(`Update failed: ${error.message}`, true);
     }
-    return { ...text(`Merged into existing classroom "${existing.name}" (${existing.id})${Object.keys(fill).length ? ` — filled ${Object.keys(fill).join(', ')}` : ' — no new fields to fill'}.`), createdId: existing.id };
+    const verb = overwrite ? 'updated' : 'filled';
+    return { ...text(`Merged into existing classroom "${existing.name}" (${existing.id})${Object.keys(fill).length ? ` — ${verb} ${Object.keys(fill).join(', ')}` : ' — no fields to change'}.`), createdId: existing.id };
   }
 
   const id = crypto.randomUUID();
@@ -494,21 +622,167 @@ async function upsertStudent(teacherId: string, args: any) {
   const patch: Record<string, string> = {};
   for (const f of fields) if (args?.[f] != null) patch[f] = String(args[f]);
 
+  const overwrite = args?.overwrite === true;
   const { data: existing } = await supa.from('students').select('*').eq('teacher_id', teacherId).eq('class_id', classroom.id).ilike('name', name).maybeSingle();
   if (existing) {
     const fill: Record<string, string> = {};
-    for (const f of fields) if (patch[f] && !existing[f]) fill[f] = patch[f];
+    for (const f of fields) if (patch[f] && (overwrite || !existing[f])) fill[f] = patch[f];
     if (Object.keys(fill).length) {
       const { error } = await supa.from('students').update(fill).eq('id', existing.id);
       if (error) return text(`Update failed: ${error.message}`, true);
     }
-    return { ...text(`Merged into existing student "${existing.name}" (${existing.id}) in "${classroom.name}"${Object.keys(fill).length ? ` — filled ${Object.keys(fill).join(', ')}` : ' — no new fields to fill'}.`), createdId: existing.id };
+    const verb = overwrite ? 'updated' : 'filled';
+    return { ...text(`Merged into existing student "${existing.name}" (${existing.id}) in "${classroom.name}"${Object.keys(fill).length ? ` — ${verb} ${Object.keys(fill).join(', ')}` : ' — no fields to change'}.`), createdId: existing.id };
   }
 
   const id = crypto.randomUUID();
   const { error } = await supa.from('students').insert({ id, teacher_id: teacherId, class_id: classroom.id, name, ...patch });
   if (error) return text(`Insert failed: ${error.message}`, true);
   return { ...text(`Created student "${name}" (${id}) in "${classroom.name}".`), createdId: id };
+}
+
+async function updateWorksheet(teacherId: string, args: any) {
+  const id = String(args?.id || '').trim();
+  if (!id) return text('"id" is required.', true);
+  let doc = args?.doc;
+  if (typeof doc === 'string') { try { doc = JSON.parse(doc); } catch { return text('doc is a string but not valid JSON.', true); } }
+  if (!doc || typeof doc !== 'object') return text('Missing "doc" (the worksheet JSON object).', true);
+  const problems = validateWorksheet(doc);
+  if (problems.length) return text(`Worksheet rejected — fix these and retry:\n${problems.map((p: string) => `- ${p}`).join('\n')}`, true);
+  const { data: existing } = await supa.from('worksheets').select('id').eq('teacher_id', teacherId).eq('id', id).maybeSingle();
+  if (!existing) return text(`No worksheet with id "${id}" in this teacher's library.`, true);
+  const { error } = await supa.from('worksheets').update({ title: doc.title || 'Untitled worksheet', subject: doc.subject || '', doc }).eq('id', id);
+  if (error) return text(`Update failed: ${error.message}`, true);
+  return { ...text(`Updated worksheet "${doc.title}" (${id}) with ${activityCount(doc)} activities.`), createdId: id };
+}
+
+async function deleteWorksheet(teacherId: string, args: any) {
+  const id = String(args?.id || '').trim();
+  if (!id) return text('"id" is required.', true);
+  const { data: existing } = await supa.from('worksheets').select('id,title').eq('teacher_id', teacherId).eq('id', id).maybeSingle();
+  if (!existing) return text(`No worksheet with id "${id}" in this teacher's library.`, true);
+  const { data: deployed } = await supa.from('aula_worksheets').select('aula_id').eq('worksheet_id', id).limit(1);
+  if (deployed && deployed.length) return text(`"${existing.title}" is deployed in a live class — close or remove that deployment first.`, true);
+  const { error } = await supa.from('worksheets').delete().eq('id', id);
+  if (error) return text(`Delete failed: ${error.message}`, true);
+  return { ...text(`Removed "${existing.title}" (${id}) from the library.`), createdId: id };
+}
+
+async function addStudentNote(teacherId: string, args: any) {
+  const noteText = String(args?.text || '').trim();
+  if (!noteText) return text('"text" is required.', true);
+  const studentName = String(args?.student || '').trim();
+  if (!studentName) return text('"student" is required.', true);
+  let classId: string | null = null;
+  if (args?.classroom) {
+    const cls = await findClassroomByName(teacherId, String(args.classroom).trim());
+    if (!cls) return text(`No classroom named "${args.classroom}".`, true);
+    classId = cls.id;
+  }
+  let q = supa.from('students').select('id,name').eq('teacher_id', teacherId).ilike('name', studentName);
+  if (classId) q = q.eq('class_id', classId);
+  const { data: student } = await q.maybeSingle();
+  if (!student) return text(`No student named "${studentName}"${args?.classroom ? ` in "${args.classroom}"` : ''}. Use upsert_student first if they're new.`, true);
+  const id = crypto.randomUUID();
+  const { error } = await supa.from('student_notes').insert({ id, teacher_id: teacherId, student_id: student.id, text: noteText });
+  if (error) return text(`Insert failed: ${error.message}`, true);
+  return { ...text(`Added an observation for ${student.name}.`), createdId: 'student:' + student.id };
+}
+
+async function deployWorksheets(teacherId: string, args: any) {
+  const worksheetIds = Array.isArray(args?.worksheet_ids) ? args.worksheet_ids.map(String) : [];
+  if (!worksheetIds.length) return text('"worksheet_ids" must be a non-empty array.', true);
+  const { data: owned } = await supa.from('worksheets').select('id').eq('teacher_id', teacherId).in('id', worksheetIds);
+  const ownedIds = new Set((owned || []).map((w) => w.id));
+  const missing = worksheetIds.filter((id) => !ownedIds.has(id));
+  if (missing.length) return text(`Unknown worksheet id(s): ${missing.join(', ')}.`, true);
+
+  let classId: string | null = null;
+  if (args?.classroom) {
+    const cls = await findClassroomByName(teacherId, String(args.classroom).trim());
+    if (!cls) return text(`No classroom named "${args.classroom}". Create it first with upsert_classroom, or omit classroom for a public link.`, true);
+    classId = cls.id;
+  }
+
+  let code = '';
+  for (let tries = 0; tries < 20; tries++) {
+    code = 'A' + Math.random().toString(36).slice(2, 6).toUpperCase();
+    const { data: clash } = await supa.from('aulas').select('id').eq('code', code).maybeSingle();
+    if (!clash) break;
+  }
+
+  let passwordHash: string | null = null;
+  if (args?.password) {
+    const { data: hash, error: hErr } = await supa.rpc('bcrypt_hash_service', { p_plain: String(args.password) });
+    if (hErr) return text(`Could not hash password: ${hErr.message}`, true);
+    passwordHash = hash;
+  }
+
+  const id = crypto.randomUUID();
+  const title = args?.title ? String(args.title) : `Deployment ${new Date().toISOString().slice(0, 10)}`;
+  const { error } = await supa.from('aulas').insert({ id, teacher_id: teacherId, class_id: classId, title, code, status: 'live', password_hash: passwordHash });
+  if (error) return text(`Insert failed: ${error.message}`, true);
+  const { error: awErr } = await supa.from('aula_worksheets').insert(worksheetIds.map((wid, i) => ({ aula_id: id, worksheet_id: wid, position: i })));
+  if (awErr) return text(`Deployment created (${code}) but linking worksheets failed: ${awErr.message}`, true);
+  return {
+    ...text(`Deployed "${title}" (${id}) — join code ${code}${classId ? '' : ' (public link, no class)'}${passwordHash ? '. Password-protected — share the password with students separately, it is not echoed back' : ''}. ${worksheetIds.length} worksheet${worksheetIds.length === 1 ? '' : 's'} included.`),
+    createdId: id,
+  };
+}
+
+async function setAulaStatus(teacherId: string, args: any) {
+  const code = String(args?.code || '').trim();
+  const status = args?.status;
+  if (!code) return text('"code" is required.', true);
+  if (!['live', 'closed'].includes(status)) return text('"status" must be "live" or "closed".', true);
+  const { data: aula } = await supa.from('aulas').select('id,title').eq('teacher_id', teacherId).ilike('code', code).maybeSingle();
+  if (!aula) return text(`No deployment with code "${code}" in this teacher's workspace.`, true);
+  const { error } = await supa.from('aulas').update({ status }).eq('id', aula.id);
+  if (error) return text(`Update failed: ${error.message}`, true);
+  return { ...text(`"${aula.title}" (${code}) is now ${status}.`), createdId: aula.id };
+}
+
+async function getProgress(teacherId: string, args: any) {
+  let aq = supa.from('aulas').select('id,code,title,class_id').eq('teacher_id', teacherId);
+  if (args?.aula_code) aq = aq.ilike('code', String(args.aula_code).trim());
+  if (args?.classroom) {
+    const cls = await findClassroomByName(teacherId, String(args.classroom).trim());
+    if (!cls) return text(`No classroom named "${args.classroom}".`, true);
+    aq = aq.eq('class_id', cls.id);
+  }
+  const { data: aulas, error: aErr } = await aq;
+  if (aErr) return text(`Query failed: ${aErr.message}`, true);
+  if (!aulas?.length) return text('No matching live deployments.');
+  const aulaIds = aulas.map((a) => a.id);
+  const aulaById = new Map(aulas.map((a) => [a.id, a]));
+
+  const [{ data: enrollments }, { data: progress }, { data: worksheets }] = await Promise.all([
+    supa.from('enrollments').select('id,aula_id,name').in('aula_id', aulaIds),
+    supa.from('progress').select('aula_id,enrollment_id,worksheet_id,total,attempted,correct,done,score,validated,updated_at').in('aula_id', aulaIds),
+    supa.from('worksheets').select('id,title').eq('teacher_id', teacherId),
+  ]);
+  const enrollById = new Map((enrollments || []).map((e) => [e.id, e]));
+  const wsById = new Map((worksheets || []).map((w) => [w.id, w.title]));
+
+  let rows = (progress || []).map((p) => {
+    const e = enrollById.get(p.enrollment_id);
+    const a = aulaById.get(p.aula_id);
+    return {
+      student: e?.name || '(unknown)', worksheet: wsById.get(p.worksheet_id) || '(unknown)',
+      aula: a?.title || a?.code || '(unknown)', code: a?.code || '',
+      attempted: p.attempted, total: p.total, correct: p.correct,
+      scorePct: Math.round((p.score || 0) * 100),
+      status: p.done ? 'complete' : (p.attempted ? 'in progress' : 'not started'),
+      validated: p.validated || '', updatedAt: p.updated_at,
+    };
+  });
+  if (args?.student) {
+    const needle = String(args.student).trim().toLowerCase();
+    rows = rows.filter((r) => r.student.toLowerCase() === needle);
+  }
+  if (!rows.length) return text('No progress recorded yet for the matching deployment(s).');
+  const lines = rows.map((r) => `- ${r.student} — "${r.worksheet}" (${r.aula}, ${r.code}): ${r.attempted}/${r.total} attempted, ${r.correct} correct, ${r.scorePct}% score, ${r.status}${r.validated ? `, ${r.validated}` : ''}`);
+  return text(lines.join('\n'));
 }
 
 /* ---------------- MCP over streamable HTTP ---------------- */
@@ -521,7 +795,7 @@ async function handleMessage(msg: any, who: Auth) {
         protocolVersion: params?.protocolVersion || '2025-03-26',
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: 'ensinolibre', version: '1.0.0' },
-        instructions: 'EnsinoLibre teacher workspace. Typical flow: get_workspace_context → get_worksheet_contract (with the types you plan to use) → create_worksheet. add_resource files llm.wiki-style summary notes into the knowledge base. For bulk imports (a roster file, a Google Classroom export, a folder of materials), call get_workspace_context first to see what already exists, then upsert_classroom / upsert_student / add_resource once per item — all three match-or-create by name, so re-running an import is safe and nothing is duplicated. get_workspace_context only PREVIEWS the knowledge base (most recent notes, truncated) — once it reports more notes exist than it showed, use search_resources to find the relevant ones and get_resource to read one in full. To revise what you already know, update_resource rewrites a note and append_resource_note adds a dated addendum.',
+        instructions: 'EnsinoLibre teacher workspace. Typical flow: get_workspace_context → get_worksheet_contract (with the types you plan to use) → create_worksheet → deploy_worksheets when the teacher wants it live. add_resource files llm.wiki-style summary notes into the knowledge base (pass `links` to relate it to other entities). For bulk imports (a roster file, a Google Classroom export, a folder of materials), call get_workspace_context first to see what already exists, then upsert_classroom / upsert_student / add_resource once per item — all three match-or-create by name, so re-running an import is safe and nothing is duplicated (pass `overwrite: true` on upsert_classroom/upsert_student only when the teacher explicitly asks to update existing context, not during routine imports). get_workspace_context only PREVIEWS the knowledge base (most recent notes, truncated) — once it reports more notes exist than it showed, use search_resources to find the relevant ones and get_resource to read one in full. To revise what you already know, update_resource rewrites a note and append_resource_note adds a dated addendum; add_student_note logs a dated observation about a student. update_worksheet/delete_worksheet revise or retire a worksheet already in the library. get_progress reads student results across live deployments — the starting point for any progress review or report.',
       });
     case 'ping':
       return rpcResult(id, {});
@@ -581,6 +855,35 @@ async function handleMessage(msg: any, who: Auth) {
           const result = await upsertStudent(who.teacherId, args);
           if (!result.isError) logActivity(who, name, 'student:' + result.createdId);
           return rpcResult(id, result);
+        }
+        if (name === 'update_worksheet') {
+          const result = await updateWorksheet(who.teacherId, args);
+          if (!result.isError) logActivity(who, name, 'worksheet:' + result.createdId);
+          return rpcResult(id, result);
+        }
+        if (name === 'delete_worksheet') {
+          const result = await deleteWorksheet(who.teacherId, args);
+          if (!result.isError) logActivity(who, name, 'worksheet:' + result.createdId);
+          return rpcResult(id, result);
+        }
+        if (name === 'add_student_note') {
+          const result = await addStudentNote(who.teacherId, args);
+          if (!result.isError) logActivity(who, name, result.createdId);
+          return rpcResult(id, result);
+        }
+        if (name === 'deploy_worksheets') {
+          const result = await deployWorksheets(who.teacherId, args);
+          if (!result.isError) logActivity(who, name, 'aula:' + result.createdId);
+          return rpcResult(id, result);
+        }
+        if (name === 'set_aula_status') {
+          const result = await setAulaStatus(who.teacherId, args);
+          if (!result.isError) logActivity(who, name, 'aula:' + result.createdId);
+          return rpcResult(id, result);
+        }
+        if (name === 'get_progress') {
+          logActivity(who, name, 'teacher');
+          return rpcResult(id, await getProgress(who.teacherId, args));
         }
         return rpcError(id, -32602, `Unknown tool: ${name}`);
       } catch (e) {

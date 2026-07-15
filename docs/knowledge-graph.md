@@ -26,4 +26,4 @@ Each row in the legend is a toggle, not just a key: click a type to hide every n
 
 ## Why it exists
 
-The graph is a visualisation of the same linked knowledge base that [[obsidian-vault|the Obsidian vault export]], [[knowledge-seeding|seeded resources]] and an [[mcp-connect|MCP agent's workspace context]] all draw from. If two things feel like they should be connected but aren't showing an edge here, the fix is the same everywhere: add an explicit wikilink to one of their notes, or set the class/student relation on the resource.
+The graph is a visualisation of the same linked knowledge base that [[obsidian-vault|the Obsidian vault export]], [[knowledge-seeding|seeded resources]] and an [[mcp-connect|MCP agent's workspace context]] all draw from. If two things feel like they should be connected but aren't showing an edge here, the fix is the same everywhere: add an explicit wikilink to one of their notes, or set the class/student relation on the resource — or, for a note an agent filed, pass `links` (entity names) to `add_resource` and the MCP server resolves them to real edges the same way a wikilink does.

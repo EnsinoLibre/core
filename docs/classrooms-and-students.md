@@ -28,3 +28,11 @@ Each student card shows an avatar, pronouns, level badge and a preview of their 
 ## Where this data goes
 
 Classroom `context` and student `goals`/`needs` aren't just notes — they're exactly what flows into the [[worksheets-library|worksheet builder]]'s "For class" auto-fill, into [[mcp-connect|an MCP agent]]'s `get_workspace_context`, and into the [[obsidian-vault|Obsidian vault export]]. Writing a real sentence or two here (not leaving it blank) is what makes generated material actually fit the class.
+
+## Observations
+
+Each student's content panel has an **Add observation** field — a dated note ("struggled with past perfect on Tuesday") that accumulates as a running log, separate from `goals`/`needs`. An [[mcp-connect|MCP agent]]'s `add_student_note` tool writes the same log, and the most recent few observations per student surface automatically in `get_workspace_context` so an agent planning a lesson sees what actually happened last time, not just the static profile.
+
+## Revising context via an agent
+
+`upsert_classroom`/`upsert_student` default to filling in only what was empty — safe for repeated imports, but it means an agent can't update stale context on its own. Pass `overwrite: true` (only on an explicit "update the class context" instruction from you) to have it replace the fields you give it instead.
