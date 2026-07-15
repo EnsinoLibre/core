@@ -598,6 +598,9 @@ R['translation-compare'] = (a, index) => {
     // Draw the connector curves once the tokens have a measured position.
     let layoutTries = 0;
     function layoutPaths() {
+      // Stop once the node is detached (e.g. React unmounted the worksheet) —
+      // no wasted retries and, with the ResizeObserver below, no leaked work.
+      if (!wrap.isConnected) return;
       const box = wrap.getBoundingClientRect();
       if (!box.width) {
         // Retry with setTimeout too, so a throttled rAF can't stop us measuring.
@@ -629,7 +632,15 @@ R['translation-compare'] = (a, index) => {
     }
     requestAnimationFrame(layoutPaths);
     setTimeout(layoutPaths, 80);
-    window.addEventListener('resize', () => { layoutTries = 0; requestAnimationFrame(layoutPaths); });
+    // Re-layout on size changes via a ResizeObserver on the wrap itself, NOT a
+    // window 'resize' listener: the observer stops firing (and is GC'd) once the
+    // node is detached, so re-mounting from React can't leak a growing pile of
+    // stale global listeners (#7). It also catches container resizes a window
+    // listener would miss.
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(() => { layoutTries = 0; requestAnimationFrame(layoutPaths); });
+      ro.observe(wrap);
+    }
   });
   return card;
 };

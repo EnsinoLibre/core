@@ -15,14 +15,25 @@ The EnsinoLibre renderer is a small, dependency-free ES module. Everything on th
 | `assets/js/validator.js` | `validateWorksheet(ws)`, `validateActivity(a)`, `parseGaps(text)`, `KNOWN_TYPES` | nothing |
 | `assets/js/renderer.js` | `renderWorksheet(ws, container)`, `RENDERERS`, `buildWordSearch(...)` | `validator.js`, `anim.js` |
 | `assets/js/analog.js` | `emitAnalog(ws)`, `ANALOG_EMITTERS` | `validator.js`, `renderer.js` |
-| `assets/js/anim.js` | animation helpers (Anime.js v4) | vendored `anime.esm.min.js` |
+| `assets/js/anim.js` | `warmAnime`, `enterTiles`, `exitTiles`, `popTiles`, `pulseWave`, `flyInMorphemes`, `drawPaths` (native Web Animations API) | nothing (browser-only) |
 | `assets/js/prompt-builder.js` | `buildPrompt(spec)`, `validateSpec(spec)`, `ACTIVITY_TYPES`, `CONTRACTS` | nothing |
 
 `validator.js`, `analog.js` and `prompt-builder.js` are pure (no DOM) and run in Node as well as the browser — the test suite imports them directly.
 
+The renderer registers **no `window`-level side effects**: any layout that must react to size changes uses a `ResizeObserver` scoped to the activity's own node (so it stops and is garbage-collected when the node is detached), never a `window` `resize` listener. Keep it that way — the renderer is mounted and unmounted repeatedly from React (the teacher platform), where a per-render global listener would leak.
+
 ## Animation
 
-The four visual-grammar types ([[activities/grammar-forms|grammar-forms]], [[activities/tense-shift|tense-shift]], [[activities/word-transform|word-transform]], [[activities/translation-compare|translation-compare]]) are animated with **Anime.js v4**, vendored locally at `assets/vendor/anime.esm.min.js` (no CDN). `anim.js` loads it lazily and every helper is a graceful no-op under `prefers-reduced-motion` or if the library fails to load — so animation is never required for correctness. A `setTimeout` safety net always settles tiles to their visible resting state even if `requestAnimationFrame` is throttled (e.g. a background tab). Word tiles stagger in with an `outBack` ease, morphemes fly in from their affix side, and translation links draw in as SVG curves.
+The four visual-grammar types ([[activities/grammar-forms|grammar-forms]], [[activities/tense-shift|tense-shift]], [[activities/word-transform|word-transform]], [[activities/translation-compare|translation-compare]]) are animated on the browser's **native Web Animations API** — no animation engine, nothing vendored, no CDN (`anim.js`'s docstring is the source of truth; the test suite even asserts the old vendored `anime.esm.min.js` no longer exists). `anim.js` exposes a small set of helpers over `Element.animate()`:
+
+- **`EASE` presets** — `cubic-bezier` curves mirroring the source PWA (`outBack`/`outBackStrong` overshoots, `inSine`, `inOutSine`, `inOutQuad`).
+- **`enterTiles` / `exitTiles` / `popTiles`** — staggered enter with a back-out overshoot, quick centre-out exit, elastic-style emphasis pop.
+- **`flyInMorphemes`** — word-building affixes fly in from their prefix/suffix side.
+- **`pulseWave`** — a travelling highlight across a row of tiles.
+- **`drawPaths`** — translation-compare's SVG connector curves draw themselves in.
+- **`warmAnime`** — a cheap warm-up so the first real animation doesn't jank.
+
+Every helper is a **graceful no-op** under `prefers-reduced-motion` (or where `Element.animate` is unavailable), so animation is never required for correctness. Enter animations fill **backwards only**, so elements always come to rest at their stylesheet state — content is never left invisible. A `settle()` safety net force-finishes animations after a capped timeout, so a throttled/backgrounded tab (where `requestAnimationFrame` stalls at 0) can't leave tiles stuck hidden.
 
 
 ## Minimal embed
