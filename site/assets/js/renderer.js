@@ -13,7 +13,7 @@
  */
 
 import { parseGaps } from './validator.js';
-import { warmAnime, enterTiles, exitTiles, popTiles, pulseWave, flyInMorphemes, drawPaths } from './anim.js';
+import { warmAnime, enterTiles, exitTiles, popTiles, pulseWave, flyInMorphemes, drawPaths, flipCard, shakeTiles } from './anim.js';
 
 let uid = 0;
 const nextId = (p) => `oc-${p}-${++uid}`;
@@ -668,15 +668,16 @@ R['flashdeck'] = (a, index) => {
     }
     counter.textContent = `Card ${current + 1} of ${a.cards.length}`;
   }
-  face.addEventListener('click', () => { showBack = !showBack; draw(); });
+  // Flip the card face-over on tap; swap content at the edge-on midpoint (#11).
+  face.addEventListener('click', () => { showBack = !showBack; flipCard(face, draw); });
   card.appendChild(face);
   const row = el('div', 'oc-actions-row');
   const prev = el('button', 'oc-btn oc-btn--check', '←');
   prev.type = 'button';
-  prev.addEventListener('click', () => { current = (current - 1 + a.cards.length) % a.cards.length; showBack = false; draw(); });
+  prev.addEventListener('click', () => { current = (current - 1 + a.cards.length) % a.cards.length; showBack = false; flipCard(face, draw); });
   const next = el('button', 'oc-btn oc-btn--check', '→');
   next.type = 'button';
-  next.addEventListener('click', () => { current = (current + 1) % a.cards.length; showBack = false; draw(); });
+  next.addEventListener('click', () => { current = (current + 1) % a.cards.length; showBack = false; flipCard(face, draw); });
   row.appendChild(prev);
   row.appendChild(counter);
   if (AUDIO_ENABLED) {
@@ -710,10 +711,10 @@ R['memory-game'] = (a, index) => {
     cell.type = 'button';
     cell.addEventListener('click', () => {
       if (cell.classList.contains('oc-memory-card--done') || open.includes(cell) || open.length === 2) return;
-      cell.textContent = f.text;
-      cell.classList.add('oc-memory-card--open');
-      open.push(cell);
       cell.dataset.key = f.key;
+      open.push(cell);
+      // Flip the card face-up (#12).
+      flipCard(cell, () => { cell.textContent = f.text; cell.classList.add('oc-memory-card--open'); });
       if (open.length === 2) {
         moveCount += 1;
         moves.textContent = `Moves: ${moveCount}`;
@@ -721,14 +722,17 @@ R['memory-game'] = (a, index) => {
         if (x.dataset.key === y.dataset.key) {
           x.classList.add('oc-memory-card--done');
           y.classList.add('oc-memory-card--done');
+          setTimeout(() => popTiles([x, y]), 320); // pop once the reveal flip settles
           matched += 1;
           open = [];
           if (matched === a.pairs.length) moves.textContent = `Completed in ${moveCount} moves! 🎉`;
         } else {
-          setTimeout(() => {
-            for (const c of [x, y]) { c.textContent = '?'; c.classList.remove('oc-memory-card--open'); }
+          const pair = [x, y];
+          setTimeout(async () => {
+            await shakeTiles(pair);            // signal the miss, then flip both back
+            for (const c of pair) flipCard(c, () => { c.textContent = '?'; c.classList.remove('oc-memory-card--open'); });
             open = [];
-          }, 900);
+          }, 700);
         }
       }
     });

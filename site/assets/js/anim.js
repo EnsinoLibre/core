@@ -108,6 +108,48 @@ export async function popTiles(nodes) {
   }
 }
 
+/**
+ * 3D card flip driven by the WAAPI: rotate the node to edge-on, run
+ * `updateContent()` at the invisible midpoint to swap front/back, then rotate
+ * the (new) face back to flat. Under reduced motion / no `animate`, the content
+ * is swapped instantly — so the card is never left mid-flip or blank.
+ */
+export async function flipCard(node, updateContent) {
+  if (!node || typeof node.animate !== 'function' || reduceMotion()) { updateContent(); return; }
+  node.getAnimations?.().forEach((a) => a.cancel()); // don't stack rapid flips
+  const half = 150;
+  const out = node.animate(
+    [{ transform: 'perspective(600px) rotateY(0deg)' }, { transform: 'perspective(600px) rotateY(90deg)' }],
+    { duration: half, easing: EASE.inOutSine, fill: 'forwards' },
+  );
+  await settle([out], half + 120);
+  updateContent();
+  const inn = node.animate(
+    [{ transform: 'perspective(600px) rotateY(-90deg)' }, { transform: 'perspective(600px) rotateY(0deg)' }],
+    { duration: half, easing: EASE.inOutSine, fill: 'forwards' },
+  );
+  await settle([inn], half + 120);
+  // Resting state is no transform; the forwards-filled `inn` holds rotateY(0),
+  // which is visually identical, and the next flip cancels it.
+}
+
+/** Quick horizontal shake to signal a wrong/mismatched action. No-op when reduced. */
+export async function shakeTiles(nodes) {
+  if (!canAnimate(nodes)) return;
+  const anims = nodes.map((n) => n.animate(
+    [
+      { transform: 'translateX(0)' },
+      { transform: 'translateX(-5px)', offset: 0.2 },
+      { transform: 'translateX(5px)', offset: 0.4 },
+      { transform: 'translateX(-4px)', offset: 0.6 },
+      { transform: 'translateX(4px)', offset: 0.8 },
+      { transform: 'translateX(0)' },
+    ],
+    { duration: 380, easing: EASE.inOutSine },
+  ));
+  await settle(anims, 380 + 150);
+}
+
 /** A left→right pulse wave over word blocks (used when reading a sentence aloud). */
 export async function pulseWave(nodes) {
   if (!canAnimate(nodes)) return;
