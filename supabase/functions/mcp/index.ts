@@ -106,7 +106,7 @@ const TOOLS = [
   },
   {
     name: 'add_resource',
-    description: "Add a note to the teacher's knowledge base. Follow the llm.wiki style: `note` is a front-facing summarizing markdown (~200 words + key points) that stands in for the source material.",
+    description: "Add a note to the teacher's knowledge base. Follow the llm.wiki style: `note` is a front-facing summarizing markdown (~200 words + key points) that stands in for the source material. Pass `classroom` and/or `student` (by name) to scope it — same match-or-create-by-name rule as upsert_classroom/upsert_student.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -116,8 +116,44 @@ const TOOLS = [
         note: { type: 'string', description: 'Front-facing markdown summary.' },
         url: { type: 'string' },
         tags: { type: 'array', items: { type: 'string' } },
+        classroom: { type: 'string', description: 'Classroom name to link this resource to. Matched case-insensitively; left unresolved (not created) if no such classroom exists.' },
+        student: { type: 'string', description: 'Student name to link this resource to (looked up within `classroom` if given, otherwise across the teacher\'s roster).' },
       },
       required: ['title', 'note'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'upsert_classroom',
+    description: "Create a classroom, or merge into an existing one matched by name (case-insensitive) — exactly the rule the platform's own Google Classroom import uses: a new name creates, a matching name fills in only the fields that were empty. Safe to call repeatedly for the same class without duplicating it. Returns the classroom id.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        subject: { type: 'string' },
+        level: { type: 'string' },
+        term: { type: 'string' },
+        description: { type: 'string' },
+        context: { type: 'string', description: 'Free-text notes that flow into worksheet generation — write a real sentence or two, not a placeholder.' },
+      },
+      required: ['name'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'upsert_student',
+    description: "Create a student, or merge into an existing one matched by name within their classroom (case-insensitive) — same match-or-create rule as upsert_classroom. If `classroom` doesn't exist yet it is created bare (call upsert_classroom first if you have more detail for it). Safe to call repeatedly without duplicating the student. Returns the student id.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        classroom: { type: 'string', description: 'Classroom name this student belongs to.' },
+        level: { type: 'string' },
+        pronouns: { type: 'string' },
+        goals: { type: 'string' },
+        needs: { type: 'string', description: 'Needs and context — flows into worksheet generation and get_workspace_context.' },
+      },
+      required: ['name', 'classroom'],
       additionalProperties: false,
     },
   },
@@ -209,14 +245,96 @@ async function addResource(teacherId: string, args: any) {
   const note = String(args?.note || '').trim();
   if (!title || !note) return text('Both "title" and "note" are required.', true);
   const kind = ['material', 'guideline', 'external', 'context'].includes(args?.kind) ? args.kind : 'context';
+
+  let classId: string | null = null;
+  if (args?.classroom) {
+    const { data } = await supa.from('classrooms').select('id').eq('teacher_id', teacherId)
+      .ilike('name', String(args.classroom).trim()).maybeSingle();
+    classId = data?.id ?? null;
+  }
+  let studentId: string | null = null;
+  if (args?.student) {
+    let q = supa.from('students').select('id').eq('teacher_id', teacherId).ilike('name', String(args.student).trim());
+    if (classId) q = q.eq('class_id', classId);
+    const { data } = await q.maybeSingle();
+    studentId = data?.id ?? null;
+  }
+
   const id = crypto.randomUUID();
   const { error } = await supa.from('resources').insert({
     id, teacher_id: teacherId, title, kind, type: 'mcp', subject: String(args?.subject || ''),
+    class_id: classId, student_id: studentId,
     url: args?.url ? String(args.url) : null, note,
     tags: Array.isArray(args?.tags) ? args.tags.map(String) : [], links: [],
   });
   if (error) return text(`Insert failed: ${error.message}`, true);
-  return { ...text(`Added ${kind} note "${title}" (${id}) to the knowledge base.`), createdId: id };
+  const scope = [classId ? 'classroom' : null, studentId ? 'student' : null].filter(Boolean).join('+');
+  return { ...text(`Added ${kind} note "${title}" (${id}) to the knowledge base${scope ? ` (linked to ${scope})` : ''}.`), createdId: id };
+}
+
+/** Find a classroom by name (case-insensitive) for this teacher, or null. */
+async function findClassroomByName(teacherId: string, name: string) {
+  const { data } = await supa.from('classrooms').select('*').eq('teacher_id', teacherId).ilike('name', name).maybeSingle();
+  return data;
+}
+
+async function upsertClassroom(teacherId: string, args: any) {
+  const name = String(args?.name || '').trim();
+  if (!name) return text('"name" is required.', true);
+  const fields = ['subject', 'level', 'term', 'description', 'context'] as const;
+  const patch: Record<string, string> = {};
+  for (const f of fields) if (args?.[f] != null) patch[f] = String(args[f]);
+
+  const existing = await findClassroomByName(teacherId, name);
+  if (existing) {
+    // Merge rule: fill in only fields that were empty, never overwrite existing content.
+    const fill: Record<string, string> = {};
+    for (const f of fields) if (patch[f] && !existing[f]) fill[f] = patch[f];
+    if (Object.keys(fill).length) {
+      const { error } = await supa.from('classrooms').update(fill).eq('id', existing.id);
+      if (error) return text(`Update failed: ${error.message}`, true);
+    }
+    return { ...text(`Merged into existing classroom "${existing.name}" (${existing.id})${Object.keys(fill).length ? ` — filled ${Object.keys(fill).join(', ')}` : ' — no new fields to fill'}.`), createdId: existing.id };
+  }
+
+  const id = crypto.randomUUID();
+  const { error } = await supa.from('classrooms').insert({ id, teacher_id: teacherId, name, ...patch });
+  if (error) return text(`Insert failed: ${error.message}`, true);
+  return { ...text(`Created classroom "${name}" (${id}).`), createdId: id };
+}
+
+async function upsertStudent(teacherId: string, args: any) {
+  const name = String(args?.name || '').trim();
+  const classroomName = String(args?.classroom || '').trim();
+  if (!name || !classroomName) return text('Both "name" and "classroom" are required.', true);
+
+  let classroom = await findClassroomByName(teacherId, classroomName);
+  if (!classroom) {
+    const id = crypto.randomUUID();
+    const { data, error } = await supa.from('classrooms').insert({ id, teacher_id: teacherId, name: classroomName }).select().single();
+    if (error) return text(`Could not create classroom "${classroomName}": ${error.message}`, true);
+    classroom = data;
+  }
+
+  const fields = ['level', 'pronouns', 'goals', 'needs'] as const;
+  const patch: Record<string, string> = {};
+  for (const f of fields) if (args?.[f] != null) patch[f] = String(args[f]);
+
+  const { data: existing } = await supa.from('students').select('*').eq('teacher_id', teacherId).eq('class_id', classroom.id).ilike('name', name).maybeSingle();
+  if (existing) {
+    const fill: Record<string, string> = {};
+    for (const f of fields) if (patch[f] && !existing[f]) fill[f] = patch[f];
+    if (Object.keys(fill).length) {
+      const { error } = await supa.from('students').update(fill).eq('id', existing.id);
+      if (error) return text(`Update failed: ${error.message}`, true);
+    }
+    return { ...text(`Merged into existing student "${existing.name}" (${existing.id}) in "${classroom.name}"${Object.keys(fill).length ? ` — filled ${Object.keys(fill).join(', ')}` : ' — no new fields to fill'}.`), createdId: existing.id };
+  }
+
+  const id = crypto.randomUUID();
+  const { error } = await supa.from('students').insert({ id, teacher_id: teacherId, class_id: classroom.id, name, ...patch });
+  if (error) return text(`Insert failed: ${error.message}`, true);
+  return { ...text(`Created student "${name}" (${id}) in "${classroom.name}".`), createdId: id };
 }
 
 /* ---------------- MCP over streamable HTTP ---------------- */
@@ -229,7 +347,7 @@ async function handleMessage(msg: any, who: Auth) {
         protocolVersion: params?.protocolVersion || '2025-03-26',
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: 'ensinolibre', version: '1.0.0' },
-        instructions: 'EnsinoLibre teacher workspace. Typical flow: get_workspace_context → get_worksheet_contract (with the types you plan to use) → create_worksheet. add_resource files llm.wiki-style summary notes into the knowledge base.',
+        instructions: 'EnsinoLibre teacher workspace. Typical flow: get_workspace_context → get_worksheet_contract (with the types you plan to use) → create_worksheet. add_resource files llm.wiki-style summary notes into the knowledge base. For bulk imports (a roster file, a Google Classroom export, a folder of materials), call get_workspace_context first to see what already exists, then upsert_classroom / upsert_student / add_resource once per item — all three match-or-create by name, so re-running an import is safe and nothing is duplicated.',
       });
     case 'ping':
       return rpcResult(id, {});
@@ -260,6 +378,16 @@ async function handleMessage(msg: any, who: Auth) {
         if (name === 'add_resource') {
           const result = await addResource(who.teacherId, args);
           if (!result.isError) logActivity(who, name, 'resource:' + result.createdId);
+          return rpcResult(id, result);
+        }
+        if (name === 'upsert_classroom') {
+          const result = await upsertClassroom(who.teacherId, args);
+          if (!result.isError) logActivity(who, name, 'classroom:' + result.createdId);
+          return rpcResult(id, result);
+        }
+        if (name === 'upsert_student') {
+          const result = await upsertStudent(who.teacherId, args);
+          if (!result.isError) logActivity(who, name, 'student:' + result.createdId);
           return rpcResult(id, result);
         }
         return rpcError(id, -32602, `Unknown tool: ${name}`);

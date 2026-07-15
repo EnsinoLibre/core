@@ -15,9 +15,23 @@ The prompt builder's copy-paste loop works with any AI. But if your AI speaks th
 | `get_worksheet_contract` | The worksheet JSON contract: envelope, quality rules, and the exact shapes of the activity types it plans to use. |
 | `create_worksheet` | Validates a worksheet document and adds it straight to your library. Rejections return the validation problems verbatim, so the agent can fix and retry. |
 | `list_worksheets` | What's already in the library. |
-| `add_resource` | Files an llm.wiki-style summary note into your knowledge base. |
+| `add_resource` | Files an llm.wiki-style summary note into your knowledge base — optionally scoped to a classroom/student by name. |
+| `upsert_classroom` | Create a classroom, or merge into an existing one matched by name. Safe to call repeatedly. |
+| `upsert_student` | Create a student under a classroom (by name), or merge into an existing one. Safe to call repeatedly. |
 
 A typical run: *"Make a B1 worksheet on phrasal verbs for my Tuesday class"* → the agent reads your workspace context, fetches the contract for the activity types it wants, generates the document, and `create_worksheet` validates and files it. Refresh the platform and it's there, ready to deploy.
+
+## Bulk import (classrooms, rosters, files)
+
+`upsert_classroom`, `upsert_student` and `add_resource` are also the agentic
+answer to the copy-paste seeding/import flows described in
+[[knowledge-seeding]] and [[google-classroom-import]] — instead of handing your
+agent one prompt and pasting back one JSON reply (which hits a wall once a
+Takeout export or a folder of files is large), an MCP-connected agent reads
+your files locally and calls these tools once per classroom/student/artefact,
+across as many turns as it needs. All three match-or-create by name, so
+re-running an import never duplicates anything. Claude Code users: see the
+project's `seed-knowledge-base` skill for the full procedure.
 
 ## Connecting
 
