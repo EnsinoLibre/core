@@ -9,10 +9,12 @@ analog-strategy: direct
 
 A clue-driven grid. High engagement, high authoring risk: **the validator reconstructs the grid from `row`/`col`/`answer` and rejects any puzzle whose crossing cells disagree** — the most common AI failure for this type. Coordinates are 0-based; answers letters-only.
 
-| Field | Type | Required |
-|-------|------|----------|
-| `type` | `"crossword"` | **yes** |
-| `clues.across` / `clues.down` | `[{ number, clue, answer, row, col }]` | **yes** |
+**Enforced bounds** (validator + JSON Schema agree): `row` and `col` must be **0–20**, and each `answer` at most **15 letters**. These caps keep the grid small enough to render — `row`/`col` drive an `O(maxRow × maxCol)` grid build, so an out-of-range coordinate would otherwise hang the browser tab. A worksheet exceeding them is rejected at ingestion, so a generating agent doesn't need to rediscover the limits from a frozen page.
+
+| Field | Type | Required | Bounds |
+|-------|------|----------|--------|
+| `type` | `"crossword"` | **yes** | |
+| `clues.across` / `clues.down` | `[{ number, clue, answer, row, col }]` | **yes** | `row`/`col` 0–20; `answer` ≤ 15 letters |
 
 **Analog version:** direct — the classic paper puzzle: grid with blocked squares, clue lists, solved grid on the key.
 

@@ -378,9 +378,9 @@
       "properties": {
         "number": { "type": "integer", "minimum": 1 },
         "clue": { "$ref": "#/$defs/nonEmpty" },
-        "answer": { "type": "string", "pattern": "^\\p{L}+$" },
-        "row": { "type": "integer", "minimum": 0 },
-        "col": { "type": "integer", "minimum": 0 }
+        "answer": { "type": "string", "pattern": "^\\p{L}+$", "maxLength": 15 },
+        "row": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "col": { "type": "integer", "minimum": 0, "maximum": 20 }
       }
     }
   }

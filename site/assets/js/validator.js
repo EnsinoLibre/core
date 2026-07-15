@@ -12,6 +12,12 @@
 
 const GAP_RE = /\{\{([^{}]+)\}\}/g;
 
+// Crossword grid bounds. row/col feed an O(maxR*maxC) grid build in
+// renderer.js / analog.js; without a cap a single clue (e.g. row: 999999) can
+// hang the tab. Kept in sync with schema/worksheet.schema.json (crosswordClue).
+const CROSSWORD_MAX_COORD = 20;
+const CROSSWORD_MAX_ANSWER = 15;
+
 function str(v) { return typeof v === 'string' && v.trim().length > 0; }
 function arr(v, min, max) { return Array.isArray(v) && v.length >= min && (max == null || v.length <= max); }
 function int(v, min) { return Number.isInteger(v) && v >= (min ?? -Infinity); }
@@ -271,6 +277,16 @@ const V = {
     const place = (c, dir) => {
       if (!c || !str(c.clue) || !str(c.answer) || !int(c.row, 0) || !int(c.col, 0) || !int(c.number, 1)) {
         e.push(`${at} (crossword): every clue needs number, clue, answer, row, col.`);
+        return;
+      }
+      // Bound the grid: row/col drive an O(maxR*maxC) DOM/Markdown grid build in
+      // the renderer and analog emitter, so an unbounded value can freeze the tab.
+      if (c.row > CROSSWORD_MAX_COORD || c.col > CROSSWORD_MAX_COORD) {
+        e.push(`${at} (crossword): row/col must be between 0 and ${CROSSWORD_MAX_COORD}.`);
+        return;
+      }
+      if (c.answer.length > CROSSWORD_MAX_ANSWER) {
+        e.push(`${at} (crossword): answer "${c.answer}" is too long (max ${CROSSWORD_MAX_ANSWER} letters).`);
         return;
       }
       if (!/^[\p{L}]+$/u.test(c.answer)) { e.push(`${at} (crossword): answer "${c.answer}" must be letters only.`); return; }

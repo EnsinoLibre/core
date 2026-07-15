@@ -346,6 +346,16 @@ test('crossword: rejects clashing crossings, accepts consistent ones', () => {
   const good = { type: 'crossword', clues: { across: [{ number: 1, clue: 'c', answer: 'SUN', row: 0, col: 0 }], down: [{ number: 1, clue: 'c', answer: 'SEA', row: 0, col: 0 }] } };
   assert.deepEqual(validateActivity(good), []);
 });
+test('crossword: rejects out-of-bounds row/col (renderer freeze guard) in validator AND schema', () => {
+  const huge = { type: 'crossword', clues: { across: [{ number: 1, clue: 'c', answer: 'SUN', row: 9999, col: 0 }], down: [{ number: 1, clue: 'c', answer: 'SEA', row: 0, col: 0 }] } };
+  assert.ok(validateActivity(huge).some((e) => /row\/col/.test(e)), 'validator must reject row: 9999');
+  assert.ok(!validateSchema(ws([huge])), 'JSON Schema must reject row: 9999');
+});
+test('crossword: rejects an over-long answer in validator AND schema', () => {
+  const long = { type: 'crossword', clues: { across: [{ number: 1, clue: 'c', answer: 'A'.repeat(16), row: 0, col: 0 }], down: [{ number: 1, clue: 'c', answer: 'SEA', row: 0, col: 0 }] } };
+  assert.ok(validateActivity(long).some((e) => /too long/.test(e)), 'validator must reject a 16-letter answer');
+  assert.ok(!validateSchema(ws([long])), 'JSON Schema must reject a 16-letter answer');
+});
 test('mark-words: rejects targets that are not in the text', () => {
   const a = { type: 'mark-words', instruction: 'i', text: 'the cat sat', targets: ['dog'] };
   assert.ok(validateActivity(a).some((e) => e.includes('dog')));
