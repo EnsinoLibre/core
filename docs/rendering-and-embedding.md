@@ -44,6 +44,10 @@ Beyond the four visual-grammar types, the **flashcard** deck and the **memory ga
 
 **Passive types** get a light staggered `enterTiles` entrance so they don't just snap in: **reading content** blocks, **timeline** items, and **dialogue** bubbles fade/rise in one after another.
 
+**Screen transitions** animate the "swap the stage" navigation types: **slides** (course-presentation) and **adaptive-lesson** pages `exitTiles` the old screen then `enterTiles` the new one on Next/Continue, and **branching-scenario** turns and choices enter as they're appended. `settle()` guarantees the incoming screen always lands visible even if `requestAnimationFrame` is throttled mid-transition.
+
+With these, **all 30 activity types are animated.**
+
 Every helper is a **graceful no-op** under `prefers-reduced-motion` (or where `Element.animate` is unavailable), so animation is never required for correctness. Enter animations fill **backwards only**, so elements always come to rest at their stylesheet state — content is never left invisible. A `settle()` safety net force-finishes animations after a capped timeout, so a throttled/backgrounded tab (where `requestAnimationFrame` stalls at 0) can't leave tiles stuck hidden.
 
 

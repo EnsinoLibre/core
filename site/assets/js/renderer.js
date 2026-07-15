@@ -372,7 +372,8 @@ R['course-presentation'] = (a, index) => {
   let current = 0;
   const stage = el('div', 'oc-slide');
   const dots = el('p', 'oc-word-count');
-  function draw() {
+  async function draw(transition) {
+    if (transition) { const leaving = [...stage.children]; if (leaving.length) await exitTiles(leaving); } // wipe the slide (#13)
     stage.textContent = '';
     const s = a.slides[current];
     if (s.title) stage.appendChild(el('h4', 'oc-content-heading', s.title));
@@ -386,13 +387,14 @@ R['course-presentation'] = (a, index) => {
     dots.textContent = `Slide ${current + 1} of ${a.slides.length}`;
     prev.disabled = current === 0;
     next.disabled = current === a.slides.length - 1;
+    if (transition) enterTiles([...stage.children]); // paint the next slide in (#13)
   }
   const prev = el('button', 'oc-btn oc-btn--check', '← Previous');
   prev.type = 'button';
-  prev.addEventListener('click', () => { current -= 1; draw(); });
+  prev.addEventListener('click', () => { current -= 1; draw(true); });
   const next = el('button', 'oc-btn oc-btn--check', 'Next →');
   next.type = 'button';
-  next.addEventListener('click', () => { current += 1; draw(); });
+  next.addEventListener('click', () => { current += 1; draw(true); });
   card.appendChild(stage);
   const row = el('div', 'oc-actions-row');
   row.appendChild(prev);
@@ -1001,6 +1003,7 @@ R['scenario'] = (a, index) => {
     bubble.appendChild(el('span', 'oc-bubble-name', n.speaker));
     bubble.appendChild(el('span', null, n.text));
     stage.appendChild(bubble);
+    enterTiles([bubble]); // each turn arrives with motion (#13)
     if (n.isEnd) {
       if (n.endMessage) stage.appendChild(el('p', 'oc-feedback oc-feedback--correct', n.endMessage));
       const again = el('button', 'oc-btn oc-btn--check', '↻ Start again');
@@ -1019,6 +1022,7 @@ R['scenario'] = (a, index) => {
         mine.appendChild(el('span', 'oc-bubble-name', 'You'));
         mine.appendChild(el('span', null, c.text));
         stage.appendChild(mine);
+        enterTiles([mine]); // the learner's reply slides in too (#13)
         const nextNode = nodes.get(c.nextNode);
         if (nextNode && nextNode.feedback) stage.appendChild(el('p', 'oc-bubble-gloss', nextNode.feedback));
         show(c.nextNode);
@@ -1026,6 +1030,7 @@ R['scenario'] = (a, index) => {
       choiceBox.appendChild(btn);
     });
     stage.appendChild(choiceBox);
+    enterTiles([...choiceBox.children]); // choices stagger in (#13)
     choiceBox.scrollIntoView({ block: 'nearest' });
   }
   show(a.startNode);
@@ -1037,9 +1042,11 @@ R['lesson'] = (a, index) => {
   const pages = new Map(a.pages.map((p) => [p.id, p]));
   const stage = el('div');
   card.appendChild(stage);
-  function show(id) {
+  async function show(id) {
+    const leaving = [...stage.children];
+    if (leaving.length) await exitTiles(leaving); // wipe the old page with motion (#13)
     stage.textContent = '';
-    if (id == null) { stage.appendChild(el('p', 'oc-feedback oc-feedback--correct', 'Lesson complete! 🎉')); return; }
+    if (id == null) { stage.appendChild(el('p', 'oc-feedback oc-feedback--correct', 'Lesson complete! 🎉')); enterTiles([...stage.children]); return; }
     const p = pages.get(id);
     if (p.title) stage.appendChild(el('h4', 'oc-content-heading', p.title));
     if (p.pageType === 'content') {
@@ -1056,6 +1063,7 @@ R['lesson'] = (a, index) => {
         stage.appendChild(btn);
       } }));
     }
+    enterTiles([...stage.children]); // paint the new page in with motion (#13)
   }
   show(a.startPage);
   return card;
