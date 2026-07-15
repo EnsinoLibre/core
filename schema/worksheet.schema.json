@@ -281,7 +281,7 @@
           "required": ["startNode", "nodes"],
           "properties": {
             "startNode": { "$ref": "#/$defs/nonEmpty" },
-            "nodes": { "type": "array", "minItems": 2, "items": {
+            "nodes": { "type": "array", "minItems": 2, "maxItems": 20, "items": {
               "type": "object", "required": ["id", "speaker", "text"],
               "properties": {
                 "id": { "$ref": "#/$defs/nonEmpty" },
@@ -299,7 +299,7 @@
           "required": ["startPage", "pages"],
           "properties": {
             "startPage": { "$ref": "#/$defs/nonEmpty" },
-            "pages": { "type": "array", "minItems": 2, "items": {
+            "pages": { "type": "array", "minItems": 2, "maxItems": 20, "items": {
               "type": "object", "required": ["id", "pageType"],
               "properties": {
                 "id": { "$ref": "#/$defs/nonEmpty" },

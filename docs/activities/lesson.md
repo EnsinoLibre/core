@@ -7,7 +7,7 @@ analog-strategy: transform
 
 # Adaptive lesson — `lesson`
 
-Linked pages of content and questions where answers determine the path: correct → onwards, wrong → a remediation page that re-teaches *differently*, then rejoins. 4–8 pages; the final page's `nextPage` is `null`. The validator checks every page reference.
+Linked pages of content and questions where answers determine the path: correct → onwards, wrong → a remediation page that re-teaches *differently*, then rejoins. `pages` must hold **2–20 entries** (enforced by the validator and JSON Schema); **aim for 4–8**. The final page's `nextPage` is `null`. The validator checks every page reference.
 
 | Field | Type | Required |
 |-------|------|----------|

@@ -9,6 +9,8 @@ analog-strategy: transform
 
 A conversation simulation: the interlocutor speaks, the learner picks a reply, and choices steer the exchange. Wrong choices should lead somewhere *instructive*, not a dead end. Every path must reach a node with `isEnd: true` (the validator walks the graph). Speakers are roles, never real names.
 
+**Size:** `nodes` must hold **2–20 entries** (enforced by the validator and JSON Schema); **aim for 5–10** — enough to branch meaningfully without becoming a maze.
+
 | Field | Type | Required |
 |-------|------|----------|
 | `type` | `"scenario"` | **yes** |

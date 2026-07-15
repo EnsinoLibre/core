@@ -13,7 +13,7 @@ One scored set mixing `mcq`, `true-false` and `gap-fill` items. **Every item mus
 |-------|------|----------|
 | `type` | `"question-set"` | **yes** |
 | `questions` | `[{ subtype, …that shape… }]` (2–12) | **yes** |
-| `passMark` | integer | no |
+| `passMark` | integer (1 … number of questions) | no |
 
 **Analog version:** direct — numbered items, each printed in its subtype's paper form; the mixed rhythm prevents answer-pattern guessing.
 

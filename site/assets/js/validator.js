@@ -201,6 +201,12 @@ const V = {
       else if (q.subtype === 'true-false') vTfCore(q, qt, e);
       else vGapCore(q, qt, e);
     });
+    // passMark mirrors quiz — the JSON Schema requires a positive integer, and
+    // the renderer's scoreTracker does `correct >= passMark` (a non-number
+    // silently reads as never-passed), so the two must agree.
+    if (a.passMark != null && (!int(a.passMark, 1) || a.passMark > a.questions.length)) {
+      e.push(`${at} (question-set): "passMark" must be between 1 and the number of questions.`);
+    }
   },
   'mark-words': (a, at, e) => {
     if (!str(a.instruction)) e.push(`${at} (mark-words): "instruction" is required (it states the criterion).`);
@@ -231,7 +237,7 @@ const V = {
   },
   'scenario': (a, at, e) => {
     if (!str(a.startNode)) e.push(`${at} (scenario): missing "startNode".`);
-    if (!arr(a.nodes, 2)) { e.push(`${at} (scenario): "nodes" must be an array of 2+ nodes.`); return; }
+    if (!arr(a.nodes, 2, 20)) { e.push(`${at} (scenario): "nodes" must be 2–20 nodes (aim for 5–10).`); return; }
     const ids = new Map(a.nodes.map((n) => [n && n.id, n]));
     if (!ids.has(a.startNode)) e.push(`${at} (scenario): startNode "${a.startNode}" is not a node id.`);
     let endSeen = false;
@@ -249,7 +255,7 @@ const V = {
   },
   'lesson': (a, at, e) => {
     if (!str(a.startPage)) e.push(`${at} (lesson): missing "startPage".`);
-    if (!arr(a.pages, 2)) { e.push(`${at} (lesson): "pages" must be an array of 2+ pages.`); return; }
+    if (!arr(a.pages, 2, 20)) { e.push(`${at} (lesson): "pages" must be 2–20 pages (aim for 4–8).`); return; }
     const ids = new Set(a.pages.map((p) => p && p.id));
     if (!ids.has(a.startPage)) e.push(`${at} (lesson): startPage "${a.startPage}" is not a page id.`);
     const ref = (id, where) => { if (id != null && !ids.has(id)) e.push(`${where} points to unknown page "${id}".`); };

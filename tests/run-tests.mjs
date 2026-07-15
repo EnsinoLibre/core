@@ -372,6 +372,25 @@ test('question-set: rejects items without a subtype', () => {
   const a = { type: 'question-set', questions: [{ question: 'q', options: ['a', 'b'], answer: 0 }, { subtype: 'true-false', statement: 's', answer: true }] };
   assert.ok(validateActivity(a).some((e) => e.includes('subtype')));
 });
+test('question-set: rejects a bad passMark in validator AND schema (#6)', () => {
+  const items = [{ subtype: 'mcq', question: 'q', options: ['a', 'b'], answer: 0 }, { subtype: 'true-false', statement: 's', answer: true }];
+  const bad = { type: 'question-set', questions: items, passMark: 'high' };
+  assert.ok(validateActivity(bad).some((e) => /passMark/.test(e)), 'validator must reject passMark: "high"');
+  assert.ok(!validateSchema(ws([bad])), 'schema must reject passMark: "high"');
+  const tooHigh = { type: 'question-set', questions: items, passMark: 5 };
+  assert.ok(validateActivity(tooHigh).some((e) => /passMark/.test(e)), 'validator must reject passMark > question count');
+});
+test('scenario/lesson: enforce the documented upper bound (#8)', () => {
+  const node = (i) => ({ id: `n${i}`, speaker: 'W', text: 't', choices: [{ text: 'x', nextNode: 'end' }] });
+  const nodes = [...Array(21)].map((_, i) => node(i + 1)); nodes.push({ id: 'end', speaker: 'W', text: 't', isEnd: true });
+  const scenario = { type: 'scenario', startNode: 'n1', nodes };
+  assert.ok(validateActivity(scenario).some((e) => /2–20 nodes/.test(e)), 'validator must reject a 22-node scenario');
+  assert.ok(!validateSchema(ws([scenario])), 'schema must reject an over-cap scenario');
+  const pages = [...Array(21)].map((_, i) => ({ id: `p${i}`, pageType: 'content', body: 'b', nextPage: null }));
+  const lesson = { type: 'lesson', startPage: 'p0', pages };
+  assert.ok(validateActivity(lesson).some((e) => /2–20 pages/.test(e)), 'validator must reject a 21-page lesson');
+  assert.ok(!validateSchema(ws([lesson])), 'schema must reject an over-cap lesson');
+});
 test('word-search: rejects multi-word entries and too-long words', () => {
   assert.ok(validateActivity({ type: 'word-search', words: ['two words', 'ok', 'fine', 'good'] }).length >= 1);
   assert.ok(validateActivity({ type: 'word-search', words: ['extraordinarily', 'ok', 'fine', 'good'], gridSize: 8 }).length >= 1);
