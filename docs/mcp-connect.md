@@ -30,8 +30,14 @@ agent one prompt and pasting back one JSON reply (which hits a wall once a
 Takeout export or a folder of files is large), an MCP-connected agent reads
 your files locally and calls these tools once per classroom/student/artefact,
 across as many turns as it needs. All three match-or-create by name, so
-re-running an import never duplicates anything. Claude Code users: see the
-project's `seed-knowledge-base` skill for the full procedure.
+re-running an import never duplicates anything.
+
+Claude Code (or any client that reads Anthropic-style skills) users don't
+need to work out the procedure by hand — install the bundled
+[`seed-knowledge-base`](https://github.com/EnsinoLibre/core/blob/main/skills/seed-knowledge-base/SKILL.md)
+skill with `npx skills add EnsinoLibre/core` and just point it at a folder or
+an unzipped Takeout export. See [`skills/`](https://github.com/EnsinoLibre/core/tree/main/skills)
+in the repo for the full list and install notes.
 
 ## Connecting
 

@@ -9,11 +9,13 @@ import { listAgentKeys, createAgentKey, revokeAgentKey, connectionSnippets, MCP_
  * the intro copy, the tool names relevant to that flow, and a `check`
  * poller for "did my agent's writes show up yet".
  */
-export function McpConnectTab({ intro, tools, checkLabel, onCheck }: {
+export function McpConnectTab({ intro, tools, checkLabel, onCheck, skillHint }: {
   intro: ReactNode;
   tools: string[];
   checkLabel: string;
   onCheck: () => Promise<string>;
+  /** Optional callout for flows where an agentic skill (not just raw tools) does the real work. */
+  skillHint?: ReactNode;
 }) {
   const [keys, setKeys] = useState<AgentKey[]>([]);
   const [notDeployed, setNotDeployed] = useState(false);
@@ -115,6 +117,8 @@ export function McpConnectTab({ intro, tools, checkLabel, onCheck }: {
         </p>
       </div>
 
+      {skillHint && <div className="app-field app-mcp-skill-hint">{skillHint}</div>}
+
       <div className="app-form-actions">
         <button className="el-button el-button--ghost" onClick={runCheck} disabled={checking}>{checking ? 'Checking…' : checkLabel}</button>
         {checkResult && <span className="app-muted">{checkResult}</span>}
@@ -138,15 +142,23 @@ export function McpConnectModal({ onClose }: { onClose: () => void }) {
         <McpConnectTab
           intro={<>
             Connect Claude (or any MCP client) straight to your workspace. Generate a key, hand the
-            snippet to your local agent, and it can read your classes and context, create worksheets and
-            knowledge notes directly — no copy-paste.
+            snippet to your local agent, and it can read your classes and context, create worksheets,
+            file knowledge notes, and import classrooms and rosters directly — no copy-paste, and no
+            size limit on how much it can bring in.
           </>}
-          tools={['get_workspace_context', 'get_worksheet_contract', 'create_worksheet', 'list_worksheets', 'add_resource']}
+          tools={['get_workspace_context', 'get_worksheet_contract', 'create_worksheet', 'list_worksheets', 'add_resource', 'upsert_classroom', 'upsert_student']}
           checkLabel="↻ Refresh"
           onCheck={async () => {
             const r = await listAgentKeys();
             return r.keys.length > 0 ? `✓ ${r.keys.length} agent key${r.keys.length === 1 ? '' : 's'} active.` : 'No agent keys yet — generate one above.';
           }}
+          skillHint={<>
+            <strong>Using Claude Code?</strong> It can drive a whole bulk import — a Google Classroom export,
+            a folder of teaching files — in one go, file by file, with no context-window wall. Point it at{' '}
+            <code>skills/seed-knowledge-base</code> in the <a className="knw-open-link" href="https://github.com/EnsinoLibre/core" target="_blank" rel="noopener">core repo</a>{' '}
+            (<code>npx skills add EnsinoLibre/core</code> to install it into your own project), or just describe the
+            import and it'll work it out from the tools above.
+          </>}
         />
       </motion.div>
     </motion.div>

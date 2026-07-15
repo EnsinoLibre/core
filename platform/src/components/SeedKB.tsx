@@ -126,11 +126,13 @@ export function SeedModal({ scope = {}, onClose, onApplied }: { scope?: SeedScop
       {tab === 'mcp' ? (
         <McpConnectTab
           intro={<>
-            Connect Claude (or any MCP client) straight to your workspace. Your AI can read your classes and
-            existing knowledge base, then <strong>write resource notes directly</strong> — no staging files or
-            copy-paste needed here.
+            Connect Claude (or any MCP client) straight to your workspace. Your AI reads the files on your
+            machine and calls <code>add_resource</code> once per file — <strong>no staging, no copy-paste, and
+            no size limit</strong>. This is the flow to reach for once a batch is too big for one prompt/reply
+            round-trip (a large folder, a whole term's materials): the agent works through it turn by turn
+            instead of needing it all to fit in one context window.
           </>}
-          tools={['get_workspace_context', 'add_resource', 'list_worksheets', 'create_worksheet']}
+          tools={['get_workspace_context', 'add_resource', 'upsert_classroom', 'upsert_student', 'list_worksheets']}
           checkLabel="↻ Check for new resources"
           onCheck={async () => {
             const before = store.resources().length;
@@ -139,6 +141,11 @@ export function SeedModal({ scope = {}, onClose, onApplied }: { scope?: SeedScop
             if (after !== before) onApplied?.();
             return after > before ? `✓ ${after - before} new resource${after - before === 1 ? '' : 's'} arrived!` : 'No new resources yet.';
           }}
+          skillHint={<>
+            <strong>Using Claude Code?</strong> The <code>seed-knowledge-base</code> skill in this repo's{' '}
+            <code>skills/</code> folder encodes the whole procedure — install it with{' '}
+            <code>npx skills add EnsinoLibre/core</code> and just point it at your folder.
+          </>}
         />
       ) : (
       <div className="app-form">
@@ -223,6 +230,7 @@ export function SeedButton({ scope, label = '⬆ Seed files', small = false, onA
  * since most teachers have never used Takeout before.
  */
 export function ClassroomImportModal({ onClose, onApplied }: { onClose: () => void; onApplied?: () => void }) {
+  const [tab, setTab] = useState<'files' | 'mcp'>('files');
   const [staged, setStaged] = useState<any[]>([]);
   const [prompt, setPrompt] = useState<string | null>(null);
   const [reply, setReply] = useState('');
@@ -264,6 +272,37 @@ export function ClassroomImportModal({ onClose, onApplied }: { onClose: () => vo
 
   return (
     <Modal title="Import from Google Classroom" onClose={onClose}>
+      <div className="app-tabs" role="tablist">
+        <button role="tab" aria-selected={tab === 'files'} className={`app-tab${tab === 'files' ? ' app-tab--active' : ''}`} onClick={() => setTab('files')}>📝 Copy-paste</button>
+        <button role="tab" aria-selected={tab === 'mcp'} className={`app-tab${tab === 'mcp' ? ' app-tab--active' : ''}`} onClick={() => setTab('mcp')}>🔌 Connect via MCP</button>
+      </div>
+      {tab === 'mcp' ? (
+        <McpConnectTab
+          intro={<>
+            A full Takeout export is often too big for one prompt/reply round-trip — a class with a term's
+            worth of Classwork can blow past what fits in a single AI context window. An MCP-connected agent
+            doesn't have that problem: point it at your unzipped export folder and it reads class by class,
+            calling <code>upsert_classroom</code> and <code>upsert_student</code> once per class/roster entry
+            and <code>add_resource</code> once per material — as many turns as it takes. Matching is by name,
+            so re-running an import later only adds what's new.
+          </>}
+          tools={['get_workspace_context', 'upsert_classroom', 'upsert_student', 'add_resource']}
+          checkLabel="↻ Check for new classrooms"
+          onCheck={async () => {
+            const before = store.classrooms().length;
+            await hydrate();
+            const after = store.classrooms().length;
+            if (after !== before) onApplied?.();
+            return after > before ? `✓ ${after - before} new classroom${after - before === 1 ? '' : 's'} arrived!` : 'No new classrooms yet — check your students and resources too.';
+          }}
+          skillHint={<>
+            <strong>Using Claude Code?</strong> The <code>seed-knowledge-base</code> skill in this repo's{' '}
+            <code>skills/</code> folder covers Google Classroom imports too — install it with{' '}
+            <code>npx skills add EnsinoLibre/core</code>, point it at your unzipped export folder, and it
+            handles the rest. Full walkthrough: <a className="knw-open-link" href="../docs.html?page=google-classroom-import" target="_blank" rel="noopener">Import from Google Classroom docs</a>.
+          </>}
+        />
+      ) : (
       <div className="app-form">
         <div className="app-field">
           <label className="el-label">1 · Export your data from Google Classroom</label>
@@ -314,6 +353,7 @@ export function ClassroomImportModal({ onClose, onApplied }: { onClose: () => vo
           </div>
         </div>
       </div>
+      )}
     </Modal>
   );
 }
@@ -339,7 +379,8 @@ export function SeedKnowledgeBaseCard() {
       <p className="el-card__body">
         Bulk-add your teaching files. EnsinoLibre builds a prompt for your local AI agent, which reads the
         originals on your machine and returns one front-facing summary note per file — the llm.wiki way:
-        the knowledge base keeps token-efficient markdown, you keep the raw files.
+        the knowledge base keeps token-efficient markdown, you keep the raw files. Big batch that won't fit
+        in one prompt/reply? Use the <strong>Connect via MCP</strong> tab instead — no size limit.
       </p>
       <div className="app-form-actions">
         <button className="el-button" onClick={() => setOpen(true)}>Seed from files…</button>
@@ -357,7 +398,9 @@ export function ClassroomImportCard() {
       <h3 className="el-card__title">🏫 Import from Google Classroom</h3>
       <p className="el-card__body">
         Bring your Google Classroom classes, rosters and materials into the knowledge base. Your local agent
-        gathers the data and summarizes each class and material into a front-facing markdown note.
+        gathers the data and summarizes each class and material into a front-facing markdown note. A full
+        Takeout export is often too big for one prompt/reply — the <strong>Connect via MCP</strong> tab lets an
+        agent import it class by class instead, with no size limit.
       </p>
       <button className="el-button" onClick={() => setOpen(true)}>Import from Classroom…</button>
       {open && <ClassroomImportModal onClose={() => setOpen(false)} />}

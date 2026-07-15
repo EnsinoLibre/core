@@ -1,6 +1,13 @@
 ---
 name: seed-knowledge-base
 description: Bulk-ingest a folder of teaching files (or a Google Classroom Takeout export) into an EnsinoLibre teacher's workspace over MCP — read each file locally, write one llm.wiki-style front-facing summary note per artefact, and file classrooms/students/resources via the upsert_classroom / upsert_student / add_resource tools. Use when the user asks to import their Google Classroom export, seed their EnsinoLibre knowledge base from a folder, or bulk-add teaching materials to EnsinoLibre.
+license: MIT
+metadata:
+  author: EnsinoLibre
+  version: "1.0.0"
+  homepage: https://ensinolibre-app.netlify.app
+  source: https://github.com/EnsinoLibre/core
+  requires: EnsinoLibre MCP connection (agent key) — see docs/mcp-connect.md
 ---
 
 # Seed the EnsinoLibre knowledge base
