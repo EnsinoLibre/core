@@ -357,10 +357,13 @@ R['open-response'] = (a, index) => {
 
 R['content'] = (a, index) => {
   const card = activityCard(a, index);
+  const items = [];
   a.sections.forEach((s) => {
-    card.appendChild(el('h4', 'oc-content-heading', s.heading));
-    s.body.split(/\n{2,}/).forEach((para) => card.appendChild(richText(el('p', 'oc-content-body'), para)));
+    const h = el('h4', 'oc-content-heading', s.heading);
+    card.appendChild(h); items.push(h);
+    s.body.split(/\n{2,}/).forEach((para) => { const p = richText(el('p', 'oc-content-body'), para); card.appendChild(p); items.push(p); });
   });
+  enterTiles(items); // light staggered entrance (#15)
   return card;
 };
 
@@ -403,6 +406,7 @@ R['course-presentation'] = (a, index) => {
 R['timeline'] = (a, index) => {
   const card = activityCard(a, index);
   const list = el('ol', 'oc-timeline');
+  const items = [];
   a.items.forEach((it) => {
     const li = el('li', 'oc-timeline-item');
     li.appendChild(el('span', 'oc-timeline-date', it.date));
@@ -410,9 +414,10 @@ R['timeline'] = (a, index) => {
     body.appendChild(el('strong', null, it.headline));
     if (it.text) body.appendChild(el('p', 'oc-content-body', it.text));
     li.appendChild(body);
-    list.appendChild(li);
+    list.appendChild(li); items.push(li);
   });
   card.appendChild(list);
+  enterTiles(items); // staggered entrance down the timeline (#15)
   return card;
 };
 
@@ -420,14 +425,16 @@ R['dialogue'] = (a, index) => {
   const card = activityCard(a, index);
   if (a.context) card.appendChild(el('p', 'oc-section-instructions', `📍 ${a.context}`));
   const chat = el('div', 'oc-chat');
+  const bubbles = [];
   a.lines.forEach((l) => {
     const bubble = el('div', `oc-bubble oc-bubble--${l.speaker}`);
     bubble.appendChild(el('span', 'oc-bubble-name', l.speaker === 'a' ? a.speakerA : a.speakerB));
     bubble.appendChild(el('span', null, l.text));
     if (l.gloss) bubble.appendChild(el('span', 'oc-bubble-gloss', l.gloss));
-    chat.appendChild(bubble);
+    chat.appendChild(bubble); bubbles.push(bubble);
   });
   card.appendChild(chat);
+  enterTiles(bubbles); // bubbles arrive one after another (#15)
   if (AUDIO_ENABLED) {
     const script = a.lines.map((l) => l.text).join('\n');
     card.appendChild(ttsButton(script, { label: '🔊 Play dialogue' }));
