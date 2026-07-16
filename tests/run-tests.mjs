@@ -397,6 +397,57 @@ test('lesson: rejects unknown page references', () => {
   ] };
   assert.ok(validateActivity(a).some((e) => e.includes('nowhere')));
 });
+test('scenario: rejects an orphan node unreachable from the start (#53)', () => {
+  const a = { type: 'scenario', startNode: 'n1', nodes: [
+    { id: 'n1', speaker: 'W', text: 't', choices: [{ text: 'x', nextNode: 'end' }] },
+    { id: 'orphan', speaker: 'W', text: 't', isEnd: true },
+    { id: 'end', speaker: 'W', text: 't', isEnd: true },
+  ] };
+  const errs = validateActivity(a);
+  assert.ok(errs.some((e) => /node "orphan" can never be reached from the start/.test(e)), JSON.stringify(errs));
+});
+test('scenario: rejects a cycle with no exit, even when an unrelated isEnd node exists (#53)', () => {
+  const a = { type: 'scenario', startNode: 'n1', nodes: [
+    { id: 'n1', speaker: 'W', text: 't', choices: [{ text: 'x', nextNode: 'n2' }] },
+    { id: 'n2', speaker: 'W', text: 't', choices: [{ text: 'y', nextNode: 'n1' }] },
+    { id: 'end', speaker: 'W', text: 't', isEnd: true },
+  ] };
+  const errs = validateActivity(a);
+  assert.ok(errs.some((e) => /node "n1" can never reach an ending/.test(e)), JSON.stringify(errs));
+  assert.ok(errs.some((e) => /node "n2" can never reach an ending/.test(e)), JSON.stringify(errs));
+});
+test('scenario: a well-formed branching graph with every path reaching an end passes (#53)', () => {
+  const a = { type: 'scenario', startNode: 'n1', nodes: [
+    { id: 'n1', speaker: 'W', text: 't', choices: [{ text: 'a', nextNode: 'n2' }, { text: 'b', nextNode: 'n3' }] },
+    { id: 'n2', speaker: 'W', text: 't', choices: [{ text: 'c', nextNode: 'end' }] },
+    { id: 'n3', speaker: 'W', text: 't', choices: [{ text: 'd', nextNode: 'end' }] },
+    { id: 'end', speaker: 'W', text: 't', isEnd: true },
+  ] };
+  assert.deepEqual(validateActivity(a), []);
+});
+test('lesson: rejects an orphan page and a dead-end loop (#53)', () => {
+  const orphan = { type: 'lesson', startPage: 'p1', pages: [
+    { id: 'p1', pageType: 'content', body: 'b', nextPage: null },
+    { id: 'p2', pageType: 'content', body: 'b', nextPage: null },
+  ] };
+  assert.ok(validateActivity(orphan).some((e) => /page "p2" can never be reached from the start/.test(e)));
+  const looped = { type: 'lesson', startPage: 'p1', pages: [
+    { id: 'p1', pageType: 'question', question: 'q', options: ['a', 'b'], answer: 0, onCorrect: 'p2', onWrong: 'p2' },
+    { id: 'p2', pageType: 'question', question: 'q', options: ['a', 'b'], answer: 0, onCorrect: 'p1', onWrong: 'p1' },
+  ] };
+  const errs = validateActivity(looped);
+  assert.ok(errs.some((e) => /page "p1" can never reach an ending/.test(e)), JSON.stringify(errs));
+  assert.ok(errs.some((e) => /page "p2" can never reach an ending/.test(e)), JSON.stringify(errs));
+});
+test('lesson: a valid content->question->re-teach->rejoin graph passes (#53)', () => {
+  const a = { type: 'lesson', startPage: 'p1', pages: [
+    { id: 'p1', pageType: 'content', body: 'b', nextPage: 'p2' },
+    { id: 'p2', pageType: 'question', question: 'q', options: ['a', 'b'], answer: 0, onCorrect: 'p4', onWrong: 'p3' },
+    { id: 'p3', pageType: 'content', body: 're-teach', nextPage: 'p4' },
+    { id: 'p4', pageType: 'content', body: 'done', nextPage: null },
+  ] };
+  assert.deepEqual(validateActivity(a), []);
+});
 test('crossword: rejects clashing crossings, accepts consistent ones', () => {
   const bad = { type: 'crossword', clues: { across: [{ number: 1, clue: 'c', answer: 'SUN', row: 0, col: 0 }], down: [{ number: 1, clue: 'c', answer: 'MOON', row: 0, col: 0 }] } };
   assert.ok(validateActivity(bad).some((e) => e.includes('clash')));

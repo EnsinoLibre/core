@@ -112,6 +112,57 @@ function wordSearchUnplaced(words, size) {
   return unplaced;
 }
 
+/**
+ * #53: shared reachability + termination check for scenario/lesson graphs.
+ * Two passes, both cycle-safe (BFS/reverse-BFS, no recursion):
+ *  1. forward BFS from `startId` — anything not visited is an orphan the
+ *     player can never reach.
+ *  2. reverse BFS from every terminal node over reversed edges — anything
+ *     reachable from the start that ISN'T in that set can only loop forever
+ *     (a cycle with no exit renders an endless chat/lesson).
+ * @param {string} startId
+ * @param {Map<string, any>} nodesById id -> node/page object
+ * @param {(node: any) => string[]} edgesOf outgoing edge target ids
+ * @param {(node: any) => boolean} isTerminal true for an end/no-exit node
+ * @param {string[]} e error sink
+ * @param {string} at prefix for messages, e.g. "Activity (scenario)"
+ * @param {string} label "node" or "page", for the message text
+ */
+function checkGraphReachability(startId, nodesById, edgesOf, isTerminal, e, at, label) {
+  const ids = [...nodesById.keys()];
+  const reachable = new Set([startId]);
+  const queue = [startId];
+  while (queue.length) {
+    const id = queue.shift();
+    for (const to of edgesOf(nodesById.get(id))) {
+      if (nodesById.has(to) && !reachable.has(to)) { reachable.add(to); queue.push(to); }
+    }
+  }
+  for (const id of ids) {
+    if (!reachable.has(id)) e.push(`${at}: ${label} "${id}" can never be reached from the start.`);
+  }
+
+  const reverse = new Map(ids.map((id) => [id, []]));
+  for (const id of ids) {
+    for (const to of edgesOf(nodesById.get(id))) {
+      if (reverse.has(to)) reverse.get(to).push(id);
+    }
+  }
+  const canEnd = new Set(ids.filter((id) => isTerminal(nodesById.get(id))));
+  const endQueue = [...canEnd];
+  while (endQueue.length) {
+    const id = endQueue.shift();
+    for (const from of reverse.get(id)) {
+      if (!canEnd.has(from)) { canEnd.add(from); endQueue.push(from); }
+    }
+  }
+  for (const id of reachable) {
+    if (!canEnd.has(id)) {
+      e.push(`${at}: ${label} "${id}" can never reach an ending — it's stuck in a loop with no way out.`);
+    }
+  }
+}
+
 function vPairs(a, at, e, min = 2, max = 8) {
   if (!arr(a.pairs, min, max)) { e.push(`${at}: "pairs" must be ${min}–${max} {left, right} objects.`); return; }
   a.pairs.forEach((p, i) => {
@@ -322,6 +373,7 @@ const V = {
     const ids = new Map(a.nodes.map((n) => [n && n.id, n]));
     if (!ids.has(a.startNode)) e.push(`${at} (scenario): startNode "${a.startNode}" is not a node id.`);
     let endSeen = false;
+    const before = e.length;
     a.nodes.forEach((n, i) => {
       const nt = `${at} (scenario): node ${i + 1}`;
       if (!n || !str(n.id) || !str(n.speaker) || !str(n.text)) { e.push(`${nt} needs "id", "speaker" and "text".`); return; }
@@ -333,13 +385,26 @@ const V = {
       });
     });
     if (!endSeen) e.push(`${at} (scenario): at least one node must have "isEnd": true.`);
+    // #53: only run the graph walk once every node/choice is individually
+    // well-formed (id/nextNode references etc.) — otherwise a single bad
+    // reference would drown in "can never be reached" noise for nodes whose
+    // real problem is a missing field.
+    if (e.length === before && endSeen && ids.has(a.startNode)) {
+      checkGraphReachability(
+        a.startNode, ids,
+        (n) => (n.isEnd ? [] : (n.choices || []).map((c) => c.nextNode)),
+        (n) => !!n.isEnd,
+        e, `${at} (scenario)`, 'node',
+      );
+    }
   },
   'lesson': (a, at, e) => {
     if (!str(a.startPage)) e.push(`${at} (lesson): missing "startPage".`);
     if (!arr(a.pages, 2, 20)) { e.push(`${at} (lesson): "pages" must be 2–20 pages (aim for 4–8).`); return; }
-    const ids = new Set(a.pages.map((p) => p && p.id));
+    const ids = new Map(a.pages.map((p) => [p && p.id, p]));
     if (!ids.has(a.startPage)) e.push(`${at} (lesson): startPage "${a.startPage}" is not a page id.`);
     const ref = (id, where) => { if (id != null && !ids.has(id)) e.push(`${where} points to unknown page "${id}".`); };
+    const before = e.length;
     a.pages.forEach((p, i) => {
       const pt = `${at} (lesson): page ${i + 1}`;
       if (!p || !str(p.id)) { e.push(`${pt} needs an "id".`); return; }
@@ -352,6 +417,19 @@ const V = {
         ref(p.onWrong ?? null, `${pt} ("${p.id}") onWrong`);
       } else e.push(`${pt} needs pageType "content" or "question".`);
     });
+    // #53: a page is terminal (an "end") when it has no outgoing edge — a
+    // content page with nextPage: null, or a question page whose onCorrect
+    // AND onWrong are both null. Only run the graph walk once every page is
+    // individually well-formed, same reasoning as scenario above.
+    if (e.length === before && ids.has(a.startPage)) {
+      const edgesOf = (p) => (p.pageType === 'content'
+        ? (p.nextPage != null ? [p.nextPage] : [])
+        : [p.onCorrect, p.onWrong].filter((x) => x != null));
+      checkGraphReachability(
+        a.startPage, ids, edgesOf, (p) => edgesOf(p).length === 0,
+        e, `${at} (lesson)`, 'page',
+      );
+    }
   },
   'crossword': (a, at, e) => {
     const across = a.clues && Array.isArray(a.clues.across) ? a.clues.across : null;
