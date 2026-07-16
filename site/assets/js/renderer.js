@@ -1252,6 +1252,16 @@ R['crossword'] = (a, index) => {
   const grid = el('div', 'oc-ws oc-cw');
   grid.style.gridTemplateColumns = `repeat(${maxC + 1}, 1fr)`;
   const inputs = new Map();
+  // Arrow-key navigation + auto-advance typing (#68): no keyboard flow existed
+  // before — every cell was reachable only by Tab, one at a time.
+  let dir = 'across';
+  const step = () => (dir === 'across' ? [0, 1] : [1, 0]);
+  const move = (r, c, dr, dc) => {
+    let nr = r + dr;
+    let nc = c + dc;
+    const next = inputs.get(`${nr},${nc}`);
+    if (next) next.focus();
+  };
   for (let r = 0; r <= maxR; r++) for (let c = 0; c <= maxC; c++) {
     const key = `${r},${c}`;
     if (!solution.has(key)) { grid.appendChild(el('span', 'oc-cw-block')); continue; }
@@ -1261,6 +1271,18 @@ R['crossword'] = (a, index) => {
     input.maxLength = 1;
     input.className = 'oc-cw-input';
     input.setAttribute('aria-label', `crossword cell ${key}`);
+    input.addEventListener('keydown', (ev) => {
+      if (ev.key === 'ArrowRight') { ev.preventDefault(); dir = 'across'; move(r, c, 0, 1); }
+      else if (ev.key === 'ArrowLeft') { ev.preventDefault(); dir = 'across'; move(r, c, 0, -1); }
+      else if (ev.key === 'ArrowDown') { ev.preventDefault(); dir = 'down'; move(r, c, 1, 0); }
+      else if (ev.key === 'ArrowUp') { ev.preventDefault(); dir = 'down'; move(r, c, -1, 0); }
+      else if (ev.key === 'Backspace' && !input.value) { const [dr, dc] = step(); move(r, c, -dr, -dc); }
+    });
+    input.addEventListener('input', () => {
+      if (!input.value) return;
+      const [dr, dc] = step();
+      move(r, c, dr, dc); // typing advances to the next cell in the active direction
+    });
     inputs.set(key, input);
     cell.appendChild(input);
     grid.appendChild(cell);
@@ -1299,6 +1321,7 @@ R['image-hotspot'] = (a, index) => {
   img.className = 'oc-hotspot-img';
   frame.appendChild(img);
   const info = el('p', 'oc-feedback');
+  info.setAttribute('aria-live', 'polite'); // hotspot info wasn't announced (#68)
   a.hotspots.forEach((h, i) => {
     const dot = el('button', 'oc-hotspot-dot', String(i + 1));
     dot.type = 'button';
@@ -1393,6 +1416,7 @@ R['survey'] = (a, index) => {
     card.appendChild(block);
   });
   const done = el('p', 'oc-feedback');
+  done.setAttribute('aria-live', 'polite'); // confirmation line wasn't announced (#68)
   card.appendChild(checkButton(() => { done.className = 'oc-feedback oc-feedback--correct'; done.textContent = 'Thank you — responses noted (they stay on this device).'; }, 'Done'));
   card.appendChild(done);
   return card;
@@ -1403,6 +1427,7 @@ R['poll'] = (a, index) => {
   card.appendChild(el('p', 'oc-activity-prompt', a.question));
   const list = el('div', 'oc-options');
   const info = el('p', 'oc-feedback');
+  info.setAttribute('aria-live', 'polite'); // confirmation line wasn't announced (#68)
   a.options.forEach((o) => {
     const btn = el('button', 'oc-option oc-choice-btn', o.text);
     btn.type = 'button';
