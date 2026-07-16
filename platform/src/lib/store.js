@@ -16,8 +16,10 @@
  *   - Writes update `state` optimistically with a client-generated uuid, then
  *     fire the Supabase insert/update/delete (setting teacher_id). Method names
  *     are unchanged so the views keep working.
- *   - `onLiveUpdate()` polls enrollments+progress (written by students via RPC)
- *     so the Live monitor reflects real student work.
+ *   - `onLiveUpdate()` subscribes to Supabase Realtime on enrollments+progress
+ *     (written by students via RPC) so the Live monitor reflects real student
+ *     work in under a couple seconds; falls back to a scoped poll if the
+ *     realtime channel doesn't come up.
  */
 import { supabase } from './supabase';
 
@@ -182,18 +184,34 @@ export async function hydrate() {
   return state;
 }
 
-/** Re-select just the live-facing tables (enrollments + progress) written by students. */
+const liveAulaIds = () => state.aulas.filter((a) => a.status === 'live').map((a) => a.id);
+
+/** Merge one fresh enrollment/progress row into state (used by both the poll and realtime paths). */
+const applyEnrollmentRow = (r) => {
+  const mapped = mapEnrollment(r);
+  const i = state.enrollments.findIndex((e) => e.id === mapped.id);
+  if (i >= 0) state.enrollments[i] = mapped; else state.enrollments.push(mapped);
+};
+const applyProgressRow = (r) => {
+  state.progress[progressKey(r.aula_id, r.enrollment_id, r.worksheet_id)] = mapProgressRow(r);
+};
+
+/**
+ * Re-select the live-facing tables (enrollments + progress), scoped to
+ * currently-live aulas only — a closed aula's history came in at hydrate()
+ * and doesn't get new writes, so re-fetching it every tick is wasted work.
+ * Merges into state rather than replacing it, so closed-aula rows loaded at
+ * hydrate() survive.
+ */
 async function refreshLive() {
+  const ids = liveAulaIds();
+  if (!ids.length) return;
   const [enr, prog] = await Promise.all([
-    supabase.from('enrollments').select('*').order('joined_at', { ascending: true }),
-    supabase.from('progress').select('*'),
+    supabase.from('enrollments').select('*').in('aula_id', ids).order('joined_at', { ascending: true }),
+    supabase.from('progress').select('*').in('aula_id', ids),
   ]);
-  if (enr.data) state.enrollments = enr.data.map(mapEnrollment);
-  if (prog.data) {
-    const next = {};
-    for (const r of prog.data) next[progressKey(r.aula_id, r.enrollment_id, r.worksheet_id)] = mapProgressRow(r);
-    state.progress = next;
-  }
+  (enr.data || []).forEach(applyEnrollmentRow);
+  (prog.data || []).forEach(applyProgressRow);
 }
 
 /* ---------------- session (kept for api.ts compatibility; not the primary path) ---------------- */
@@ -519,24 +537,67 @@ export const store = {
   async reset() { await hydrate(); },
 };
 
-/* ---------------- live sync (poll Supabase for student-written progress) ---------------- */
+/* ---------------- live sync (Supabase Realtime, scoped-poll fallback) ---------------- */
 
 const LIVE_POLL_MS = 4000;
+// How long to wait for the realtime channel to confirm SUBSCRIBED before
+// falling back to polling — covers the gap while the socket handshakes, and
+// any environment where realtime is unreachable (proxy, ad-blocker, outage).
+const REALTIME_FALLBACK_MS = 3000;
 
 /**
- * Subscribe to live updates. Students write enrollments/progress via RPC; we
- * poll those tables and notify so the Live monitor reflects real work.
- * Returns an unsubscribe function.
+ * Subscribe to live updates. Students write enrollments/progress via RPC
+ * (join_aula, save_progress); a Supabase Realtime channel on those two
+ * tables (RLS-scoped, so this teacher only ever receives their own aulas'
+ * rows — see migration 20260716140000) applies each change into `state`
+ * directly, no re-query needed. If the channel errors, times out, or closes,
+ * a poll scoped to live aulas only (closed aulas don't get new writes) takes
+ * over, and pauses while the tab is hidden. Returns an unsubscribe function.
  */
 export function onLiveUpdate(handler) {
   let stopped = false;
+  let pollTimer = null;
+
+  const stopPoll = () => { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } };
   const tick = async () => {
-    if (stopped) return;
+    if (stopped || document.hidden) return;
     try { await refreshLive(); if (!stopped) handler({ type: 'poll' }); }
     catch (e) { console.error('[store] live poll failed:', e); }
   };
-  const timer = setInterval(tick, LIVE_POLL_MS);
-  return () => { stopped = true; clearInterval(timer); };
+  const startPoll = () => { if (!pollTimer) { pollTimer = setInterval(tick, LIVE_POLL_MS); tick(); } };
+
+  const channel = supabase
+    .channel(`live-progress-${teacherId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'progress' }, (payload) => {
+      if (stopped || !payload.new) return;
+      applyProgressRow(payload.new);
+      handler({ type: 'realtime' });
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'enrollments' }, (payload) => {
+      if (stopped || !payload.new) return;
+      applyEnrollmentRow(payload.new);
+      handler({ type: 'realtime' });
+    })
+    .subscribe((status) => {
+      if (stopped) return;
+      if (status === 'SUBSCRIBED') stopPoll();
+      else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') startPoll();
+    });
+
+  // Initial paint so the monitor isn't empty before the first realtime event.
+  tick();
+  const fallbackTimer = setTimeout(() => { if (!stopped && !pollTimer) startPoll(); }, REALTIME_FALLBACK_MS);
+
+  const onVisibility = () => { if (!document.hidden) tick(); };
+  document.addEventListener('visibilitychange', onVisibility);
+
+  return () => {
+    stopped = true;
+    stopPoll();
+    clearTimeout(fallbackTimer);
+    document.removeEventListener('visibilitychange', onVisibility);
+    supabase.removeChannel(channel);
+  };
 }
 
 /** No-op: state is always live in memory. Kept for api.ts / KnowledgeGraph compatibility. */

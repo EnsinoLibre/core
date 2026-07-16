@@ -15,6 +15,8 @@ description: Deploy worksheets to a class as a live session, watch progress in r
 
 Each deployed session shows its join code, a live/closed status toggle, and three stats (students joined, worksheets complete, average score), followed by a table: one row per student, one column per worksheet, each cell a progress bar with the running score. Click a cell to validate that specific attempt, or click a student's name for a full drilldown across every worksheet in the session.
 
+Updates arrive over **Supabase Realtime** — a student joining or saving progress shows up in the monitor in under a couple of seconds, no manual refresh. If the realtime channel can't connect (network, proxy, ad-blocker), the monitor falls back to polling every 4 seconds, scoped to only the currently-live sessions, and pauses while the browser tab is in the background.
+
 **Validating** an attempt marks it **✓ Validated** or **⚑ Needs review** (or clears the mark) — a teacher-only annotation students never see, useful for flagging work you want to look at more closely or confirming grades.
 
 ## Password protection

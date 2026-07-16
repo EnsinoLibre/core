@@ -157,13 +157,17 @@ unique; `class_id` nullable for public/class‑less links; `password_hash`,
 (name‑based, unique per aula via a generated `name_key`), `progress`,
 `agent_keys` (`elk_…` bearer tokens, `expires_at` nullable = never expires),
 `agent_activity` (per‑tool‑call audit log: `status`, `summary`,
-`target_node_id`; 30‑day retention, swept per call — see §10).
+`target_node_id`; 30‑day retention, swept per call — see §10). `progress` and
+`enrollments` are also added to the `supabase_realtime` publication (see #33)
+so the teacher platform's Live monitor can subscribe instead of polling.
 
 **Security model:**
 - **RLS on every table.** Teacher tables use `teacher_id = auth.uid()`. Teachers
   can also *read* `enrollments`/`progress` of their own aulas, and *insert*
   their own `agent_activity` rows (used only for teacher-initiated reverts of
-  agent writes — see §10).
+  agent writes — see §10). Realtime Postgres Changes honours these same SELECT
+  policies, so a teacher's realtime subscription only ever receives events for
+  their own aulas' rows — no separate authorization layer needed.
 - **Public/student access is ONLY through code‑gated `SECURITY DEFINER` RPCs** —
   anon never selects tables directly (verified: anon `students` select → `[]`):
   - `get_aula(p_code)` → deployment + class + worksheets (live only) + `has_password`
@@ -241,8 +245,13 @@ and the tracking epic (github.com/EnsinoLibre/core/issues/49).
   in‑memory cache once after login (`store.hydrate()`), reads stay synchronous,
   writes are client‑uuid'd and fire‑and‑forget to Postgres (`fire()` /
   `fireTracked()` for writes a dependent insert must wait on — see
-  `whenReady()`). Live monitor polls `progress`/`enrollments` instead of the
-  old localStorage `BroadcastChannel`.
+  `whenReady()`). Live monitor subscribes to **Supabase Realtime** on
+  `progress`/`enrollments` (RLS-scoped, so each teacher only receives their
+  own aulas' events), with a poll fallback scoped to live aulas only, paused
+  on `document.hidden` — see #33 and migration
+  `20260716140000_realtime_progress_enrollments.sql`. Replaces the original
+  4s unscoped poll, itself a replacement for the old localStorage
+  `BroadcastChannel`.
 - **Task C — Clickable worksheets → detail + progress dashboard.**
   `/worksheets/:id` renders the actual worksheet (via the shared
   `site/assets/js/renderer.js`) read‑only plus a cross‑deployment progress
