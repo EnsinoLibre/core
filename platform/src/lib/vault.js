@@ -52,11 +52,16 @@ export function buildVault() {
   for (const s of store.students()) {
     const cls = store.classroom(s.classId);
     const obs = (s.notes || []).map((n) => `- ${fmDate(n.at)} — ${n.text}`).join('\n');
+    // Resources scoped to this student directly (regardless of classroom) —
+    // otherwise a student-only note (e.g. from MCP add_resource with just a
+    // `student` argument) has its own file but nothing links to it here.
+    const ctxFiles = store.resources().filter((r) => r.studentId === s.id);
     files.push({ name: `Students/${noteName(s.name)}.md`, content:
       frontmatter({ type: 'student', level: s.level, pronouns: s.pronouns, class: cls ? noteName(cls.name) : '', tags: ['ensinolibre/student'] }) +
       `# ${s.name}\n\n${cls ? `Class: ${link(cls.name)}\n\n` : ''}` +
       `## Goals\n${s.goals || '_None set._'}\n\n## Needs & context\n${s.needs || '_None yet._'}\n\n` +
-      `## Observations\n${obs || '_None yet._'}\n` });
+      `## Observations\n${obs || '_None yet._'}\n\n` +
+      `## Context files\n${ctxFiles.map((r) => `- ${link(r.title)}`).join('\n') || '_None._'}\n` });
   }
 
   /* Worksheets (with analog content = token-efficient) */
