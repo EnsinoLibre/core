@@ -13,7 +13,7 @@
  */
 
 import { parseGaps } from './validator.js';
-import { warmAnime, enterTiles, exitTiles, popTiles, pulseWave, flyInMorphemes, drawPaths, flipCard, shakeTiles, flashCorrect } from './anim.js';
+import { warmAnime, enterTiles, exitTiles, popTiles, pulseWave, flyInMorphemes, drawPaths, flipCard, flipSwap, shakeTiles, flashCorrect } from './anim.js';
 
 let uid = 0;
 const nextId = (p) => `oc-${p}-${++uid}`;
@@ -294,6 +294,7 @@ R['ordering'] = (a, index) => {
   let order = shuffled(a.items);
   if (order.join(' ') === a.items.join(' ')) order = [order[1], order[0], ...order.slice(2)];
   const list = el('ol', 'oc-order');
+  let busy = false;
   function draw() {
     list.textContent = '';
     order.forEach((item, i) => {
@@ -302,19 +303,42 @@ R['ordering'] = (a, index) => {
       const controls = el('span', 'oc-order-controls');
       const up = el('button', 'oc-btn oc-btn--mini', '↑');
       up.type = 'button';
-      up.disabled = i === 0;
+      up.disabled = busy || i === 0;
       up.setAttribute('aria-label', `move "${item}" up`);
-      up.addEventListener('click', () => { [order[i - 1], order[i]] = [order[i], order[i - 1]]; draw(); });
+      up.addEventListener('click', () => swap(i - 1, i));
       const down = el('button', 'oc-btn oc-btn--mini', '↓');
       down.type = 'button';
-      down.disabled = i === order.length - 1;
+      down.disabled = busy || i === order.length - 1;
       down.setAttribute('aria-label', `move "${item}" down`);
-      down.addEventListener('click', () => { [order[i + 1], order[i]] = [order[i], order[i + 1]]; draw(); });
+      down.addEventListener('click', () => swap(i, i + 1));
       controls.appendChild(up);
       controls.appendChild(down);
       li.appendChild(controls);
       list.appendChild(li);
     });
+  }
+  // FLIP the two rows that just swapped positions (#64): measure their
+  // current rects, mutate the order + redraw, then animate from the old
+  // position back to identity. Buttons are disabled for the swap's duration
+  // so state and DOM can't race further clicks; reduced motion / no
+  // `animate` resolves instantly via anim.js's canAnimate no-op.
+  async function swap(i, j) {
+    if (busy || i < 0 || j >= order.length) return;
+    const lis = [...list.children];
+    const liA = lis[i];
+    const liB = lis[j];
+    const rectA = liA.getBoundingClientRect();
+    const rectB = liB.getBoundingClientRect();
+    [order[i], order[j]] = [order[j], order[i]];
+    busy = true;
+    draw();
+    const newLis = [...list.children];
+    try {
+      await flipSwap(newLis[i], rectB, newLis[j], rectA);
+    } finally {
+      busy = false;
+      draw();
+    }
   }
   draw();
   card.appendChild(list);
@@ -370,31 +394,40 @@ R['content'] = (a, index) => {
 R['course-presentation'] = (a, index) => {
   const card = activityCard(a, index);
   let current = 0;
+  let busy = false;
   const stage = el('div', 'oc-slide');
   const dots = el('p', 'oc-word-count');
   async function draw(transition) {
-    if (transition) { const leaving = [...stage.children]; if (leaving.length) await exitTiles(leaving); } // wipe the slide (#13)
-    stage.textContent = '';
-    const s = a.slides[current];
-    if (s.title) stage.appendChild(el('h4', 'oc-content-heading', s.title));
-    if (s.body) stage.appendChild(richText(el('p', 'oc-content-body'), s.body));
-    if (s.activity) {
-      const boxed = el('div', 'oc-qblock oc-slide-check');
-      boxed.appendChild(el('p', 'oc-live-example-label', 'Quick check'));
-      boxed.appendChild(s.activity.subtype === 'mcq' ? qMcq(s.activity) : qTf(s.activity));
-      stage.appendChild(boxed);
+    if (busy) return; // ignore re-entrant calls while an exit/enter is in flight (#54)
+    busy = true;
+    prev.disabled = true;
+    next.disabled = true;
+    try {
+      if (transition) { const leaving = [...stage.children]; if (leaving.length) await exitTiles(leaving); } // wipe the slide (#13)
+      stage.textContent = '';
+      const s = a.slides[current];
+      if (s.title) stage.appendChild(el('h4', 'oc-content-heading', s.title));
+      if (s.body) stage.appendChild(richText(el('p', 'oc-content-body'), s.body));
+      if (s.activity) {
+        const boxed = el('div', 'oc-qblock oc-slide-check');
+        boxed.appendChild(el('p', 'oc-live-example-label', 'Quick check'));
+        boxed.appendChild(s.activity.subtype === 'mcq' ? qMcq(s.activity) : qTf(s.activity));
+        stage.appendChild(boxed);
+      }
+      dots.textContent = `Slide ${current + 1} of ${a.slides.length}`;
+      if (transition) await enterTiles([...stage.children]); // paint the next slide in (#13)
+    } finally {
+      busy = false;
+      prev.disabled = current === 0;
+      next.disabled = current === a.slides.length - 1;
     }
-    dots.textContent = `Slide ${current + 1} of ${a.slides.length}`;
-    prev.disabled = current === 0;
-    next.disabled = current === a.slides.length - 1;
-    if (transition) enterTiles([...stage.children]); // paint the next slide in (#13)
   }
   const prev = el('button', 'oc-btn oc-btn--check', '← Previous');
   prev.type = 'button';
-  prev.addEventListener('click', () => { current -= 1; draw(true); });
+  prev.addEventListener('click', () => { if (busy) return; current -= 1; draw(true); });
   const next = el('button', 'oc-btn oc-btn--check', 'Next →');
   next.type = 'button';
-  next.addEventListener('click', () => { current += 1; draw(true); });
+  next.addEventListener('click', () => { if (busy) return; current += 1; draw(true); });
   card.appendChild(stage);
   const row = el('div', 'oc-actions-row');
   row.appendChild(prev);
@@ -668,9 +701,18 @@ R['flashdeck'] = (a, index) => {
   const card = activityCard(a, index);
   let current = 0;
   let showBack = false;
+  let busy = false;
   const face = el('button', 'oc-flashcard');
   face.type = 'button';
   const counter = el('p', 'oc-word-count');
+  async function doFlip(mutate) {
+    // Serialise flips: a click landing mid-animation used to desync showBack
+    // from the visible face (#67) — busy guards the whole flip like formsTabs.
+    if (busy) return;
+    busy = true;
+    mutate();
+    try { await flipCard(face, draw); } finally { busy = false; }
+  }
   function draw() {
     const c = a.cards[current];
     face.textContent = '';
@@ -686,15 +728,15 @@ R['flashdeck'] = (a, index) => {
     counter.textContent = `Card ${current + 1} of ${a.cards.length}`;
   }
   // Flip the card face-over on tap; swap content at the edge-on midpoint (#11).
-  face.addEventListener('click', () => { showBack = !showBack; flipCard(face, draw); });
+  face.addEventListener('click', () => doFlip(() => { showBack = !showBack; }));
   card.appendChild(face);
   const row = el('div', 'oc-actions-row');
   const prev = el('button', 'oc-btn oc-btn--check', '←');
   prev.type = 'button';
-  prev.addEventListener('click', () => { current = (current - 1 + a.cards.length) % a.cards.length; showBack = false; flipCard(face, draw); });
+  prev.addEventListener('click', () => doFlip(() => { current = (current - 1 + a.cards.length) % a.cards.length; showBack = false; }));
   const next = el('button', 'oc-btn oc-btn--check', '→');
   next.type = 'button';
-  next.addEventListener('click', () => { current = (current + 1) % a.cards.length; showBack = false; flipCard(face, draw); });
+  next.addEventListener('click', () => doFlip(() => { current = (current + 1) % a.cards.length; showBack = false; }));
   row.appendChild(prev);
   row.appendChild(counter);
   if (AUDIO_ENABLED) {
@@ -1284,7 +1326,18 @@ export function renderWorksheet(ws, container) {
     if (section.instructions) sec.appendChild(el('p', 'oc-section-instructions', section.instructions));
     section.activities.forEach((a) => {
       counter += 1;
-      sec.appendChild(R[a.type](a, counter));
+      // Isolate each activity: a throwing renderer (a bug, or a validator blind
+      // spot) must not blank the rest of the worksheet for the student (#69).
+      try {
+        sec.appendChild(R[a.type](a, counter));
+      } catch (err) {
+        console.error(`renderWorksheet: activity ${counter} (${a.type}) failed to render`, err);
+        const fallback = activityCard(a, counter);
+        const msg = el('p', 'oc-feedback oc-feedback--wrong', "This activity couldn't be displayed.");
+        msg.setAttribute('aria-live', 'polite');
+        fallback.appendChild(msg);
+        sec.appendChild(fallback);
+      }
     });
     root.appendChild(sec);
   });
