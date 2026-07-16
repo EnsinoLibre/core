@@ -420,6 +420,7 @@ R['course-presentation'] = (a, index) => {
   let current = 0;
   let busy = false;
   const stage = el('div', 'oc-slide');
+  stage.setAttribute('aria-live', 'polite'); // slide changes are announced (#68)
   const dots = el('p', 'oc-word-count');
   async function draw(transition) {
     if (busy) return; // ignore re-entrant calls while an exit/enter is in flight (#54)
@@ -522,8 +523,15 @@ function sentenceTiles(stage, sentence) {
 
 function formsTabs(card, entries, headline) {
   if (headline) card.appendChild(el('h4', 'oc-content-heading', headline));
+  // Tab semantics + arrow-key navigation between tabs (#68).
   const tabs = el('div', 'oc-checks');
+  tabs.setAttribute('role', 'tablist');
+  if (headline) tabs.setAttribute('aria-label', headline);
+  const stageId = nextId('formsstage');
   const stage = el('div', 'oc-forms-stage');
+  stage.id = stageId;
+  stage.setAttribute('role', 'tabpanel');
+  stage.setAttribute('aria-live', 'polite');
   const glossEl = el('p', 'oc-bubble-gloss');
   const buttons = [];
   let currentTiles = [];
@@ -539,7 +547,12 @@ function formsTabs(card, entries, headline) {
   async function show(i, animated) {
     if (busy || i === currentIndex) return;
     busy = true;
-    buttons.forEach((b, j) => b.classList.toggle('oc-tab--active', i === j));
+    buttons.forEach((b, j) => {
+      const active = i === j;
+      b.classList.toggle('oc-tab--active', active);
+      b.setAttribute('aria-selected', String(active));
+      b.tabIndex = active ? 0 : -1;
+    });
     if (animated && currentTiles.length) await exitTiles(currentTiles);
     currentIndex = i;
     const tiles = paint(i);
@@ -552,7 +565,24 @@ function formsTabs(card, entries, headline) {
   entries.forEach((f, i) => {
     const b = el('button', 'oc-btn oc-btn--check', f.label);
     b.type = 'button';
+    b.setAttribute('role', 'tab');
+    b.setAttribute('aria-selected', 'false');
+    b.setAttribute('aria-controls', stageId);
+    b.tabIndex = -1;
     b.addEventListener('click', () => show(i, true));
+    b.addEventListener('keydown', (ev) => {
+      // Roving-tabindex arrow-key navigation between tabs (standard tablist pattern).
+      let target = null;
+      if (ev.key === 'ArrowRight') target = (i + 1) % buttons.length;
+      else if (ev.key === 'ArrowLeft') target = (i - 1 + buttons.length) % buttons.length;
+      else if (ev.key === 'Home') target = 0;
+      else if (ev.key === 'End') target = buttons.length - 1;
+      if (target != null) {
+        ev.preventDefault();
+        buttons[target].focus();
+        show(target, true);
+      }
+    });
     buttons.push(b);
     tabs.appendChild(b);
   });
@@ -578,6 +608,8 @@ function formsTabs(card, entries, headline) {
 
   // Initial paint + entrance animation.
   buttons[0].classList.add('oc-tab--active');
+  buttons[0].setAttribute('aria-selected', 'true');
+  buttons[0].tabIndex = 0;
   currentIndex = 0;
   enterTiles(paint(0)).then(() => popTiles(currentTiles.filter((t) => t.dataset.emph === '1')));
   return { show };
@@ -788,18 +820,28 @@ R['memory-game'] = (a, index) => {
   ]));
   const grid = el('div', 'oc-memory');
   const moves = el('p', 'oc-word-count', 'Moves: 0');
+  moves.setAttribute('aria-live', 'polite');
   let open = [];
   let moveCount = 0;
   let matched = 0;
-  faces.forEach((f) => {
+  // Every cell was labelled "?" — indistinguishable to a screen reader (#68).
+  // Give each a positional label, kept in sync with its visible state.
+  faces.forEach((f, i) => {
     const cell = el('button', 'oc-memory-card', '?');
     cell.type = 'button';
+    const position = i + 1;
+    const label = (state) => cell.setAttribute('aria-label', `card ${position}, ${state}`);
+    label('face down');
     cell.addEventListener('click', () => {
       if (cell.classList.contains('oc-memory-card--done') || open.includes(cell) || open.length === 2) return;
       cell.dataset.key = f.key;
       open.push(cell);
       // Flip the card face-up (#12).
-      flipCard(cell, () => { cell.textContent = f.text; cell.classList.add('oc-memory-card--open'); });
+      flipCard(cell, () => {
+        cell.textContent = f.text;
+        cell.classList.add('oc-memory-card--open');
+        label(`showing ${f.text}`);
+      });
       if (open.length === 2) {
         moveCount += 1;
         moves.textContent = `Moves: ${moveCount}`;
@@ -807,6 +849,8 @@ R['memory-game'] = (a, index) => {
         if (x.dataset.key === y.dataset.key) {
           x.classList.add('oc-memory-card--done');
           y.classList.add('oc-memory-card--done');
+          x.setAttribute('aria-label', x.getAttribute('aria-label').replace('showing', 'matched:'));
+          y.setAttribute('aria-label', y.getAttribute('aria-label').replace('showing', 'matched:'));
           setTimeout(() => popTiles([x, y]), 320); // pop once the reveal flip settles
           matched += 1;
           open = [];
@@ -815,7 +859,11 @@ R['memory-game'] = (a, index) => {
           const pair = [x, y];
           setTimeout(async () => {
             await shakeTiles(pair);            // signal the miss, then flip both back
-            for (const c of pair) flipCard(c, () => { c.textContent = '?'; c.classList.remove('oc-memory-card--open'); });
+            for (const c of pair) flipCard(c, () => {
+              c.textContent = '?';
+              c.classList.remove('oc-memory-card--open');
+            });
+            for (const c of pair) c.setAttribute('aria-label', c.getAttribute('aria-label').replace(/showing.*/, 'face down'));
             open = [];
           }, 700);
         }
@@ -969,6 +1017,7 @@ R['quiz'] = (a, index) => {
 R['single-choice-set'] = (a, index) => {
   const card = activityCard(a, index);
   const stage = el('div');
+  stage.setAttribute('aria-live', 'polite'); // question swaps are announced (#68)
   card.appendChild(stage);
   const track = scoreTracker(card, a.questions.length);
   let current = 0;
@@ -1107,6 +1156,7 @@ R['scenario'] = (a, index) => {
   const card = activityCard(a, index);
   const nodes = new Map(a.nodes.map((n) => [n.id, n]));
   const stage = el('div', 'oc-chat');
+  stage.setAttribute('aria-live', 'polite'); // new turns/choices are announced (#68)
   card.appendChild(stage);
   function show(id) {
     const n = nodes.get(id);
@@ -1152,6 +1202,7 @@ R['lesson'] = (a, index) => {
   const card = activityCard(a, index);
   const pages = new Map(a.pages.map((p) => [p.id, p]));
   const stage = el('div');
+  stage.setAttribute('aria-live', 'polite'); // page swaps are announced (#68)
   card.appendChild(stage);
   async function show(id) {
     const leaving = [...stage.children];
