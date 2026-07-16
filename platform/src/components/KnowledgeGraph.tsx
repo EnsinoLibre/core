@@ -974,8 +974,19 @@ const TOOL_LABEL: Record<string, string> = {
   create_worksheet: 'created a worksheet',
   list_worksheets: 'listed worksheets',
   add_resource: 'added a knowledge note',
+  get_resource: 'read a knowledge note',
+  search_resources: 'searched the knowledge base',
+  update_resource: 'revised a knowledge note',
+  append_resource_note: 'added a dated note update',
   upsert_classroom: 'created/updated a classroom',
   upsert_student: 'created/updated a student',
+  update_worksheet: 'revised a worksheet',
+  delete_worksheet: 'removed a worksheet',
+  add_student_note: 'logged a student observation',
+  deploy_worksheets: 'deployed a live session',
+  set_aula_status: 'changed a deployment status',
+  get_progress: 'read student progress',
+  revert: 'reverted an agent change',
 };
 
 function timeAgo(iso: string) {
@@ -1050,8 +1061,8 @@ function AgentPopover({ info, onClose }: { info: { id: string; label: string; re
       ) : (
         <ul className="knw-agent-activity">
           {info.recent.slice().reverse().slice(0, 8).map((r) => (
-            <li key={r.id}>
-              <span>{TOOL_LABEL[r.tool] || r.tool}</span>
+            <li key={r.id} className={r.status === 'error' ? 'knw-agent-activity--error' : undefined}>
+              <span>{r.status === 'error' ? '⚠ ' : ''}{r.summary || TOOL_LABEL[r.tool] || r.tool}</span>
               <span className="app-muted">{timeAgo(r.createdAt)}</span>
             </li>
           ))}

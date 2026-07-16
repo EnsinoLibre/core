@@ -57,19 +57,33 @@ async function authenticate(req: Request): Promise<Auth | null> {
   return { teacherId: data.teacher_id, agentKeyId: data.id, agentLabel: data.label };
 }
 
+// Retention for the audit trail (issue #28): long enough for "what did my
+// agent do yesterday/last week", short enough to keep the table bounded.
+// The Knowledge graph's live overlay only ever queries its own short
+// lookback window (ACTIVITY_LOOKBACK_MS client-side), so this is independent
+// of that — extending retention here doesn't change the graph's behaviour.
+const ACTIVITY_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
 /**
- * Fire-and-forget activity log for the Knowledge graph's live "agent" node:
- * one row per successful tool call, plus a cheap sweep of this teacher's
- * older rows so the table stays small (the graph only ever looks at the
- * last couple of minutes).
+ * Fire-and-forget activity log for the Knowledge graph's live "agent" node
+ * and the platform's Agent activity history: one row per tool call —
+ * success AND error, so a misbehaving agent is visible, not silent — with a
+ * one-line human summary. Sweeps this teacher's rows older than the
+ * retention window on each call so the table stays bounded.
  */
-function logActivity(who: Auth, tool: string, targetNodeId: string | null) {
+function logActivity(who: Auth, tool: string, targetNodeId: string | null, summary: string | null, status: 'done' | 'error' = 'done') {
   supa.from('agent_activity').insert({
     teacher_id: who.teacherId, agent_key_id: who.agentKeyId, agent_label: who.agentLabel,
-    tool, status: 'done', target_node_id: targetNodeId,
+    tool, status, target_node_id: targetNodeId, summary, finished_at: new Date().toISOString(),
   }).then(() => {});
   supa.from('agent_activity').delete().eq('teacher_id', who.teacherId)
-    .lt('created_at', new Date(Date.now() - 5 * 60_000).toISOString()).then(() => {});
+    .lt('created_at', new Date(Date.now() - ACTIVITY_RETENTION_MS).toISOString()).then(() => {});
+}
+
+/** One-line human summary for the activity log — the same text already shown to the agent, capped so a huge tool result (e.g. get_workspace_context) doesn't bloat the log. */
+function resultSummary(r: any, cap = 220): string | null {
+  const t = r?.content?.[0]?.text;
+  return typeof t === 'string' ? (t.length > cap ? t.slice(0, cap) + '…' : t) : null;
 }
 
 /* ---------------- tools ---------------- */
@@ -378,7 +392,7 @@ ${shapes}`,
   ].filter(Boolean).join('\n\n');
 }
 
-async function createWorksheet(teacherId: string, args: any) {
+async function createWorksheet(teacherId: string, args: any, agentKeyId: string) {
   let doc = args?.doc;
   if (typeof doc === 'string') { try { doc = JSON.parse(doc); } catch { return text('doc is a string but not valid JSON.', true); } }
   if (!doc || typeof doc !== 'object') return text('Missing "doc" (the worksheet JSON object).', true);
@@ -387,6 +401,7 @@ async function createWorksheet(teacherId: string, args: any) {
   const id = crypto.randomUUID();
   const { error } = await supa.from('worksheets').insert({
     id, teacher_id: teacherId, title: doc.title || 'Untitled worksheet', subject: doc.subject || '', doc,
+    created_by_agent_key_id: agentKeyId,
   });
   if (error) return text(`Insert failed: ${error.message}`, true);
   return { ...text(`Created worksheet "${doc.title}" (${id}) with ${activityCount(doc)} activities. It is now in the teacher's library and can be deployed to a class.`), createdId: id };
@@ -433,7 +448,7 @@ async function findResourceByScopedTitle(teacherId: string, title: string, class
   return data;
 }
 
-async function addResource(teacherId: string, args: any) {
+async function addResource(teacherId: string, args: any, agentKeyId: string) {
   const title = String(args?.title || '').trim();
   const note = String(args?.note || '').trim();
   if (!title || !note) return text('Both "title" and "note" are required.', true);
@@ -481,6 +496,7 @@ async function addResource(teacherId: string, args: any) {
     class_id: classId, student_id: studentId,
     url: args?.url ? String(args.url) : null, note,
     tags: Array.isArray(args?.tags) ? args.tags.map(String) : [], links: linkResolved,
+    created_by_agent_key_id: agentKeyId,
   });
   if (error) return text(`Insert failed: ${error.message}`, true);
   const scope = [classId ? 'classroom' : null, studentId ? 'student' : null].filter(Boolean).join('+');
@@ -804,90 +820,80 @@ async function handleMessage(msg: any, who: Auth) {
     case 'tools/call': {
       const name = params?.name;
       const args = params?.arguments || {};
+      // logResult: uniform success/error logging for a tool that already produced
+      // its own { content, isError } result — used by every write/read-detail tool.
+      const logResult = (result: any, prefix: string | null) => {
+        const errored = !!result.isError;
+        const target = errored ? null : (prefix && result.createdId ? prefix + ':' + result.createdId : prefix);
+        logActivity(who, name, target, resultSummary(result), errored ? 'error' : 'done');
+        return result;
+      };
       try {
         if (name === 'get_workspace_context') {
           const out = await getWorkspaceContext(who.teacherId);
-          logActivity(who, name, 'teacher');
+          // Never log the full dump (can be very large) — a fixed short summary is enough.
+          logActivity(who, name, 'teacher', 'Read workspace context', 'done');
           return rpcResult(id, text(out));
         }
         if (name === 'get_worksheet_contract') {
-          logActivity(who, name, null);
+          logActivity(who, name, null, args?.types?.length ? `Fetched contract for: ${args.types.join(', ')}` : 'Fetched the full worksheet contract', 'done');
           return rpcResult(id, text(getWorksheetContract(args.types)));
         }
         if (name === 'create_worksheet') {
-          const result = await createWorksheet(who.teacherId, args);
-          if (!result.isError) logActivity(who, name, 'worksheet:' + result.createdId);
-          return rpcResult(id, result);
+          return rpcResult(id, logResult(await createWorksheet(who.teacherId, args, who.agentKeyId), 'worksheet'));
         }
         if (name === 'list_worksheets') {
-          logActivity(who, name, 'teacher');
-          return rpcResult(id, await listWorksheets(who.teacherId));
+          const result = await listWorksheets(who.teacherId);
+          logActivity(who, name, 'teacher', resultSummary(result), result.isError ? 'error' : 'done');
+          return rpcResult(id, result);
         }
         if (name === 'add_resource') {
-          const result = await addResource(who.teacherId, args);
-          if (!result.isError) logActivity(who, name, 'resource:' + result.createdId);
-          return rpcResult(id, result);
+          return rpcResult(id, logResult(await addResource(who.teacherId, args, who.agentKeyId), 'resource'));
         }
         if (name === 'get_resource') {
-          logActivity(who, name, null);
-          return rpcResult(id, await getResource(who.teacherId, args));
+          return rpcResult(id, logResult(await getResource(who.teacherId, args), null));
         }
         if (name === 'search_resources') {
-          logActivity(who, name, null);
-          return rpcResult(id, await searchResources(who.teacherId, args));
+          return rpcResult(id, logResult(await searchResources(who.teacherId, args), null));
         }
         if (name === 'update_resource') {
-          const result = await updateResource(who.teacherId, args);
-          if (!result.isError) logActivity(who, name, 'resource:' + result.createdId);
-          return rpcResult(id, result);
+          return rpcResult(id, logResult(await updateResource(who.teacherId, args), 'resource'));
         }
         if (name === 'append_resource_note') {
-          const result = await appendResourceNote(who.teacherId, args);
-          if (!result.isError) logActivity(who, name, 'resource:' + result.createdId);
-          return rpcResult(id, result);
+          return rpcResult(id, logResult(await appendResourceNote(who.teacherId, args), 'resource'));
         }
         if (name === 'upsert_classroom') {
-          const result = await upsertClassroom(who.teacherId, args);
-          if (!result.isError) logActivity(who, name, 'classroom:' + result.createdId);
-          return rpcResult(id, result);
+          return rpcResult(id, logResult(await upsertClassroom(who.teacherId, args), 'classroom'));
         }
         if (name === 'upsert_student') {
-          const result = await upsertStudent(who.teacherId, args);
-          if (!result.isError) logActivity(who, name, 'student:' + result.createdId);
-          return rpcResult(id, result);
+          return rpcResult(id, logResult(await upsertStudent(who.teacherId, args), 'student'));
         }
         if (name === 'update_worksheet') {
-          const result = await updateWorksheet(who.teacherId, args);
-          if (!result.isError) logActivity(who, name, 'worksheet:' + result.createdId);
-          return rpcResult(id, result);
+          return rpcResult(id, logResult(await updateWorksheet(who.teacherId, args), 'worksheet'));
         }
         if (name === 'delete_worksheet') {
-          const result = await deleteWorksheet(who.teacherId, args);
-          if (!result.isError) logActivity(who, name, 'worksheet:' + result.createdId);
-          return rpcResult(id, result);
+          return rpcResult(id, logResult(await deleteWorksheet(who.teacherId, args), 'worksheet'));
         }
         if (name === 'add_student_note') {
           const result = await addStudentNote(who.teacherId, args);
-          if (!result.isError) logActivity(who, name, result.createdId);
+          const errored = !!result.isError;
+          logActivity(who, name, errored ? null : result.createdId, resultSummary(result), errored ? 'error' : 'done');
           return rpcResult(id, result);
         }
         if (name === 'deploy_worksheets') {
-          const result = await deployWorksheets(who.teacherId, args);
-          if (!result.isError) logActivity(who, name, 'aula:' + result.createdId);
-          return rpcResult(id, result);
+          return rpcResult(id, logResult(await deployWorksheets(who.teacherId, args), 'aula'));
         }
         if (name === 'set_aula_status') {
-          const result = await setAulaStatus(who.teacherId, args);
-          if (!result.isError) logActivity(who, name, 'aula:' + result.createdId);
-          return rpcResult(id, result);
+          return rpcResult(id, logResult(await setAulaStatus(who.teacherId, args), 'aula'));
         }
         if (name === 'get_progress') {
-          logActivity(who, name, 'teacher');
-          return rpcResult(id, await getProgress(who.teacherId, args));
+          return rpcResult(id, logResult(await getProgress(who.teacherId, args), 'teacher'));
         }
         return rpcError(id, -32602, `Unknown tool: ${name}`);
       } catch (e) {
-        return rpcResult(id, text(`Tool failed: ${(e as Error).message}`, true));
+        const message = (e as Error).message;
+        logActivity(who, name, null, `Tool failed: ${message}`.slice(0, 220), 'error');
+        return rpcResult(id, text(`Tool failed: ${message}`, true));
       }
     }
     default:

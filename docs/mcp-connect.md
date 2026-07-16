@@ -75,12 +75,18 @@ Other clients take the equivalent JSON config (shown in the app when you generat
 - The MCP server maps key → teacher and every read/write is scoped to that teacher's rows — the same boundary the app itself has.
 - Worksheets are validated with the same validator the platform uses before anything is written.
 
+## Trust, audit trail & undo
+
+Every tool call — success or failure — is logged with a one-line human summary, visible live as you work (the [[knowledge-graph|Knowledge graph]]'s pulsing agent node) and retained for 30 days on the **Profile** page's **Agent activity** card, so "what did my agent do yesterday" has a real answer, including the calls that failed.
+
+Nothing an agent writes is a silent, unrecoverable change: worksheets and knowledge notes an agent creates carry which key created them, and the same Agent activity card lists them with a one-click **↩ Revert** — deleting the item and logging that as its own audit-trail entry. There's no draft/review gate before a write lands (an agent's `create_worksheet` or `add_resource` is live immediately, the same as a teacher's own edit), so revert is the safety net, not a preview step — review what an agent did after the fact rather than before.
+
 ## Deploying the backend (self-hosters)
 
-The server is a Supabase Edge Function in `supabase/functions/mcp/` plus one migration:
+The server is a Supabase Edge Function in `supabase/functions/mcp/` plus the migrations under `supabase/migrations/`:
 
 ```
-supabase db push          # creates agent_keys
+supabase db push          # creates agent_keys, agent_activity, search_vector, created_by_agent_key_id, etc.
 supabase functions deploy mcp --no-verify-jwt
 ```
 

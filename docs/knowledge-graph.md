@@ -24,6 +24,10 @@ Each row in the legend is a toggle, not just a key: click a type to hide every n
 - **⛶ Fit** reframes the camera around whatever's currently *visible* — respecting your legend filters, so hidden node types don't count towards the framing.
 - **Workspace / Docs** switches which layer is in the foreground; the other floats, dimmed, behind it. The docs layer's activity pages connect to every worksheet that uses that specific activity block — a live map of which components are actually in use.
 
+## Watching an agent work
+
+A connected [[mcp-connect|MCP agent]] shows up as a pulsing node while it's active, with edges lighting up to whatever it's currently reading or writing; click it for a popover of its last few tool calls, each with a one-line summary of what actually happened (not just the tool name) and an error mark if a call failed. That popover is a live window — the full, retained history (30 days) lives on the **Profile** page's **Agent activity** card, alongside anything the agent created (worksheets, resources) with a one-click **↩ Revert** if it's not what you wanted.
+
 ## Why it exists
 
 The graph is a visualisation of the same linked knowledge base that [[obsidian-vault|the Obsidian vault export]], [[knowledge-seeding|seeded resources]] and an [[mcp-connect|MCP agent's workspace context]] all draw from. If two things feel like they should be connected but aren't showing an edge here, the fix is the same everywhere: add an explicit wikilink to one of their notes, or set the class/student relation on the resource — or, for a note an agent filed, pass `links` (entity names) to `add_resource` and the MCP server resolves them to real edges the same way a wikilink does.
