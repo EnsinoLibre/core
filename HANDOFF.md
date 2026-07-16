@@ -1,7 +1,10 @@
 # EnsinoLibre — developer handoff
 
-Last updated: 2026‑07‑07. This file is the single source of truth for picking up
-development. Read it fully before touching code.
+Last updated: 2026‑07‑16. This file is the single source of truth for picking up
+development. Read it fully before touching code. For what's next specifically,
+see **[ROADMAP.md](ROADMAP.md)** and the pinned tracking epic
+(github.com/EnsinoLibre/core/issues/49) — this file covers the codebase and
+backend as they stand, ROADMAP/the epic cover prioritised outstanding work.
 
 ---
 
@@ -137,18 +140,33 @@ Dedicated project **EnsinoLibre** (separate from the English‑with‑Sara DB):
 - The Supabase MCP is available to you — use it for migrations (`apply_migration`),
   SQL (`execute_sql`), advisors (`get_advisors`), keys, etc.
 
-**Schema** (migration `ensinolibre_core_schema`): `profiles`, `classrooms`,
-`students`, `student_notes`, `worksheets(doc jsonb)`, `resources`, `aulas`
-(deployments; `code` unique), `aula_worksheets`, `enrollments` (name‑based,
-unique per aula via a generated `name_key`), `progress`.
+**Schema** (migration `ensinolibre_core_schema` plus everything under
+`supabase/migrations/`): `profiles`, `classrooms`, `students`, `student_notes`,
+`worksheets(doc jsonb, created_by_agent_key_id)`, `resources(…, search_vector
+generated tsvector, created_by_agent_key_id)`, `aulas` (deployments; `code`
+unique; `class_id` nullable for public/class‑less links; `password_hash`,
+`failed_attempts`, `locked_until`), `aula_worksheets`, `enrollments`
+(name‑based, unique per aula via a generated `name_key`), `progress`,
+`agent_keys` (`elk_…` bearer tokens, `expires_at` nullable = never expires),
+`agent_activity` (per‑tool‑call audit log: `status`, `summary`,
+`target_node_id`; 30‑day retention, swept per call — see §10).
 
 **Security model:**
 - **RLS on every table.** Teacher tables use `teacher_id = auth.uid()`. Teachers
-  can also *read* `enrollments`/`progress` of their own aulas.
+  can also *read* `enrollments`/`progress` of their own aulas, and *insert*
+  their own `agent_activity` rows (used only for teacher-initiated reverts of
+  agent writes — see §10).
 - **Public/student access is ONLY through code‑gated `SECURITY DEFINER` RPCs** —
   anon never selects tables directly (verified: anon `students` select → `[]`):
-  - `get_aula(p_code)` → deployment + class + worksheets (live only)
-  - `join_aula(p_code, p_name)` → upserts enrollment, returns aula + worksheets + `enrollment_id`
+  - `get_aula(p_code)` → deployment + class + worksheets (live only) + `has_password`
+  - `join_aula(p_code, p_name, p_password default null)` → verifies the
+    password if one is set (bcrypt via `extensions.crypt`, with a legacy‑sha256
+    read/upgrade path), locks the code for 15 minutes after 5 wrong guesses,
+    upserts the enrollment, returns aula + worksheets + `enrollment_id`
+  - `set_aula_password(p_aula_id, p_password)` → teacher‑only (checks
+    `auth.uid()`), hashes server‑side; the client never computes or uploads a hash
+  - `bcrypt_hash_service(p_plain)` → service‑role‑only primitive the `mcp`
+    edge function uses to hash a `deploy_worksheets` password
   - `get_my_progress(p_enrollment_id)` → this student's rows
   - `save_progress(p_enrollment_id, p_worksheet_id, total, attempted, correct, done, score)`
 - `handle_new_user` trigger auto‑creates a `profiles` row on signup.
@@ -160,12 +178,12 @@ trigger (`teacher_id := auth.uid()`).
 
 ---
 
-## 6. Current data-layer state (READ THIS)
+## 6. Data layer
 
-| Area | Data source today |
+| Area | Data source |
 |------|-------------------|
-| **Student aula** (`site/…/aula/*`) | ✅ **Supabase** (RPCs). Public link `aula.html?code=<CODE>`. Progress in Postgres. Session marker in `sessionStorage` (a login token, not coursework). |
-| **Teacher platform** (`platform/`) | ⏳ **still localStorage** via `platform/src/lib/store.js` + fake `auth`. This is what you migrate. |
+| **Student aula** (`site/…/aula/*`) | **Supabase** (RPCs). Public link `aula.html?code=<CODE>`. Progress in Postgres. Session marker in `sessionStorage` (a login token, not coursework). |
+| **Teacher platform** (`platform/`) | **Supabase**, real auth (Tasks A/B/C below shipped). `platform/src/lib/store.js` is a synchronous in‑memory cache hydrated once after login, writes fire‑and‑forget to Postgres. |
 
 The teacher store shape (what the views expect) is an in‑memory object:
 `{ teacher, classrooms[], students[] (each with notes[]), resources[]
@@ -176,9 +194,6 @@ All `store.*` reads are **synchronous**; the views mutate then re‑render via a
 local `force`/`useState` counter. `api.ts` re‑exports `store`, `auth`,
 `onLiveUpdate`, `refresh`, `validateWorksheet`, the exporters, `buildVault`,
 `makeZip`, and the graph helpers.
-
-> **Note (this table row is stale — see #48):** the teacher platform is now on
-> **Supabase**, not localStorage. Writes are optimistic and fire-and-forget.
 
 **Public generator save (issue #18).** The zero-build generator's "Save to my
 library" now writes to the real `worksheets` table via
@@ -203,65 +218,33 @@ rows** return no error, so they aren't caught by this hook (they'd need a
 
 ---
 
-## 7. First tasks (prioritised)
+## 7. Foundational tasks (shipped)
 
-### Task A — Teacher Supabase Auth
-Replace the fake login with real Supabase Auth (email/password; the demo teacher
-exists). Concretely:
-- Add `platform/src/lib/supabase.ts` → `createClient(URL, PUBLISHABLE_KEY,
-  { auth: { persistSession: true, autoRefreshToken: true } })`.
-- Rewrite `platform/src/views/Login.tsx` to call `supabase.auth.signInWithPassword`.
-  Add a sign‑up path (`signUp`) — decide whether to require email confirmation
-  (for a smooth demo you may disable confirmation in Auth settings, or use magic
-  links). Show real errors.
-- `App.tsx` `RequireAuth`: gate on `supabase.auth.getSession()`; subscribe to
-  `onAuthStateChange`. Sign‑out in `Shell` calls `supabase.auth.signOut()`.
-- The public landing/docs already show an avatar when a session exists — keep
-  that working (it reads `localStorage`; you may switch it to the supabase session
-  or leave the simple check).
+The original three foundational tasks that took the teacher platform off
+localStorage are done — kept here as a record of what "done" looked like, not
+as a to‑do list. For what's actually next, see **[ROADMAP.md](ROADMAP.md)**
+and the tracking epic (github.com/EnsinoLibre/core/issues/49).
 
-### Task B — Migrate the teacher store to Supabase
-Recommended low‑risk approach: **keep the synchronous store API**, back it with an
-in‑memory cache hydrated from Supabase.
-- `store.hydrate()` (async, run once after login): with the **authenticated**
-  client, `select *` from each teacher table (RLS scopes to the teacher),
-  plus `enrollments`/`progress` for their aulas, and build the exact `state`
-  shape above. Map: `aula.worksheetIds` from `aula_worksheets` (ordered by
-  `position`); `student.notes` from `student_notes`; keep `resources.links`/`tags`
-  as text[].
-- Reads stay synchronous from `state`.
-- Writes: **client‑generate a uuid** (`crypto.randomUUID()`), update `state`
-  optimistically, and fire the Supabase insert/update/delete (set
-  `teacher_id`). Keep method names identical so views don't change
-  (`addClassroom`, `updateStudent`, `addWorksheet`, `createAula`, `setValidation`,
-  `removeAula`, …). `createAula` should insert the aula + `aula_worksheets`.
-- **Live monitor**: `enrollments`/`progress` are written by students via RPC.
-  Replace the localStorage `BroadcastChannel` `onLiveUpdate` with **Supabase
-  Realtime** on `progress`/`enrollments` (filter to the teacher's aulas) or a
-  simple poll (re‑select every ~4s) so the Live view updates as students work.
-- Delete the localStorage code paths once done. The student flow already writes
-  to the same DB, so the Live monitor will then show real progress.
+- **Task A — Teacher Supabase Auth.** `platform/src/lib/supabase.ts` +
+  `Login.tsx` on `supabase.auth.signInWithPassword`/`signUp`; `App.tsx`
+  `RequireAuth` gates on `supabase.auth.getSession()` and subscribes to
+  `onAuthStateChange`; `Shell` sign‑out calls `supabase.auth.signOut()`.
+- **Task B — Teacher store on Supabase.** `store.js` hydrates a synchronous
+  in‑memory cache once after login (`store.hydrate()`), reads stay synchronous,
+  writes are client‑uuid'd and fire‑and‑forget to Postgres (`fire()` /
+  `fireTracked()` for writes a dependent insert must wait on — see
+  `whenReady()`). Live monitor polls `progress`/`enrollments` instead of the
+  old localStorage `BroadcastChannel`.
+- **Task C — Clickable worksheets → detail + progress dashboard.**
+  `/worksheets/:id` renders the actual worksheet (via the shared
+  `site/assets/js/renderer.js`) read‑only plus a cross‑deployment progress
+  dashboard; classroom/student cards and Live monitor rows drill down to
+  per‑entity panels.
 
-### Task C — Clickable worksheets / cards → worksheet + progress dashboard
-- **Worksheets** (`platform/src/views/Worksheets.tsx`): make each card clickable
-  to a new route `/worksheets/:id` — a detail view that (1) **renders the actual
-  worksheet** read‑only and (2) shows a **progress dashboard**: across every
-  deployment (aula) that includes this worksheet, list students × their
-  attempted/score/validated. Reuse `store.exportRows`‑style aggregation.
-- **Rendering a worksheet inside React**: the renderer is DOM‑based
-  (`site/assets/js/renderer.js`). You can import it into the platform via a
-  relative path (`../../site/assets/js/renderer.js`) — Vite bundles it and
-  `anim.js` is self-contained (vanilla Web Animations API, no vendored engine).
-  Mount it in a `useEffect` into a `ref` div. (Or build a small read‑only preview.)
-- Also wire up the obvious drill‑downs the user asked for: **Live** monitor cells
-  / student rows → a per‑student progress panel; keep classroom/student cards
-  clickable (they already route to details in `Classrooms`/`Students`).
-
-**Definition of done:** teacher logs in with real auth, sees their real data from
-Supabase, deploys a worksheet (writes to DB), a student joins by code and works
-through it, and the teacher's Live monitor + the worksheet's progress dashboard
-show that progress — all with no localStorage for data. Verify on the **deployed**
-URL with a cache‑buster, and re‑run `get_advisors` after any DDL.
+**Definition of done (met):** teacher logs in with real auth, sees their real
+data from Supabase, deploys a worksheet, a student joins by code and works
+through it, and the teacher's Live monitor + the worksheet's progress
+dashboard show that progress — all with no localStorage for data.
 
 ---
 
@@ -312,17 +295,34 @@ Supabase Edge Function that implements the Model Context Protocol
 `supabase/migrations/20260710120000_agent_keys.sql`.
 
 - Auth: personal agent keys (`elk_...`) generated in the app; only SHA-256
-  hashes stored in `agent_keys` (RLS teacher-scoped). The function maps
-  key -> teacher_id and writes with the service role, always teacher-scoped.
-- Tools: get_workspace_context, get_worksheet_contract, create_worksheet
-  (validated with the shared validator), list_worksheets, add_resource
-  (idempotent by title+scope), get_resource, search_resources (full-text via
-  a `search_vector` generated column + GIN index on `resources`),
-  update_resource, append_resource_note, upsert_classroom, upsert_student.
+  hashes stored in `agent_keys` (RLS teacher-scoped), with an optional
+  `expires_at` (30d/90d/1y/never, picked at generation — see #47). The
+  function maps key -> teacher_id and writes with the service role, always
+  teacher-scoped. Requests are also rate-limited to 60/min per key (429 past
+  that), tracked by reusing `agent_activity` rather than a separate counter
+  table — see #47.
+- Tools (17): get_workspace_context, get_worksheet_contract, create_worksheet
+  (validated with the shared validator), update_worksheet, delete_worksheet
+  (refuses if deployed), list_worksheets, add_resource (idempotent by
+  title+scope, with a soft llm.wiki style-check nudge in the response text —
+  see #40), get_resource, search_resources (full-text via a `search_vector`
+  generated column + GIN index on `resources`), update_resource,
+  append_resource_note, upsert_classroom, upsert_student, add_student_note,
+  deploy_worksheets, set_aula_status, get_progress.
   get_workspace_context previews recent notes only and says so once there
   are more — search_resources/get_resource are the read path past that.
+  Full per-tool table: [[mcp-connect]].
+- Every call (success or failure) is logged to `agent_activity` with a
+  one-line summary and status, retained 30 days, and surfaced live in the
+  Knowledge graph's agent node plus a Profile "Agent activity" card with
+  per-item Revert (deletes the item, logs the revert as its own entry) — see
+  #29/#38.
 - `validator.js` / `prompt-builder.js` inside the function dir are verbatim
-  copies of `site/assets/js/*` - keep in sync.
+  copies of `site/assets/js/*` - keep in sync, and **always re-read both
+  files fresh before every `deploy_edge_function` call** — reconstructing
+  their content from memory has caused a real deploy-breaking syntax error
+  before (mismatched `prompt-builder.js` tail); never assume "same as last
+  deploy" without reading them again.
 - Deploy (needs a Supabase access token for project edgdxuvzyhwqidjjbidq):
     supabase link --project-ref edgdxuvzyhwqidjjbidq
     supabase db push
@@ -332,3 +332,7 @@ Supabase Edge Function that implements the Model Context Protocol
   (`set_aula_password` RPC, teacher-owned) with a 5-attempt/15-minute
   lockout inside `join_aula` itself — see [[live-classroom]] and
   `supabase/migrations/20260715130000_aula_password_bcrypt_rate_limit.sql`.
+- **Keeping this file in sync:** whenever a migration touches `agent_keys`,
+  `agent_activity`, `aulas`, or any RPC signature listed in §5, update this
+  section and §5 in the same commit — that drift (stale tool list, stale RPC
+  signatures) is exactly what issue #48 fixed.
