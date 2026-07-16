@@ -63,6 +63,15 @@ function svgDataUri(svg) {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
+/**
+ * Quote and escape a value for a YAML frontmatter scalar: wrap in double
+ * quotes, escape backslashes and double quotes, strip newlines (a raw
+ * newline would break the single-line "key: value" frontmatter entry).
+ */
+function yamlEscape(v) {
+  return `"${String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r?\n/g, ' ')}"`;
+}
+
 function mcqBody(q, n) {
   const opts = q.options.map((o, i) => `   - [ ] ${LETTERS[i].toUpperCase()}. ${o}`).join('\n');
   return `**${n}.** ${q.question}\n\n${opts}`;
@@ -411,9 +420,9 @@ export function emitAnalog(ws) {
   const meta = [ws.subject, ws.topic, ws.audience, ws.estimatedMinutes ? `~${ws.estimatedMinutes} min` : null].filter(Boolean).join(' · ');
   const parts = [
     '---',
-    `title: ${ws.title}`,
-    `subject: ${ws.subject}`,
-    `language: ${ws.language}`,
+    `title: ${yamlEscape(ws.title)}`,
+    `subject: ${yamlEscape(ws.subject)}`,
+    `language: ${yamlEscape(ws.language)}`,
     'source: EnsinoLibre',
     '---',
     '',

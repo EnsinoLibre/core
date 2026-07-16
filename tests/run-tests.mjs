@@ -467,7 +467,7 @@ const analogWs = {
 test('emitAnalog produces a complete Markdown document', () => {
   assert.deepEqual(validateWorksheet(analogWs), []);
   const md = emitAnalog(analogWs);
-  assert.ok(md.startsWith('---\ntitle: Analog test'), 'frontmatter');
+  assert.ok(md.startsWith('---\ntitle: "Analog test"'), 'frontmatter');
   assert.ok(md.includes('# Analog test'));
   assert.ok(md.includes('# Answer key & teacher page'));
 });
@@ -520,6 +520,29 @@ test('crossword: printed grid carries every clue number, so the paper puzzle is 
   assert.ok(body.includes('12. high double-digit clue'));
   // Answer-key grid is unaffected — still letters/■ only.
   assert.ok(key.includes('S E A') || key.includes('S U N'), 'answer key grid still shows letters, not clue numbers');
+});
+test('emitAnalog escapes hostile YAML frontmatter values (#56)', () => {
+  const hostileWs = {
+    title: 'Fractions: a "first" look\nwith a newline and a \\backslash',
+    subject: 'Maths: intro',
+    audience: 'Year 6', language: 'en-GB',
+    sections: [{ title: 'Warm-up', activities: [
+      { type: 'true-false', statement: '1/2 is a fraction.', answer: true },
+    ] }],
+  };
+  const md = emitAnalog(hostileWs);
+  const frontmatter = md.slice(0, md.indexOf('\n---\n', 4) + 5);
+  const titleLine = frontmatter.split('\n').find((l) => l.startsWith('title:'));
+  assert.ok(titleLine, 'title line present');
+  assert.ok(!/\r|\n/.test(titleLine.slice(6)), 'no raw newline in the title value');
+  assert.ok(titleLine.startsWith('title: "') && titleLine.endsWith('"'), 'title value is quoted');
+  // The YAML value itself must be parseable as valid double-quoted YAML: no
+  // unescaped quote or backslash breaks the string early.
+  assert.doesNotThrow(() => {
+    // crude but sufficient sanity check: every quote inside must be escaped
+    const inner = titleLine.slice('title: "'.length, -1);
+    assert.ok(!/(^|[^\\])"/.test(inner), 'unescaped double quote inside the value');
+  });
 });
 test('scenario without isCorrect must not emit a false "Best path" claim (#52)', () => {
   const a = {
