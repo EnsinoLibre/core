@@ -17,6 +17,7 @@ export const DOC_PAGES = [
   { group: 'Reference', pages: [
     { slug: 'worksheet-schema', title: 'Worksheet schema' },
     { slug: 'rendering-and-embedding', title: 'Rendering & embedding' },
+    { slug: 'contributor-architecture', title: 'Contributor architecture' },
   ]},
   { group: 'Teacher platform', pages: [
     { slug: 'platform-overview', title: 'Teacher platform' },
