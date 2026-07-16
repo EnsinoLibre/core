@@ -1177,6 +1177,11 @@ R['scenario'] = (a, index) => {
   const stage = el('div', 'oc-chat');
   stage.setAttribute('aria-live', 'polite'); // new turns/choices are announced (#68)
   card.appendChild(stage);
+  // Give choices[].isCorrect a digital meaning (it already drives the analog
+  // "Best path" answer key): track whether every marked decision was the best
+  // one and say so at the end. Scenarios without isCorrect data stay open-ended.
+  let sawBestData = false;
+  let tookBestPath = true;
   function show(id) {
     const n = nodes.get(id);
     const bubble = el('div', 'oc-bubble oc-bubble--a');
@@ -1186,9 +1191,13 @@ R['scenario'] = (a, index) => {
     enterTiles([bubble]); // each turn arrives with motion (#13)
     if (n.isEnd) {
       if (n.endMessage) stage.appendChild(el('p', 'oc-feedback oc-feedback--correct', n.endMessage));
+      if (sawBestData) {
+        stage.appendChild(el('p', tookBestPath ? 'oc-feedback oc-feedback--correct' : 'oc-feedback',
+          tookBestPath ? '🌟 You took the best path!' : 'You reached an ending — there was an even better path. Try again?'));
+      }
       const again = el('button', 'oc-btn oc-btn--check', '↻ Start again');
       again.type = 'button';
-      again.addEventListener('click', () => { stage.textContent = ''; show(a.startNode); });
+      again.addEventListener('click', () => { stage.textContent = ''; sawBestData = false; tookBestPath = true; show(a.startNode); });
       stage.appendChild(again);
       return;
     }
@@ -1197,6 +1206,10 @@ R['scenario'] = (a, index) => {
       const btn = el('button', 'oc-option oc-choice-btn', c.text);
       btn.type = 'button';
       btn.addEventListener('click', () => {
+        if (n.choices.some((ch) => ch.isCorrect != null)) {
+          sawBestData = true;
+          if (!c.isCorrect) tookBestPath = false;
+        }
         choiceBox.remove();
         const mine = el('div', 'oc-bubble oc-bubble--b');
         mine.appendChild(el('span', 'oc-bubble-name', 'You'));
@@ -1377,6 +1390,16 @@ R['summary'] = (a, index) => {
   });
   card.appendChild(list);
   const fb = makeFeedback(card, a, () => a.statements.filter((s) => s.correct).map((s) => s.text).join(' · '));
+  // Per-statement explanations appear digitally once the answer is settled
+  // (correct or revealed) — previously they only reached the analog answer key.
+  let explained = false;
+  const explain = () => {
+    if (explained) return;
+    explained = true;
+    for (const { s, label } of boxes) {
+      if (s.explanation) label.appendChild(el('span', 'oc-bubble-gloss', s.explanation));
+    }
+  };
   card.appendChild(checkButton(() => {
     let right = true;
     for (const { input, s, label } of boxes) {
@@ -1385,6 +1408,7 @@ R['summary'] = (a, index) => {
       if (!ok) right = false;
     }
     right ? fb.correct() : fb.wrong();
+    if (right || card.dataset.state === 'revealed') explain();
   }));
   return card;
 };
@@ -1436,7 +1460,7 @@ R['survey'] = (a, index) => {
   });
   const done = el('p', 'oc-feedback');
   done.setAttribute('aria-live', 'polite'); // confirmation line wasn't announced (#68)
-  card.appendChild(checkButton(() => { done.className = 'oc-feedback oc-feedback--correct'; done.textContent = 'Thank you — responses noted (they stay on this device).'; }, 'Done'));
+  card.appendChild(checkButton(() => { done.className = 'oc-feedback oc-feedback--correct'; done.textContent = 'Thank you! Your answers are not saved or sent anywhere — share them with your teacher if asked.'; }, 'Done'));
   card.appendChild(done);
   return card;
 };
