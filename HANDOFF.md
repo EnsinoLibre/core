@@ -90,7 +90,16 @@ team viansara). Live at **https://ensinolibre-app.netlify.app**. The paths are
 under `/site/...` (landing at `/site/index.html`, platform at `/site/app/`,
 student at `/site/aula.html`).
 
-**Manual deploy (there is no CI):**
+**CI gate:** `.github/workflows/ci.yml` runs on every push/PR to `main` — the
+worksheet-engine test suite (`npm test`, 126 tests) and the platform's
+`typecheck` + `vite build`, on GitHub's own Ubuntu runners with a real `npm`
+(no `<NPM>`/`<NETLIFY>` runtime-path workarounds needed there — those are
+only for this Windows dev box). It does **not** deploy: that needs a
+`NETLIFY_AUTH_TOKEN`/`NETLIFY_SITE_ID` repo secret nobody has added yet, so
+CI is a build/test gate only, not an auto-deploy pipeline. Deploy is still
+one of the two paths below.
+
+**Manual deploy:**
 ```
 cd platform && <NPM> run build
 # copy platform/dist -> site/app
@@ -99,6 +108,14 @@ cd core && <NETLIFY> deploy --prod --dir . --site d0da070a-0639-404e-9f7a-2b9fa6
 `NETLIFY = ...\.runtime\netlify.cmd`. netlify CLI needs `dangerouslyDisableSandbox`
 for network in this environment.
 
+`netlify.toml`'s own `[build] command` (`npm --prefix platform ci && npm --prefix
+platform run build && node scripts/sync-app.mjs`) is git-buildable — if the
+Netlify site has its git integration enabled in the dashboard, pushing to
+`main` deploys automatically without the manual CLI steps above. Not
+confirmed either way from this dev box (no dashboard access); check the
+Netlify site's **Site settings → Build & deploy** before assuming which path
+is actually live.
+
 > **Always check the DEPLOYED version after deploying**, not just localhost.
 > Two things bit us before:
 > 1. A leftover `site/app.html` file collided with the built `site/app/` dir —
@@ -106,9 +123,6 @@ for network in this environment.
 >    whose name matches a directory.
 > 2. Browsers cache the old hashed bundle. Load with a cache‑buster query
 >    (`/site/app/?cb=<timestamp>`) to confirm the new `index-*.js` is served.
-
-**Consider adding a GitHub Action** that builds the platform, copies to
-`site/app`, and deploys on push — this manual flow is the main source of friction.
 
 ---
 
@@ -255,6 +269,13 @@ URL with a cache‑buster, and re‑run `get_advisors` after any DDL.
 
 - **PowerShell here‑strings mangle multiline git messages** — commit with `git
   commit -F <file>` (write the message to a file first), not inline `-m`.
+- **`store.js` writes are fire-and-forget by design** (`fire()`, optimistic UI)
+  — fine for independent rows, but a child insert that references a row
+  *just* created inline (e.g. a classroom created from a student/resource
+  "+ Create" relation picker) can race the parent's own insert and fail its
+  FK/RLS check silently. Use `fireTracked(builder, label, id)` for the parent
+  write and `await store.whenReady(id)` before firing the dependent child
+  write — see `addClassroom`/`AddEntity.tsx`'s `save()` handlers.
 - **LF→CRLF warnings** on commit are noise (the repo is fine).
 - **esbuild needs node on PATH**: to re‑bundle the vendored supabase client,
   `node platform/node_modules/esbuild/bin/esbuild <entry> --bundle --format=esm

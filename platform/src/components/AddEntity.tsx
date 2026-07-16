@@ -74,10 +74,17 @@ export function AddStudentModal({ onClose, onAdded }: { onClose: () => void; onA
   const [goals, setGoals] = useState('');
   const [needs, setNeeds] = useState('');
   const [, force] = useState(0); // re-render after inline classroom creation so the picker's option list refreshes
+  const [saving, setSaving] = useState(false);
 
-  const save = () => {
+  const save = async () => {
     if (!name.trim() || !classId) return;
+    setSaving(true);
+    // If classId was just created inline (RelationPicker's "+ Create"), its own
+    // insert may still be in flight — wait for it, otherwise the student insert's
+    // FK/RLS check can race the classroom's and silently fail (issue #30).
+    await store.whenReady(classId);
     store.addStudent(classId, { name: name.trim(), pronouns: pronouns.trim(), level: level.trim(), goals: goals.trim(), needs: needs.trim() });
+    setSaving(false);
     onAdded?.();
     onClose();
   };
@@ -103,7 +110,7 @@ export function AddStudentModal({ onClose, onAdded }: { onClose: () => void; onA
         <div className="app-form-actions">
           <button className="el-button el-button--ghost" onClick={onClose}>Cancel</button>
           <span className="app-spacer" />
-          <button className="el-button" disabled={!name.trim() || !classId} onClick={save}>Add student</button>
+          <button className="el-button" disabled={!name.trim() || !classId || saving} onClick={save}>{saving ? 'Adding…' : 'Add student'}</button>
         </div>
       </div>
     </ModalShell>
@@ -129,11 +136,16 @@ export function AddResourceModal({ onClose, onAdded, defaultKind = 'material' }:
   const [classId, setClassId] = useState<string | null>(null);
   const [studentId, setStudentId] = useState<string | null>(null);
   const [, force] = useState(0);
+  const [saving, setSaving] = useState(false);
 
-  const save = () => {
+  const save = async () => {
     if (!title.trim()) return;
+    setSaving(true);
+    // Same inline-classroom-creation race as AddStudentModal (issue #30).
+    if (classId) await store.whenReady(classId);
     const tags = tagsText.split(',').map((t) => t.trim()).filter(Boolean);
     store.addResource({ title: title.trim(), kind, subject: subject.trim(), url: url.trim() || undefined, note: note.trim(), tags, classId, studentId });
+    setSaving(false);
     onAdded?.();
     onClose();
   };
@@ -177,7 +189,7 @@ export function AddResourceModal({ onClose, onAdded, defaultKind = 'material' }:
         <div className="app-form-actions">
           <button className="el-button el-button--ghost" onClick={onClose}>Cancel</button>
           <span className="app-spacer" />
-          <button className="el-button" disabled={!title.trim()} onClick={save}>Add resource</button>
+          <button className="el-button" disabled={!title.trim() || saving} onClick={save}>{saving ? 'Adding…' : 'Add resource'}</button>
         </div>
       </div>
     </ModalShell>

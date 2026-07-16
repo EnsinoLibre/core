@@ -59,6 +59,34 @@ function fire(builder, label) {
   }).catch((e) => reportWriteError(label, e));
 }
 
+/*
+ * Pending-write registry (issue #30): fire() is fire-and-forget by design
+ * (optimistic UI). A few call sites insert a PARENT row (e.g. addClassroom)
+ * whose id a caller may go on to reference in a CHILD insert moments later
+ * (e.g. addStudent, from an inline "+ Create" in a relation picker) — the
+ * child's FK/RLS check needs the parent row to have actually landed in
+ * Postgres first, which a plain fire() doesn't guarantee. Rather than making
+ * every write awaited (losing the point of fire()), track the in-flight
+ * promise per row id so a caller that knows it just created that id can
+ * await it — via whenReady() — before firing the dependent write.
+ */
+const pendingWrites = new Map();
+
+function fireTracked(builder, label, id) {
+  const p = Promise.resolve(builder).then(({ error }) => {
+    if (error) reportWriteError(label, error);
+  }).catch((e) => reportWriteError(label, e)).finally(() => {
+    if (pendingWrites.get(id) === p) pendingWrites.delete(id);
+  });
+  pendingWrites.set(id, p);
+  return p;
+}
+
+/** Resolves once row `id`'s own write (if fired via fireTracked) has settled — a no-op for any id that was never tracked (e.g. an already-existing row). */
+async function whenReady(id) {
+  await (pendingWrites.get(id) || Promise.resolve());
+}
+
 /* ---------------- in-memory state ---------------- */
 
 function emptyState() {
@@ -213,12 +241,14 @@ export const store = {
   addClassroom(data) {
     const c = { id: uuid(), createdAt: nowISO(), subject: '', level: '', term: '', description: '', context: '', ...data };
     state.classrooms.unshift(c);
-    fire(supabase.from('classrooms').insert({
+    fireTracked(supabase.from('classrooms').insert({
       id: c.id, teacher_id: teacherId, name: c.name, subject: c.subject, level: c.level,
       term: c.term, description: c.description, context: c.context,
-    }), 'addClassroom');
+    }), 'addClassroom', c.id);
     return c;
   },
+  /** Await a just-created row's own write before firing a dependent child insert that references it (issue #30). No-op for ids that were never tracked. */
+  whenReady,
   /**
    * Like addClassroom, but AWAITS the insert. Bulk imports (Google Classroom)
    * fire students/resources referencing this classroom's id immediately
