@@ -19,7 +19,10 @@ export function download(name, content, mime) {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  URL.revokeObjectURL(a.href);
+  // Revoke on a short delay, not synchronously: Safari/iOS can start the
+  // download fetch just after click() returns, and revoking the object URL
+  // before that fetch runs produces an empty file (#70).
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
 /* ---------- JSON ---------- */
@@ -55,11 +58,18 @@ export function exportAnalogPDF(ws) {
 </style></head><body>${body}
 <script>window.onload=function(){setTimeout(function(){window.print();},250);};<\/script>
 </body></html>`;
-  const win = window.open('', '_blank');
-  if (!win) { alert('Please allow pop-ups to export a PDF (then use your browser’s “Save as PDF”).'); return; }
-  win.document.open();
-  win.document.write(doc);
-  win.document.close();
+  // Blob-URL popup instead of document.write: document.write on a popup is
+  // deprecated and blocked in some embedder contexts (#70). The auto-print
+  // onload script embedded in `doc` above still fires once the blob loads.
+  const blob = new Blob([doc], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, '_blank');
+  if (!win) {
+    URL.revokeObjectURL(url);
+    alert('Please allow pop-ups to export a PDF (then use your browser’s “Save as PDF”).');
+    return;
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /* ---------- Moodle XML (question import) ---------- */

@@ -742,6 +742,45 @@ test('toMoodleXML never runs the passage text through gap substitution (#57)', (
   assert.ok(xml.includes('{1:SHORTANSWER:=light~=heat}'), 'the real gap-fill answer must still become a cloze field');
 });
 
+console.log('\n9c) Exporters: deferred revocation & Blob-URL popup (#70)');
+
+await test('download() defers URL.revokeObjectURL instead of calling it synchronously (#70)', async () => {
+  const { download } = await import(new URL('../site/assets/js/exporters.js', import.meta.url));
+  const created = [];
+  const revoked = [];
+  const clicked = [];
+  let capturedTimeoutFn = null;
+  const origDoc = globalThis.document;
+  const origCreateObjectURL = URL.createObjectURL;
+  const origRevokeObjectURL = URL.revokeObjectURL;
+  const origTimeout = globalThis.setTimeout;
+  globalThis.document = {
+    createElement: () => ({
+      set href(v) { this._href = v; },
+      get href() { return this._href; },
+      click() { clicked.push(this.href); },
+      remove() {},
+    }),
+    body: { appendChild() {} },
+  };
+  URL.createObjectURL = () => { const u = `blob:fake-${created.length}`; created.push(u); return u; };
+  URL.revokeObjectURL = (u) => revoked.push(u);
+  globalThis.setTimeout = (fn) => { capturedTimeoutFn = fn; return 0; };
+  try {
+    download('x.json', '{}', 'application/json');
+    assert.equal(clicked.length, 1, 'anchor was clicked');
+    assert.equal(revoked.length, 0, 'must NOT revoke synchronously — that races the browser download fetch');
+    assert.ok(typeof capturedTimeoutFn === 'function', 'a deferred revoke was scheduled');
+    capturedTimeoutFn(); // simulate the timer firing
+    assert.deepEqual(revoked, created, 'the deferred callback revokes the same URL it created');
+  } finally {
+    globalThis.document = origDoc;
+    URL.createObjectURL = origCreateObjectURL;
+    URL.revokeObjectURL = origRevokeObjectURL;
+    globalThis.setTimeout = origTimeout;
+  }
+});
+
 console.log('\n10) Animation layer');
 
 test('animation layer has no vendored engine (native Web Animations API only)', () => {
