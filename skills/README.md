@@ -12,6 +12,7 @@ EnsinoLibre locally to use them, just an agent key from your workspace.
 |---|---|
 | [`make-worksheet`](make-worksheet/SKILL.md) | Create or revise a worksheet — ground on real classroom/student context, pick activity types deliberately, validate-and-retry, offer to deploy it live. |
 | [`seed-knowledge-base`](seed-knowledge-base/SKILL.md) | Bulk-ingest a folder of teaching files, or a Google Classroom Takeout export, file-by-file with no context-window wall — the agentic answer to the platform's copy-paste seeding/import flows. |
+| [`progress-report`](progress-report/SKILL.md) | Turn raw progress data into a teacher-facing weekly review — per-student completion/score summary, filed as a dated knowledge-base note, numbers-only (never guesses reasons for low scores). |
 
 ## Installing
 

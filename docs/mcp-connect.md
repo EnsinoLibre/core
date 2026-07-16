@@ -51,6 +51,16 @@ skill with `npx skills add EnsinoLibre/core` and just point it at a folder or
 an unzipped Takeout export. See [`skills/`](https://github.com/EnsinoLibre/core/tree/main/skills)
 in the repo for the full list and install notes.
 
+## Weekly reviews from progress data
+
+`get_progress` is the read path for turning live-deployment results into a
+teacher-facing summary — filterable by aula code, classroom, and/or student.
+The bundled [`progress-report`](https://github.com/EnsinoLibre/core/blob/main/skills/progress-report/SKILL.md)
+skill encodes the discipline for this: pull the numbers, summarize
+per-student completion/score, file one dated `weekly-review`-tagged note per
+class via `add_resource` so the next review has a baseline, and report
+numbers only — never a fabricated reason for a low score.
+
 ## Reading and revising memory at scale
 
 `get_workspace_context` is a **preview**, not the whole knowledge base: it shows your most recent notes (with tags and links) and, once there are more than it can show, says so explicitly and points at `search_resources` instead of silently dropping the rest. That matters once a workspace has hundreds of notes — reading everything on every call doesn't scale, and a truncated dump the agent doesn't know is truncated is worse than no dump at all.
