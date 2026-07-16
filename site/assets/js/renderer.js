@@ -80,6 +80,7 @@ function makeFeedback(card, activity, revealText) {
   card.appendChild(box);
   let attempts = 0;
   return {
+    get attempts() { return attempts; }, // wrong-tries so far, for first-attempt scoring (#63)
     correct(extra) {
       card.dataset.state = 'correct';
       box.className = 'oc-feedback oc-feedback--correct';
@@ -145,7 +146,7 @@ function qMcq(q, { onResolve } = {}) {
     if (!picked) return fb.neutral('Choose an option first.');
     const ok = Number(picked.value) === q.answer;
     ok ? fb.correct() : fb.wrong();
-    if (!done && (ok || block.dataset.state === 'revealed')) { done = true; onResolve && onResolve(ok); }
+    if (!done && (ok || block.dataset.state === 'revealed')) { done = true; onResolve && onResolve(ok, { attempts: fb.attempts }); }
   }));
   return block;
 }
@@ -173,7 +174,7 @@ function qTf(q, { onResolve } = {}) {
     if (!picked) return fb.neutral('Choose True or False first.');
     const ok = (picked.value === 'true') === q.answer;
     ok ? fb.correct() : fb.wrong();
-    if (!done && (ok || block.dataset.state === 'revealed')) { done = true; onResolve && onResolve(ok); }
+    if (!done && (ok || block.dataset.state === 'revealed')) { done = true; onResolve && onResolve(ok, { attempts: fb.attempts }); }
   }));
   return block;
 }
@@ -210,7 +211,7 @@ function qGap(q, { onResolve } = {}) {
     }
     if (!allFilled) return fb.neutral('Fill in every gap first.');
     allRight ? fb.correct() : fb.wrong();
-    if (!done && (allRight || block.dataset.state === 'revealed')) { done = true; onResolve && onResolve(allRight); }
+    if (!done && (allRight || block.dataset.state === 'revealed')) { done = true; onResolve && onResolve(allRight, { attempts: fb.attempts }); }
   }));
   return block;
 }
@@ -260,20 +261,43 @@ function qMatch(q, { onResolve } = {}) {
 
 const Q_PRIMITIVES = { 'mcq': qMcq, 'true-false': qTf, 'gap-fill': qGap, 'matching': qMatch };
 
-/** Score tracker banner for set types with a passMark. */
+/** Stagger (ms) for entering `count` tiles, clamped so a long set's total
+ *  entrance never blows past ~1s (a 12-question quiz shouldn't take 4s to
+ *  appear) — scales the per-tile delay down as count grows (#66). */
+function clampedStagger(count, base = 70, capTotal = 900) {
+  if (count <= 1) return base;
+  return Math.max(15, Math.min(base, Math.floor(capTotal / count)));
+}
+
+/**
+ * Score tracker banner for set types with a passMark. Tracks both eventual
+ * correctness (hint-cycled to the right answer counts) and first-attempt
+ * correctness (right first try, attempts === 0) so a learner can't hint-cycle
+ * every MCQ and still bank a "passed" — pass/fail is decided on the first-try
+ * tally, and both numbers are shown once they diverge (#63). The tiered
+ * hint→hint→reveal learning flow itself is untouched; this only changes what
+ * gets counted for the passMark banner.
+ */
 function scoreTracker(card, total, passMark) {
   const bar = el('p', 'oc-word-count');
   bar.textContent = `0 / ${total} correct` + (passMark ? ` · pass mark ${passMark}` : '');
   card.appendChild(bar);
   let correct = 0;
+  let firstTry = 0;
   let resolved = 0;
-  return (ok) => {
+  return (ok, meta) => {
     resolved += 1;
-    if (ok) correct += 1;
-    bar.textContent = `${correct} / ${total} correct` + (passMark ? ` · pass mark ${passMark}` : '');
+    if (ok) {
+      correct += 1;
+      if (!meta || meta.attempts === 0) firstTry += 1;
+    }
+    bar.textContent = firstTry === correct
+      ? `${correct} / ${total} correct` + (passMark ? ` · pass mark ${passMark}` : '')
+      : `${firstTry} / ${total} first try · ${correct} / ${total} after retries` + (passMark ? ` · pass mark ${passMark}` : '');
     if (resolved === total && passMark) {
-      bar.classList.add(correct >= passMark ? 'oc-word-count--met' : 'oc-feedback--wrong');
-      bar.textContent += correct >= passMark ? ' — passed! 🎉' : ' — not passed, review and retry.';
+      const passed = firstTry >= passMark;
+      bar.classList.add(passed ? 'oc-word-count--met' : 'oc-feedback--wrong');
+      bar.textContent += passed ? ' — passed! 🎉' : ' — not passed, review and retry.';
     }
   };
 }
@@ -606,6 +630,9 @@ R['word-transform'] = (a, index) => {
 
 R['translation-compare'] = (a, index) => {
   const card = activityCard(a, index);
+  // Emitted once per activity, not once per pair — with several pairs the
+  // same instruction used to print once per pair (#58).
+  card.appendChild(el('p', 'oc-word-count', 'Tap a word in the top row — its match and the link light up.'));
   a.pairs.forEach((p) => {
     if (p.headline) card.appendChild(el('h4', 'oc-content-heading', p.headline));
     const wrap = el('div', 'oc-tc');
@@ -640,7 +667,6 @@ R['translation-compare'] = (a, index) => {
     wrap.appendChild(srcRow);
     wrap.appendChild(tgtRow);
     card.appendChild(wrap);
-    card.appendChild(el('p', 'oc-word-count', 'Tap a word in the top row — its match and the link light up.'));
     p.links.filter((l) => l.note).forEach((l) => {
       card.appendChild(el('p', 'oc-bubble-gloss', `⚠ ${p.sourceTokens[l.s]} → ${p.targetTokens[l.t]}: ${l.note}`));
     });
@@ -934,7 +960,9 @@ R['word-search'] = (a, index) => {
 R['quiz'] = (a, index) => {
   const card = activityCard(a, index);
   const track = scoreTracker(card, a.questions.length, a.passMark);
-  a.questions.forEach((q) => card.appendChild(qMcq(q, { onResolve: track })));
+  const blocks = a.questions.map((q) => qMcq(q, { onResolve: track }));
+  blocks.forEach((b) => card.appendChild(b));
+  enterTiles(blocks, { stagger: clampedStagger(blocks.length) }); // #66
   return card;
 };
 
@@ -944,11 +972,24 @@ R['single-choice-set'] = (a, index) => {
   card.appendChild(stage);
   const track = scoreTracker(card, a.questions.length);
   let current = 0;
-  function draw() {
+  async function draw() {
+    // Exit the leaving question, then paint + enter the next one (short
+    // stagger keeps the rapid-fire feel) — was an instant textContent swap
+    // unlike course-presentation/lesson (#65).
+    const leaving = [...stage.children];
+    if (leaving.length) await exitTiles(leaving, { stagger: 20 });
+    if (!stage.isConnected) return; // unmounted mid-exit (e.g. React re-render)
     stage.textContent = '';
-    if (current >= a.questions.length) { stage.appendChild(el('p', 'oc-feedback--correct oc-feedback', 'Set complete!')); return; }
+    if (current >= a.questions.length) { stage.appendChild(el('p', 'oc-feedback--correct oc-feedback', 'Set complete!')); await enterTiles([...stage.children]); return; }
     stage.appendChild(el('p', 'oc-word-count', `Question ${current + 1} of ${a.questions.length} — first instinct!`));
-    stage.appendChild(qMcq(a.questions[current], { onResolve: (ok) => { track(ok); current += 1; setTimeout(draw, 800); } }));
+    stage.appendChild(qMcq(a.questions[current], {
+      onResolve: (ok, meta) => {
+        track(ok, meta);
+        current += 1;
+        setTimeout(() => { if (stage.isConnected) draw(); }, 800); // guard: don't mutate a detached stage (#65)
+      },
+    }));
+    await enterTiles([...stage.children], { stagger: 20 });
   }
   draw();
   return card;
@@ -957,10 +998,12 @@ R['single-choice-set'] = (a, index) => {
 R['question-set'] = (a, index) => {
   const card = activityCard(a, index);
   const track = scoreTracker(card, a.questions.length, a.passMark);
-  a.questions.forEach((q) => {
+  const blocks = a.questions.map((q) => {
     const fn = { 'mcq': qMcq, 'true-false': qTf, 'gap-fill': qGap }[q.subtype];
-    card.appendChild(fn(q, { onResolve: track }));
+    return fn(q, { onResolve: track });
   });
+  blocks.forEach((b) => card.appendChild(b));
+  enterTiles(blocks, { stagger: clampedStagger(blocks.length) }); // #66
   return card;
 };
 
@@ -980,22 +1023,30 @@ R['mark-words'] = (a, index) => {
     p.appendChild(btn);
   }
   card.appendChild(p);
-  const fb = makeFeedback(card, a, () => a.targets.join(', '));
+  // Every occurrence of a target must be marked — a repeated target ("cat"
+  // appearing 3x) only counts as fully found once every instance is tapped,
+  // not just one of them (#62).
+  const fb = makeFeedback(card, a, () => `every occurrence of: ${a.targets.join(', ')}`);
   card.appendChild(checkButton(() => {
     let hits = 0;
     let misses = 0;
     let falseAlarms = 0;
-    const seen = new Set();
+    let targetOccurrences = 0;
     for (const w of wordEls) {
       const sel = w.classList.contains('oc-markword--sel');
       const isTarget = targets.has(w.dataset.word);
       w.classList.toggle('oc-markword--wrong', sel && !isTarget);
-      if (sel && isTarget) { if (!seen.has(w.dataset.word)) { hits += 1; seen.add(w.dataset.word); } }
-      if (sel && !isTarget) falseAlarms += 1;
+      w.classList.toggle('oc-markword--missed', false); // reset before recheck below
+      if (isTarget) {
+        targetOccurrences += 1;
+        if (sel) hits += 1; else misses += 1;
+        w.classList.toggle('oc-markword--missed', !sel);
+      } else if (sel) {
+        falseAlarms += 1;
+      }
     }
-    misses = targets.size - seen.size;
     if (misses === 0 && falseAlarms === 0) fb.correct();
-    else if (hits === 0 && falseAlarms === 0) fb.neutral('Tap the words in the text first.');
+    else if (hits === 0 && falseAlarms === 0 && targetOccurrences > 0) fb.neutral('Tap the words in the text first.');
     else fb.wrong();
   }));
   return card;
@@ -1006,15 +1057,24 @@ R['mark-words'] = (a, index) => {
 R['reading-comp'] = (a, index) => {
   const card = activityCard(a, index);
   const passage = el('div', 'oc-passage');
-  a.passage.split(/\n{2,}/).forEach((para) => passage.appendChild(el('p', null, para)));
+  const paras = a.passage.split(/\n{2,}/).map((para) => el('p', null, para));
+  paras.forEach((p) => passage.appendChild(p));
   card.appendChild(passage);
-  a.questions.forEach((q) => card.appendChild(Q_PRIMITIVES[q.type](q)));
+  enterTiles(paras, { stagger: clampedStagger(paras.length) }); // #66
+  const blocks = a.questions.map((q) => Q_PRIMITIVES[q.type](q));
+  blocks.forEach((b) => card.appendChild(b));
+  enterTiles(blocks, { stagger: clampedStagger(blocks.length) }); // #66
   return card;
 };
 
+/** Strip combining diacritics after NFD-normalising, on top of normLoose's
+ *  lowercase/trim/punctuation stripping — an accent-insensitive fallback
+ *  tier for "cafe" vs "café" style near-misses (#55). */
+export const normAccentless = (s) => normLoose(s).normalize('NFD').replace(/\p{M}/gu, '');
+
 R['translation'] = (a, index) => {
   const card = activityCard(a, index);
-  a.sentences.forEach((s, i) => {
+  const blocks = a.sentences.map((s, i) => {
     const block = el('div', 'oc-qblock');
     block.appendChild(el('p', 'oc-activity-prompt', `${i + 1}. ${s.source}`));
     const input = document.createElement('input');
@@ -1025,12 +1085,21 @@ R['translation'] = (a, index) => {
     const fb = makeFeedback(block, s, () => s.target);
     block.appendChild(checkButton(() => {
       if (!input.value.trim()) return fb.neutral('Write your translation first.');
+      const targets = [s.target, ...(s.alternatives || [])];
       const val = normLoose(input.value);
-      const ok = [s.target, ...(s.alternatives || [])].some((t) => normLoose(t) === val);
-      ok ? fb.correct() : fb.wrong();
+      const exact = targets.some((t) => normLoose(t) === val);
+      if (exact) { fb.correct(); return; }
+      // Softer tier: accent-insensitive match — correct, but nudge them to
+      // mind the diacritics rather than silently accepting it (#55).
+      const valAccentless = normAccentless(input.value);
+      const nearMatch = targets.some((t) => normAccentless(t) === valAccentless);
+      if (nearMatch) { fb.correct(`Watch the accents: ${s.target}`); return; }
+      fb.wrong();
     }));
     card.appendChild(block);
+    return block;
   });
+  enterTiles(blocks, { stagger: clampedStagger(blocks.length) }); // #66
   return card;
 };
 

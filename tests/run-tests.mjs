@@ -635,6 +635,16 @@ await test('supabase/functions/mcp/prompt-builder.js matches site/assets/js/prom
   assert.equal(a, b, 'mcp/prompt-builder.js has drifted from site/assets/js/prompt-builder.js — re-read both fresh and redeploy (see HANDOFF.md §10)');
 });
 
+console.log('\n12) Renderer pure-logic helpers');
+
+await test('normAccentless matches accented/unaccented spellings for translation scoring (#55)', async () => {
+  const { normAccentless } = await import(new URL('../site/assets/js/renderer.js', import.meta.url));
+  assert.equal(normAccentless('café'), normAccentless('cafe'));
+  assert.equal(normAccentless('está'), normAccentless('esta'));
+  assert.equal(normAccentless('Café!'), normAccentless('cafe'), 'strips punctuation/case too (normLoose tier)');
+  assert.notEqual(normAccentless('café'), normAccentless('cafes'), 'still distinguishes genuinely different words');
+});
+
 /* ---------- summary ---------- */
 
 console.log(`\n${passed} passed, ${failed} failed`);

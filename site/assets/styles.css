@@ -557,6 +557,7 @@ pre {
 .oc-markword:hover { background: var(--oc-surface-2); }
 .oc-markword--sel { background: var(--oc-accent-soft); color: var(--oc-accent); text-decoration: underline; }
 .oc-markword--wrong { background: color-mix(in srgb, var(--oc-red) 18%, transparent); color: var(--oc-red); }
+.oc-markword--missed { outline: 2px dashed var(--oc-red); outline-offset: 1px; border-radius: 4px; }
 
 .oc-passage { background: var(--oc-bg); border: 1px solid var(--oc-border); border-left: 3px solid var(--oc-accent); border-radius: 8px; margin-bottom: 1rem; padding: 0.8rem 1.2rem; }
 
