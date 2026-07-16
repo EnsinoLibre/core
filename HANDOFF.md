@@ -58,7 +58,7 @@ core/
 │   └── dist/                  ← build output (gitignored)
 ├── docs/                      ← Obsidian markdown docs (served by docs.html; WORKING COPY — EnsinoLibre/docs is synced from here, not the other way round, see below)
 ├── schema/worksheet.schema.json
-├── tests/run-tests.mjs        ← 150 tests for the worksheet engine (node), incl. an MCP-copy drift check (§10)
+├── tests/run-tests.mjs        ← 189 tests for the worksheet engine (node), incl. an MCP-copy drift check (§10) and a jsdom DOM-rendering pass (§13, #9)
 ├── server.mjs                 ← tiny static dev server (serves directory indexes)
 └── netlify.toml
 ```
@@ -104,7 +104,7 @@ NPM  = C:\Users\User\Documents\Claude\english-with-sara-pwa\.runtime\npm.cmd
   `graph.js` edge derivation, `vault.js` export shape, `agentkeys.ts` key
   lifecycle; see #44). Supabase is mocked (`src/test/fakeSupabase.ts`), so
   these run offline and don't touch the real project.
-- **Worksheet engine tests:** `node core/tests/run-tests.mjs` (should be 150/0).
+- **Worksheet engine tests:** `node core/tests/run-tests.mjs` (should be 189/0).
 
 ---
 
@@ -116,7 +116,7 @@ under `/site/...` (landing at `/site/index.html`, platform at `/site/app/`,
 student at `/site/aula.html`).
 
 **CI gate:** `.github/workflows/ci.yml` runs on every push/PR to `main` — the
-worksheet-engine test suite (`npm test`, 150 tests), the platform's
+worksheet-engine test suite (`npm test`, 189 tests), the platform's
 `typecheck` + `vitest run` (25 tests, #44) + `vite build`, on GitHub's own
 Ubuntu runners with a real `npm` (no `<NPM>`/`<NETLIFY>` runtime-path
 workarounds needed there — those are only for this Windows dev box). It does

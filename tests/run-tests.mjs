@@ -17,6 +17,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import Ajv from 'ajv/dist/2020.js';
+import { JSDOM } from 'jsdom';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -26,7 +27,7 @@ const { buildPrompt, validateSpec, ACTIVITY_TYPES, CONTRACTS } = await import(
 const { validateWorksheet, validateActivity, parseGaps, KNOWN_TYPES } = await import(
   new URL('../site/assets/js/validator.js', import.meta.url)
 );
-const { RENDERERS, buildWordSearch } = await import(
+const { RENDERERS, buildWordSearch, renderWorksheet } = await import(
   new URL('../site/assets/js/renderer.js', import.meta.url)
 );
 const { ANALOG_EMITTERS, emitAnalog } = await import(
@@ -874,6 +875,110 @@ await test('normAccentless matches accented/unaccented spellings for translation
   assert.equal(normAccentless('está'), normAccentless('esta'));
   assert.equal(normAccentless('Café!'), normAccentless('cafe'), 'strips punctuation/case too (normLoose tier)');
   assert.notEqual(normAccentless('café'), normAccentless('cafes'), 'still distinguishes genuinely different words');
+});
+
+console.log('\n13) Renderer DOM rendering (jsdom) — issue #9');
+
+// renderer.js reads `document`/`window` off the global scope (it's written to
+// run in a real browser, no DI). A single jsdom window, installed as globals
+// before any renderer function is CALLED (imports above only reference these
+// lazily inside function bodies, so import order doesn't matter), is enough
+// to exercise the actual DOM-construction code — the one path the rest of
+// this suite's RENDERERS key-parity check (§7) never touches.
+const dom = new JSDOM('<!doctype html><html><body></body></html>');
+globalThis.window = dom.window;
+globalThis.document = dom.window.document;
+globalThis.Node = dom.window.Node;
+globalThis.HTMLElement = dom.window.HTMLElement;
+globalThis.customElements = dom.window.customElements;
+// jsdom lays out nothing (no CSS engine), so every element's
+// getBoundingClientRect is zero-size — translation-compare's connector-curve
+// layout would burn through all 30 measure-retries on every pair for that
+// reason alone. A fixed non-zero box keeps the DOM-render pass fast and
+// deterministic without weakening what it's actually checking (that
+// renderer.js's construction code runs to completion without throwing).
+dom.window.Element.prototype.getBoundingClientRect = () => ({ x: 0, y: 0, top: 0, left: 0, right: 100, bottom: 20, width: 100, height: 20, toJSON() {} });
+// Not implemented by jsdom; anim.js/renderer.js both check for these before
+// using them and no-op gracefully when absent — defining stubs here just
+// keeps jsdom's virtual console quiet, it doesn't change what's exercised.
+dom.window.matchMedia = () => ({ matches: false, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {} });
+dom.window.speechSynthesis = { cancel() {}, speak() {}, getVoices: () => [] };
+dom.window.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
+dom.window.Element.prototype.scrollIntoView = () => {};
+// jsdom has no rendering/animation loop of its own; fire on the next macrotask
+// so callers waiting a frame (layout measurement, anim.js) still resolve.
+dom.window.requestAnimationFrame = (cb) => setTimeout(() => cb(Date.now()), 0);
+dom.window.cancelAnimationFrame = (id) => clearTimeout(id);
+globalThis.requestAnimationFrame = dom.window.requestAnimationFrame;
+globalThis.cancelAnimationFrame = dom.window.cancelAnimationFrame;
+
+const allExamples = [
+  { label: 'demo-worksheet.json', json: demoText },
+  ...embedded.map(({ file, json }) => ({ label: file.slice(ROOT.length + 1), json })),
+];
+
+for (const { label, json } of allExamples) {
+  await test(`renders "${label}" into a non-empty DOM tree without throwing`, async () => {
+    const ws = toWorksheet(JSON.parse(json));
+    const container = dom.window.document.createElement('div');
+    const root = renderWorksheet(ws, container);
+    assert.ok(container.contains(root), 'renderWorksheet must append into the given container');
+    assert.ok(root.children.length > 0, 'a rendered worksheet must produce at least one child element');
+    // renderWorksheet isolates a throwing activity into a fallback card (#69)
+    // rather than surfacing it as a JS exception — a genuinely broken
+    // renderer would otherwise pass this test by "rendering" nothing useful.
+    assert.equal(root.querySelectorAll('.oc-feedback--wrong').length, 0, `activity in "${label}" fell back to the broken-render placeholder`);
+  });
+}
+
+await test('every RENDERERS[type] can be invoked directly and returns an element (not just via renderWorksheet)', async () => {
+  const samples = new Map();
+  for (const { json } of allExamples) {
+    const ws = toWorksheet(JSON.parse(json));
+    for (const section of ws.sections) for (const a of section.activities) if (!samples.has(a.type)) samples.set(a.type, a);
+  }
+  const missing = KNOWN_TYPES.filter((t) => !samples.has(t));
+  assert.deepEqual(missing, [], `no embedded/demo example exercises these types directly: ${missing.join(', ')}`);
+  let i = 0;
+  for (const [type, activity] of samples) {
+    i += 1;
+    assert.doesNotThrow(() => {
+      const node = RENDERERS[type](activity, i);
+      assert.ok(node instanceof dom.window.HTMLElement, `RENDERERS.${type} must return an HTMLElement`);
+    }, `RENDERERS.${type} threw`);
+  }
+});
+
+await test('translation-compare lays out connector curves via ResizeObserver, not a global window resize listener (regression, #7)', async () => {
+  // renderer.js checks the bare, unqualified `ResizeObserver` identifier
+  // (`typeof ResizeObserver !== 'undefined'`), which resolves through
+  // globalThis in a plain Node ES module — dom.window.ResizeObserver alone
+  // is never consulted, so the stub has to live on globalThis too.
+  const originalRO = globalThis.ResizeObserver;
+  let observed = null;
+  globalThis.ResizeObserver = class {
+    constructor(cb) { this.cb = cb; }
+    observe(node) { observed = node; }
+    disconnect() {}
+  };
+  let resizeListenerAdded = false;
+  const originalAdd = dom.window.addEventListener.bind(dom.window);
+  dom.window.addEventListener = (type, ...rest) => {
+    if (type === 'resize') resizeListenerAdded = true;
+    return originalAdd(type, ...rest);
+  };
+  try {
+    const tcExample = allExamples.find(({ json }) => toWorksheet(JSON.parse(json)).sections.some((s) => s.activities.some((a) => a.type === 'translation-compare')));
+    assert.ok(tcExample, 'expected at least one translation-compare example in docs/demo to regression-test #7 against');
+    const ws = toWorksheet(JSON.parse(tcExample.json));
+    const container = dom.window.document.createElement('div');
+    renderWorksheet(ws, container);
+    assert.ok(observed, 'translation-compare must register a ResizeObserver on its wrapper element');
+    assert.equal(resizeListenerAdded, false, 'translation-compare must not fall back to a global window "resize" listener (#7)');
+  } finally {
+    globalThis.ResizeObserver = originalRO;
+    dom.window.addEventListener = originalAdd;
+  }
 });
 
 /* ---------- summary ---------- */
