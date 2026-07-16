@@ -43,28 +43,36 @@ core/
 │       ├── brand/             ← wordmark + favicon (theme-adaptive)
 │       ├── vendor/            ← tokens.css, primitives/, marked, supabase.esm.js
 │       └── js/
-│           ├── prompt-builder / validator / renderer / anim / analog / exporters  ← the worksheet "blocks" engine (shared)
+│           ├── prompt-builder / validator / renderer / anim / analog / exporters  ← the worksheet "blocks" engine (canonical here — supabase/functions/mcp/{validator,prompt-builder}.js are verbatim copies, see §10)
 │           ├── nav.js, theme.js, md.js, docs.js, app.js  ← public site wiring
-│           ├── app/           ← shared logic: store.js (localStorage), graph.js, seed-worksheets.js, util.js, router.js, track.js, vault.js, zip.js
+│           ├── app/           ← util.js, router.js, track.js, vault.js, zip.js (still used); store.js, graph.js removed as dead (zero importers, superseded by platform/src/lib/*); seed-worksheets.js also unused but kept as a content reference for platform/src/lib/seed-worksheets.js
 │           └── aula/          ← STUDENT app: api.js (Supabase), views.js, main.js
 ├── platform/                  ← THE BUILT TEACHER APP (Vite/React/TS)
 │   ├── src/
 │   │   ├── main.tsx, App.tsx  ← entry + router + RequireAuth
 │   │   ├── components/        ← Shell, ErrorBoundary, KnowledgeGraph, DeployModal, bits.tsx
 │   │   ├── views/             ← Login, Dashboard, Knowledge, Classrooms, Students, Resources, Worksheets, Live, Profile
-│   │   ├── lib/               ← api.ts (facade), store.js*, graph.js*, seed-worksheets.js*, validator/analog/exporters/vault/zip/wordsearch, theme.ts
+│   │   ├── lib/               ← api.ts (facade), store.js, graph.js, seed-worksheets.js (all canonical here — no site equivalent), validator/analog/exporters/vault/zip/wordsearch, theme.ts
 │   │   └── styles/            ← index.css, tokens.css, primitives/, app.css, graph.css
 │   ├── package.json, vite.config.ts, tsconfig.json, index.html
 │   └── dist/                  ← build output (gitignored)
 ├── docs/                      ← Obsidian markdown docs (served by docs.html; mirror of EnsinoLibre/docs)
 ├── schema/worksheet.schema.json
-├── tests/run-tests.mjs        ← 121 tests for the worksheet engine (node)
+├── tests/run-tests.mjs        ← 128 tests for the worksheet engine (node), incl. an MCP-copy drift check (§10)
 ├── server.mjs                 ← tiny static dev server (serves directory indexes)
 └── netlify.toml
-
-* store.js / graph.js / seed-worksheets.js are COPIES of the site versions
-  (single source of truth is site/assets/js/app/*; keep them in sync).
 ```
+
+**Copy-ownership, per shared file (see #32):**
+- `prompt-builder.js` / `validator.js` — canonical in `site/assets/js/`;
+  `supabase/functions/mcp/{validator,prompt-builder}.js` are verbatim copies
+  the MCP server needs bundled into its own function dir. **Always re-read
+  both fresh before every `deploy_edge_function` call** — see §10.
+- `store.js` / `graph.js` / `seed-worksheets.js` — canonical in
+  `platform/src/lib/`. The old `site/assets/js/app/*` copies these used to
+  shadow were dead (zero importers, superseded once the teacher platform
+  moved off localStorage) and were deleted in #32 — there is no site-side
+  copy left to keep in sync.
 
 ---
 
@@ -94,7 +102,7 @@ under `/site/...` (landing at `/site/index.html`, platform at `/site/app/`,
 student at `/site/aula.html`).
 
 **CI gate:** `.github/workflows/ci.yml` runs on every push/PR to `main` — the
-worksheet-engine test suite (`npm test`, 126 tests) and the platform's
+worksheet-engine test suite (`npm test`, 128 tests) and the platform's
 `typecheck` + `vite build`, on GitHub's own Ubuntu runners with a real `npm`
 (no `<NPM>`/`<NETLIFY>` runtime-path workarounds needed there — those are
 only for this Windows dev box). It does **not** deploy: that needs a
@@ -318,11 +326,12 @@ Supabase Edge Function that implements the Model Context Protocol
   per-item Revert (deletes the item, logs the revert as its own entry) — see
   #29/#38.
 - `validator.js` / `prompt-builder.js` inside the function dir are verbatim
-  copies of `site/assets/js/*` - keep in sync, and **always re-read both
-  files fresh before every `deploy_edge_function` call** — reconstructing
-  their content from memory has caused a real deploy-breaking syntax error
-  before (mismatched `prompt-builder.js` tail); never assume "same as last
-  deploy" without reading them again.
+  copies of `site/assets/js/*` - keep in sync (CI enforces this: `tests/run-tests.mjs`
+  §11 fails the build if either copy drifts, modulo line endings — see #32),
+  and **always re-read both files fresh before every `deploy_edge_function`
+  call** — reconstructing their content from memory has caused a real
+  deploy-breaking syntax error before (mismatched `prompt-builder.js` tail);
+  never assume "same as last deploy" without reading them again.
 - Deploy (needs a Supabase access token for project edgdxuvzyhwqidjjbidq):
     supabase link --project-ref edgdxuvzyhwqidjjbidq
     supabase db push

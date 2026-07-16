@@ -1,9 +1,10 @@
 /**
  * EnsinoLibre teacher workspace — Supabase-backed data store.
  *
- * NOTE: this is the PLATFORM copy of store.js. It has intentionally DIVERGED
- * from the public-site copy (site/assets/js/app/store.js, still localStorage):
- * the teacher platform is authenticated and its data lives in Supabase.
+ * NOTE: the public-site copy this used to diverge from (site/assets/js/app/store.js,
+ * localStorage-backed) is gone — dead code, removed in #32. This is now the
+ * only store.js in the repo; the teacher platform is authenticated and its
+ * data lives in Supabase.
  *
  * Design (kept deliberately simple so the React views don't change):
  *   - An in-memory `state` object holds the whole workspace, shaped exactly the

@@ -496,6 +496,19 @@ await test('no site source references an external CDN (self-contained rule)', as
   }
 });
 
+console.log('\n11) MCP function copies stay in sync with their canonical source');
+
+await test('supabase/functions/mcp/validator.js matches site/assets/js/validator.js (modulo EOL)', async () => {
+  const a = (await readFile(join(ROOT, 'supabase', 'functions', 'mcp', 'validator.js'), 'utf8')).replace(/\r\n/g, '\n');
+  const b = (await readFile(join(ROOT, 'site', 'assets', 'js', 'validator.js'), 'utf8')).replace(/\r\n/g, '\n');
+  assert.equal(a, b, 'mcp/validator.js has drifted from site/assets/js/validator.js — re-read both fresh and redeploy (see HANDOFF.md §10)');
+});
+await test('supabase/functions/mcp/prompt-builder.js matches site/assets/js/prompt-builder.js (modulo EOL)', async () => {
+  const a = (await readFile(join(ROOT, 'supabase', 'functions', 'mcp', 'prompt-builder.js'), 'utf8')).replace(/\r\n/g, '\n');
+  const b = (await readFile(join(ROOT, 'site', 'assets', 'js', 'prompt-builder.js'), 'utf8')).replace(/\r\n/g, '\n');
+  assert.equal(a, b, 'mcp/prompt-builder.js has drifted from site/assets/js/prompt-builder.js — re-read both fresh and redeploy (see HANDOFF.md §10)');
+});
+
 /* ---------- summary ---------- */
 
 console.log(`\n${passed} passed, ${failed} failed`);
