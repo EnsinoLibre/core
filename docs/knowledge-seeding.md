@@ -19,6 +19,8 @@ We follow the *llm.wiki* idea (after Andrej Karpathy): knowledge meant for AI co
 
 The raw files stay on *your* machine, where your local agent can always re-read them. The workspace stays token-efficient: an agent handed your vault export gets the whole picture in a few thousand tokens.
 
+On the [[mcp-connect|MCP]] path, `add_resource` checks new notes against this convention — a note over ~400 words, or a long note with no headings/bullet list, comes back with a soft style note in the tool result (never a hard rejection; a genuinely short note is still legitimate). It's a nudge for the agent to tighten the note, not a gate.
+
 ## Seed from files (bulk)
 
 Found in **Profile → Seed knowledge base**, on the **Resources** page, and on every resource subcategory (Teaching materials, Guidelines, External resources, Context — each is an upload surface with its own scoped flow):

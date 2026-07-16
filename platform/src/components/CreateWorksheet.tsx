@@ -173,7 +173,7 @@ function McpTab({ onAdded }: { onAdded: () => void }) {
         classes and context, fetch the worksheet contract, and <strong>create worksheets and knowledge notes
         directly</strong> — no copy-paste.
       </>}
-      tools={['get_workspace_context', 'get_worksheet_contract', 'create_worksheet', 'list_worksheets', 'add_resource']}
+      tools={['get_workspace_context', 'get_worksheet_contract', 'create_worksheet', 'update_worksheet', 'list_worksheets', 'deploy_worksheets', 'add_resource']}
       checkLabel="↻ Check for new worksheets"
       onCheck={async () => {
         const before = store.worksheetsAll().length;
@@ -182,6 +182,12 @@ function McpTab({ onAdded }: { onAdded: () => void }) {
         if (after !== before) onAdded();
         return after > before ? `✓ ${after - before} new worksheet${after - before === 1 ? '' : 's'} arrived!` : 'No new worksheets yet.';
       }}
+      skillHint={<>
+        <strong>Using Claude Code?</strong> The <code>make-worksheet</code> skill in this repo's{' '}
+        <code>skills/</code> folder encodes the whole procedure — grounding on your class, picking
+        activity types deliberately, validate-and-retry, deploy on request. Install it with{' '}
+        <code>npx skills add EnsinoLibre/core</code> and just describe the worksheet you want.
+      </>}
     />
   );
 }

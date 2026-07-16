@@ -31,6 +31,8 @@ The prompt builder's copy-paste loop works with any AI. But if your AI speaks th
 
 A typical run: *"Make a B1 worksheet on phrasal verbs for my Tuesday class"* → the agent reads your workspace context, fetches the contract for the activity types it wants, generates the document, `create_worksheet` validates and files it, and — if you ask it to put the sheet in front of the class — `deploy_worksheets` puts a join code in your hands without a trip to the UI.
 
+Claude Code (or any client that reads Anthropic-style skills) users get this procedure encoded rather than improvised — install the bundled [`make-worksheet`](https://github.com/EnsinoLibre/core/blob/main/skills/make-worksheet/SKILL.md) skill with `npx skills add EnsinoLibre/core` for the grounding → contract → validate-and-retry → deploy discipline on every request, not just the happy path.
+
 ## Bulk import (classrooms, rosters, files)
 
 `upsert_classroom`, `upsert_student` and `add_resource` are also the agentic
@@ -74,6 +76,8 @@ Other clients take the equivalent JSON config (shown in the app when you generat
 - Keys are personal bearer tokens; only the SHA-256 hash is stored (`agent_keys` table, RLS teacher-scoped).
 - The MCP server maps key → teacher and every read/write is scoped to that teacher's rows — the same boundary the app itself has.
 - Worksheets are validated with the same validator the platform uses before anything is written.
+- **Keys expire.** Pick 30 days, 90 days (default), 1 year, or never when you generate one — a leaked key isn't valid forever. An expired key gets a distinct "expired, generate a new one" error rather than a generic unauthorized, and shows as expired in your key list until you revoke or replace it.
+- **Rate limited** to 60 requests/minute per key, so a leaked or misbehaving key can't hammer your workspace unbounded — past that it gets a 429 until the window clears.
 
 ## Trust, audit trail & undo
 

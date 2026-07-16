@@ -21,6 +21,7 @@ export function McpConnectTab({ intro, tools, checkLabel, onCheck, skillHint }: 
   const [notDeployed, setNotDeployed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [label, setLabel] = useState('');
+  const [expiresInDays, setExpiresInDays] = useState<number | null>(90);
   const [fresh, setFresh] = useState<{ raw: string; label: string } | null>(null);
   const [error, setError] = useState('');
   const [checking, setChecking] = useState(false);
@@ -38,7 +39,7 @@ export function McpConnectTab({ intro, tools, checkLabel, onCheck, skillHint }: 
   const create = async () => {
     setError('');
     try {
-      const { raw, key } = await createAgentKey(label);
+      const { raw, key } = await createAgentKey(label, expiresInDays);
       setFresh({ raw, label: key.label });
       setLabel('');
       refresh();
@@ -71,14 +72,18 @@ export function McpConnectTab({ intro, tools, checkLabel, onCheck, skillHint }: 
           ? <p className="app-muted">No keys yet — generate one below.</p>
           : (
             <ul className="app-seed-files">
-              {keys.map((k) => (
-                <li key={k.id}>
-                  <span className="app-seed-file-name">🔑 {k.label}</span>
-                  <span className="app-muted">{k.lastUsedAt ? 'used ' + new Date(k.lastUsedAt).toLocaleDateString() : 'never used'}</span>
-                  <button className="app-icon-btn" title="Revoke" aria-label={`Revoke ${k.label}`}
-                    onClick={() => { if (confirm(`Revoke "${k.label}"? Agents using it lose access.`)) revokeAgentKey(k.id).then(refresh); }}>✕</button>
-                </li>
-              ))}
+              {keys.map((k) => {
+                const expired = k.expiresAt ? new Date(k.expiresAt).getTime() < Date.now() : false;
+                const expiryLabel = k.expiresAt ? `${expired ? 'expired' : 'expires'} ${new Date(k.expiresAt).toLocaleDateString()}` : 'never expires';
+                return (
+                  <li key={k.id}>
+                    <span className="app-seed-file-name">🔑 {k.label}{expired && <span className="app-seed-error" style={{ marginLeft: 6 }}>(expired)</span>}</span>
+                    <span className="app-muted">{k.lastUsedAt ? 'used ' + new Date(k.lastUsedAt).toLocaleDateString() : 'never used'} · {expiryLabel}</span>
+                    <button className="app-icon-btn" title="Revoke" aria-label={`Revoke ${k.label}`}
+                      onClick={() => { if (confirm(`Revoke "${k.label}"? Agents using it lose access.`)) revokeAgentKey(k.id).then(refresh); }}>✕</button>
+                  </li>
+                );
+              })}
             </ul>
           )}
       </div>
@@ -87,6 +92,13 @@ export function McpConnectTab({ intro, tools, checkLabel, onCheck, skillHint }: 
         <label className="el-label">Generate a key</label>
         <div className="app-field-row">
           <input className="el-input" value={label} placeholder='Label, e.g. "Claude Code on my laptop"' onChange={(e) => setLabel(e.target.value)} />
+          <select className="el-input" style={{ maxWidth: 160 }} value={expiresInDays ?? 'never'}
+            onChange={(e) => setExpiresInDays(e.target.value === 'never' ? null : Number(e.target.value))}>
+            <option value="30">Expires in 30 days</option>
+            <option value="90">Expires in 90 days</option>
+            <option value="365">Expires in 1 year</option>
+            <option value="never">Never expires</option>
+          </select>
           <button className="el-button" onClick={create} disabled={notDeployed}>+ Generate</button>
         </div>
         {error && <p className="app-seed-error">{error}</p>}

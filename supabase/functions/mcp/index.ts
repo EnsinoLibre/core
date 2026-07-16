@@ -44,17 +44,32 @@ async function sha256hex(s: string) {
 const supa = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
 interface Auth { teacherId: string; agentKeyId: string; agentLabel: string }
+interface AuthResult { who: Auth | null; expired?: boolean }
 
-/** Resolve the agent key from headers → { teacherId, agentKeyId, agentLabel }, or null. */
-async function authenticate(req: Request): Promise<Auth | null> {
+/** Resolve the agent key from headers → { who, expired? } (issue #47: a key with a past expires_at is rejected distinctly from an unrecognised one, so the client can tell "generate a new key" from "check your key"). */
+async function authenticate(req: Request): Promise<AuthResult> {
   const auth = req.headers.get('authorization') || '';
   const raw = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : (req.headers.get('x-agent-key') || '').trim();
-  if (!raw.startsWith('elk_')) return null;
+  if (!raw.startsWith('elk_')) return { who: null };
   const hash = await sha256hex(raw);
-  const { data } = await supa.from('agent_keys').select('id,teacher_id,label').eq('key_hash', hash).maybeSingle();
-  if (!data) return null;
+  const { data } = await supa.from('agent_keys').select('id,teacher_id,label,expires_at').eq('key_hash', hash).maybeSingle();
+  if (!data) return { who: null };
+  if (data.expires_at && new Date(data.expires_at).getTime() < Date.now()) return { who: null, expired: true };
   supa.from('agent_keys').update({ last_used_at: new Date().toISOString() }).eq('id', data.id).then(() => {});
-  return { teacherId: data.teacher_id, agentKeyId: data.id, agentLabel: data.label };
+  return { who: { teacherId: data.teacher_id, agentKeyId: data.id, agentLabel: data.label } };
+}
+
+// Rate limiting (issue #47): bound the blast radius of a leaked key. Reuses
+// agent_activity — every tool call already logs a row there — instead of a
+// new counter table; a request that hasn't hit tools/call yet (e.g. the
+// very first call on a key) has no rows, so it's never falsely limited.
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 60;
+
+async function isRateLimited(agentKeyId: string): Promise<boolean> {
+  const { count } = await supa.from('agent_activity').select('id', { count: 'exact', head: true })
+    .eq('agent_key_id', agentKeyId).gte('created_at', new Date(Date.now() - RATE_LIMIT_WINDOW_MS).toISOString());
+  return (count ?? 0) >= RATE_LIMIT_MAX;
 }
 
 // Retention for the audit trail (issue #28): long enough for "what did my
@@ -448,6 +463,23 @@ async function findResourceByScopedTitle(teacherId: string, title: string, class
   return data;
 }
 
+/**
+ * Soft llm.wiki style check for add_resource's note (issue #40) — the tool
+ * description asks for "~200 words + key points", but nothing enforced it,
+ * so convention drift silently degraded the knowledge base's scannability
+ * over time. Warnings only, never a hard rejection: a genuinely short note
+ * ("office hours: Tue 3pm") is still a legitimate note.
+ */
+function checkNoteStyle(note: string): string[] {
+  const warnings: string[] = [];
+  const words = note.trim().split(/\s+/).filter(Boolean).length;
+  if (words > 400) warnings.push(`this note is ${words} words — llm.wiki style is ~200 words; consider tightening it so the knowledge base stays scannable`);
+  if (words >= 60 && !/key points?/i.test(note) && !/^#+\s/m.test(note) && !/^[-*]\s/m.test(note)) {
+    warnings.push('no headings or bullet list found — a short "Key points" list keeps longer notes scannable at a glance');
+  }
+  return warnings;
+}
+
 async function addResource(teacherId: string, args: any, agentKeyId: string) {
   const title = String(args?.title || '').trim();
   const note = String(args?.note || '').trim();
@@ -473,6 +505,8 @@ async function addResource(teacherId: string, args: any, agentKeyId: string) {
     ({ resolved: linkResolved, unresolved: linkUnresolved } = await resolveEntityLinks(teacherId, args.links));
   }
   const unresolvedNote = linkUnresolved.length ? ` Couldn't resolve these link names (skipped — retry with a corrected name): ${linkUnresolved.join(', ')}.` : '';
+  const styleWarnings = checkNoteStyle(note);
+  const styleNote = styleWarnings.length ? ` Style note: ${styleWarnings.join('; ')}.` : '';
 
   // Idempotent by (title, classroom, student): re-running the same seed or
   // import updates the note it already filed instead of duplicating it.
@@ -487,7 +521,7 @@ async function addResource(teacherId: string, args: any, agentKeyId: string) {
     };
     const { error } = await supa.from('resources').update(patch).eq('id', existing.id);
     if (error) return text(`Update failed: ${error.message}`, true);
-    return { ...text(`Updated existing ${kind} note "${title}" (${existing.id}) — re-running this import didn't duplicate it.${unresolvedNote}`), createdId: existing.id };
+    return { ...text(`Updated existing ${kind} note "${title}" (${existing.id}) — re-running this import didn't duplicate it.${unresolvedNote}${styleNote}`), createdId: existing.id };
   }
 
   const id = crypto.randomUUID();
@@ -500,7 +534,7 @@ async function addResource(teacherId: string, args: any, agentKeyId: string) {
   });
   if (error) return text(`Insert failed: ${error.message}`, true);
   const scope = [classId ? 'classroom' : null, studentId ? 'student' : null].filter(Boolean).join('+');
-  return { ...text(`Added ${kind} note "${title}" (${id}) to the knowledge base${scope ? ` (linked to ${scope})` : ''}.${unresolvedNote}`), createdId: id };
+  return { ...text(`Added ${kind} note "${title}" (${id}) to the knowledge base${scope ? ` (linked to ${scope})` : ''}.${unresolvedNote}${styleNote}`), createdId: id };
 }
 
 /** Resolve a resource by id or (case-insensitive) title, for the read/update/append tools. */
@@ -908,10 +942,17 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'DELETE') return new Response(null, { status: 200, headers: CORS });
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405);
 
-  const who = await authenticate(req);
+  const { who, expired } = await authenticate(req);
   if (!who) {
-    return new Response(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Unauthorized: pass your EnsinoLibre agent key (elk_…) as a bearer token.' } }),
+    const message = expired
+      ? 'Your EnsinoLibre agent key has expired — generate a new one in the app (Worksheets → + Create worksheet → Connect via MCP).'
+      : 'Unauthorized: pass your EnsinoLibre agent key (elk_…) as a bearer token.';
+    return new Response(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32001, message } }),
       { status: 401, headers: { 'Content-Type': 'application/json', 'WWW-Authenticate': 'Bearer realm="ensinolibre-mcp"', ...CORS } });
+  }
+  if (await isRateLimited(who.agentKeyId)) {
+    return new Response(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32029, message: `Rate limit exceeded — max ${RATE_LIMIT_MAX} requests/minute per agent key. Try again shortly.` } }),
+      { status: 429, headers: { 'Content-Type': 'application/json', ...CORS } });
   }
 
   let body: any;
