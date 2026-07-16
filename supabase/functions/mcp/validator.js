@@ -11,6 +11,9 @@
  */
 
 const GAP_RE = /\{\{([^{}]+)\}\}/g;
+// #61: at least one **bold** span — the changing chunk grammar-forms/
+// tense-shift sentences animate (renderer.js sentenceTiles/popTiles).
+const EMPHASIS_RE = /\*\*[^*]+\*\*/;
 
 // Crossword grid bounds. row/col feed an O(maxR*maxC) grid build in
 // renderer.js / analog.js; without a cap a single clue (e.g. row: 999999) can
@@ -178,6 +181,12 @@ const V = {
     if (!arr(a.forms, 2, 6)) { e.push(`${at} (grammar-forms): "forms" must be 2–6 entries.`); return; }
     a.forms.forEach((f, i) => {
       if (!f || !str(f.label) || !str(f.sentence)) e.push(`${at} (grammar-forms): form ${i + 1} needs "label" and "sentence".`);
+      // #61: renderer.js's sentenceTiles/popTiles pipeline animates the
+      // **bold** span as the changing chunk — a sentence with none renders as
+      // a flat row with a pop animation that fires on zero nodes.
+      else if (!EMPHASIS_RE.test(f.sentence)) {
+        e.push(`${at} (grammar-forms): form ${i + 1} — wrap the changing words in **double asterisks** so they can be highlighted.`);
+      }
     });
   },
   'tense-shift': (a, at, e) => {
@@ -185,6 +194,9 @@ const V = {
     if (!arr(a.tenses, 2, 6)) { e.push(`${at} (tense-shift): "tenses" must be 2–6 entries.`); return; }
     a.tenses.forEach((t, i) => {
       if (!t || !str(t.label) || !str(t.sentence)) e.push(`${at} (tense-shift): tense ${i + 1} needs "label" and "sentence".`);
+      else if (!EMPHASIS_RE.test(t.sentence)) {
+        e.push(`${at} (tense-shift): tense ${i + 1} — wrap the changing words in **double asterisks** so they can be highlighted.`);
+      }
     });
   },
   // #59: renderer.js's word-transform view never reads step.derived (it only

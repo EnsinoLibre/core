@@ -252,6 +252,31 @@ test('rejects matching with duplicate right values', () => {
 test('rejects ordering with fewer than 3 items', () => {
   assert.ok(validateActivity({ type: 'ordering', prompt: 'p', items: ['a', 'b'] }).length === 1);
 });
+test('grammar-forms/tense-shift: rejects sentences with no **emphasis** span, in validator AND schema (#61)', () => {
+  const flatForm = { type: 'grammar-forms', grammar: 'negation', forms: [
+    { label: 'Positive', sentence: 'I like tea.' },
+    { label: 'Negative', sentence: 'I do not like tea.' },
+  ] };
+  assert.ok(validateActivity(flatForm).some((e) => /\*\*double asterisks\*\*/.test(e)), 'validator must reject a form sentence with no bold span');
+  assert.ok(!validateSchema(ws([flatForm])), 'schema must reject a form sentence with no bold span');
+  const boldForm = { type: 'grammar-forms', grammar: 'negation', forms: [
+    { label: 'Positive', sentence: 'I **like** tea.' },
+    { label: 'Negative', sentence: 'I **do not like** tea.' },
+  ] };
+  assert.deepEqual(validateActivity(boldForm), []);
+
+  const flatTense = { type: 'tense-shift', verb: 'to work', tenses: [
+    { label: 'Present', sentence: 'I work every day.' },
+    { label: 'Past', sentence: 'I worked yesterday.' },
+  ] };
+  assert.ok(validateActivity(flatTense).some((e) => /\*\*double asterisks\*\*/.test(e)), 'validator must reject a tense sentence with no bold span');
+  assert.ok(!validateSchema(ws([flatTense])), 'schema must reject a tense sentence with no bold span');
+  const boldTense = { type: 'tense-shift', verb: 'to work', tenses: [
+    { label: 'Present', sentence: 'I **work** every day.' },
+    { label: 'Past', sentence: 'I **worked** yesterday.' },
+  ] };
+  assert.deepEqual(validateActivity(boldTense), []);
+});
 test('schema also rejects the same bad cases (spot check)', () => {
   assert.ok(!validateSchema(ws([{ type: 'gap-fill', text: 'no gaps' }])));
   assert.ok(!validateSchema(ws([{ type: 'ordering', prompt: 'p', items: ['a', 'b'] }])));

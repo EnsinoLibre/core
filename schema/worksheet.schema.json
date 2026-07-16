@@ -167,7 +167,14 @@
             "grammar": { "$ref": "#/$defs/nonEmpty" },
             "forms": { "type": "array", "minItems": 2, "maxItems": 6, "items": {
               "type": "object", "required": ["label", "sentence"],
-              "properties": { "label": { "$ref": "#/$defs/nonEmpty" }, "sentence": { "$ref": "#/$defs/nonEmpty" }, "gloss": { "type": "string" } } } }
+              "properties": {
+                "label": { "$ref": "#/$defs/nonEmpty" },
+                "sentence": {
+                  "type": "string", "minLength": 1, "pattern": "\\*\\*[^*]+\\*\\*",
+                  "description": "Must wrap the changing words in **double asterisks** — the renderer animates that span (see #61)."
+                },
+                "gloss": { "type": "string" }
+              } } }
           } } },
         { "if": { "properties": { "type": { "const": "tense-shift" } } }, "then": {
           "required": ["verb", "tenses"],
@@ -176,7 +183,14 @@
             "context": { "type": "string" },
             "tenses": { "type": "array", "minItems": 2, "maxItems": 6, "items": {
               "type": "object", "required": ["label", "sentence"],
-              "properties": { "label": { "$ref": "#/$defs/nonEmpty" }, "sentence": { "$ref": "#/$defs/nonEmpty" }, "gloss": { "type": "string" } } } }
+              "properties": {
+                "label": { "$ref": "#/$defs/nonEmpty" },
+                "sentence": {
+                  "type": "string", "minLength": 1, "pattern": "\\*\\*[^*]+\\*\\*",
+                  "description": "Must wrap the changing (tense-bearing) words in **double asterisks** — the renderer animates that span (see #61)."
+                },
+                "gloss": { "type": "string" }
+              } } }
           } } },
         { "if": { "properties": { "type": { "const": "word-transform" } } }, "then": {
           "required": ["baseWord", "steps"],
