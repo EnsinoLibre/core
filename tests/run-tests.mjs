@@ -469,6 +469,51 @@ test('every embedded docs example emits analog Markdown without throwing', () =>
     assert.ok(md.length > 100, `${file}: empty analog output`);
   }
 });
+test('crossword: printed grid carries every clue number, so the paper puzzle is solvable (#50)', () => {
+  const a = {
+    type: 'crossword',
+    clues: {
+      across: [{ number: 1, clue: 'star of the solar system', answer: 'SUN', row: 0, col: 0 }],
+      down: [
+        { number: 1, clue: 'not down', answer: 'SEA', row: 0, col: 0 },
+        { number: 12, clue: 'high double-digit clue', answer: 'AB', row: 0, col: 5 },
+      ],
+    },
+  };
+  assert.deepEqual(validateActivity(a, 0), []);
+  const { body, key } = ANALOG_EMITTERS['crossword'](a, 1);
+  // Every clue number must appear in the body, and single-digit ones must
+  // appear inline inside the grid code block (not just the clue list).
+  const gridBlock = body.match(/```\n([\s\S]*?)\n```/)[1];
+  assert.ok(/\b1\b/.test(gridBlock), 'clue 1 should be inlined into the grid');
+  assert.ok(body.includes('12 → row 1, col 6'), 'clue numbers ≥10 get a coordinates legend');
+  assert.ok(body.includes('1. star of the solar system'));
+  assert.ok(body.includes('12. high double-digit clue'));
+  // Answer-key grid is unaffected — still letters/■ only.
+  assert.ok(key.includes('S E A') || key.includes('S U N'), 'answer key grid still shows letters, not clue numbers');
+});
+test('image-hotspot: analog emits the scene as a data-URI image with one marker per hotspot (#51)', () => {
+  const a = {
+    type: 'image-hotspot',
+    instruction: 'Label the parts.',
+    svg: '<svg viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg"><rect width="200" height="100" fill="#eee"/></svg>',
+    hotspots: [
+      { label: 'nose', x: 10, y: 20 },
+      { label: 'eye', x: 50, y: 50 },
+      { label: 'tail', x: 90, y: 80 },
+    ],
+  };
+  assert.deepEqual(validateActivity(a, 0), []);
+  const { body } = ANALOG_EMITTERS['image-hotspot'](a, 1);
+  assert.ok(body.includes('data:image/svg+xml'), 'body should embed the scene as a data-URI image');
+  const dataUri = body.match(/data:image\/svg\+xml[^)]+/)[0];
+  const svg = decodeURIComponent(dataUri.replace(/^data:image\/svg\+xml;utf8,/, ''));
+  assert.ok(svg.includes('</svg>'), 'composited SVG must still be well-formed');
+  const markerCount = (svg.match(/<circle /g) || []).length;
+  assert.equal(markerCount, a.hotspots.length, 'one marker per hotspot');
+  const textCount = (svg.match(/<text /g) || []).length;
+  assert.equal(textCount, a.hotspots.length, 'one number label per hotspot');
+});
 
 console.log('\n10) Animation layer');
 

@@ -30,6 +30,39 @@ function seededShuffle(arr, seedStr) {
   return a;
 }
 
+/**
+ * Composite numbered markers (small circle + label) into an inline SVG
+ * string, purely at the string level (no DOM), then wrap as a Markdown
+ * data-URI image. Hotspot x/y are percentages of the scene; they are
+ * converted into the SVG's own viewBox coordinate space so the dots land
+ * in the right place regardless of the scene's native size.
+ */
+function svgWithHotspotMarkers(svg, hotspots) {
+  const vbMatch = svg.match(/viewBox\s*=\s*["']\s*([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s*["']/i);
+  let minX = 0; let minY = 0; let width = 100; let height = 100;
+  if (vbMatch) {
+    [minX, minY, width, height] = vbMatch.slice(1, 5).map(Number);
+  } else {
+    const wMatch = svg.match(/\bwidth\s*=\s*["']?\s*([\d.]+)/i);
+    const hMatch = svg.match(/\bheight\s*=\s*["']?\s*([\d.]+)/i);
+    if (wMatch) width = Number(wMatch[1]);
+    if (hMatch) height = Number(hMatch[1]);
+  }
+  const r = Math.max(width, height) * 0.03;
+  const dots = hotspots.map((h, i) => {
+    const cx = minX + (h.x / 100) * width;
+    const cy = minY + (h.y / 100) * height;
+    return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#e11d48" stroke="#fff" stroke-width="${r * 0.15}"/>` +
+      `<text x="${cx}" y="${cy}" font-size="${r * 1.2}" font-weight="bold" fill="#fff" text-anchor="middle" dominant-baseline="central">${i + 1}</text>`;
+  }).join('');
+  const markers = `<g>${dots}</g>`;
+  return /<\/svg\s*>/i.test(svg) ? svg.replace(/<\/svg\s*>/i, `${markers}</svg>`) : svg + markers;
+}
+
+function svgDataUri(svg) {
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
 function mcqBody(q, n) {
   const opts = q.options.map((o, i) => `   - [ ] ${LETTERS[i].toUpperCase()}. ${o}`).join('\n');
   return `**${n}.** ${q.question}\n\n${opts}`;
@@ -265,7 +298,10 @@ const E = {
     const all = [...a.clues.across.map((c) => ({ ...c, dir: 'across' })), ...a.clues.down.map((c) => ({ ...c, dir: 'down' }))];
     let maxR = 0; let maxC = 0;
     const solution = new Map();
+    const startNum = new Map(); // "r,c" -> clue number of the cell where a clue starts
     for (const c of all) {
+      const key = `${c.row},${c.col}`;
+      if (!startNum.has(key)) startNum.set(key, c.number);
       const L = c.answer.toUpperCase();
       for (let i = 0; i < L.length; i++) {
         const r = c.dir === 'across' ? c.row : c.row + i;
@@ -276,11 +312,24 @@ const E = {
     }
     const gridLines = [];
     const keyLines = [];
+    const legend = []; // for clue numbers too wide to fit inline (>= 10)
     for (let r = 0; r <= maxR; r++) {
       let row = ''; let solved = '';
       for (let c = 0; c <= maxC; c++) {
-        row += solution.has(`${r},${c}`) ? '☐ ' : '■ ';
-        solved += solution.has(`${r},${c}`) ? solution.get(`${r},${c}`) + ' ' : '■ ';
+        const key = `${r},${c}`;
+        if (solution.has(key)) {
+          const num = startNum.get(key);
+          if (num != null && num <= 9) {
+            row += `${num} `;
+          } else {
+            if (num != null) legend.push(`${num} → row ${r + 1}, col ${c + 1}`);
+            row += '☐ ';
+          }
+          solved += solution.get(key) + ' ';
+        } else {
+          row += '■ ';
+          solved += '■ ';
+        }
       }
       gridLines.push(row.trimEnd());
       keyLines.push(solved.trimEnd());
@@ -288,16 +337,21 @@ const E = {
     const clues = (dir, label) => a.clues[dir].length
       ? `**${label}**\n` + a.clues[dir].map((c) => `${c.number}. ${c.clue} (${c.answer.length})`).join('\n')
       : '';
+    const legendBlock = legend.length ? `\n\n*Clue numbers:* ${legend.join('; ')}` : '';
     return {
-      body: `**${n}.** Crossword\n\n\`\`\`\n${gridLines.join('\n')}\n\`\`\`\n\n${clues('across', 'Across')}\n\n${clues('down', 'Down')}`.trim(),
+      body: `**${n}.** Crossword\n\n\`\`\`\n${gridLines.join('\n')}\n\`\`\`${legendBlock}\n\n${clues('across', 'Across')}\n\n${clues('down', 'Down')}`.trim(),
       key: `${n}.\n\`\`\`\n${keyLines.join('\n')}\n\`\`\``,
     };
   },
-  'image-hotspot': (a, n) => ({
-    body: `**${n}.** ${a.instruction || 'Label the picture.'} *(the picture shows numbered markers — write each label next to its number)*\n\n` +
-      a.hotspots.map((h, i) => `${i + 1}. ${line(20)}`).join('\n'),
-    key: `${n}. ` + a.hotspots.map((h, i) => `(${i + 1}) ${h.label}`).join(', '),
-  }),
+  'image-hotspot': (a, n) => {
+    const scene = svgWithHotspotMarkers(a.svg, a.hotspots);
+    return {
+      body: `**${n}.** ${a.instruction || 'Label the picture.'} *(the picture shows numbered markers — write each label next to its number)*\n\n` +
+        `![scene](${svgDataUri(scene)})\n\n` +
+        a.hotspots.map((h, i) => `${i + 1}. ${line(20)}`).join('\n'),
+      key: `${n}. ` + a.hotspots.map((h, i) => `(${i + 1}) ${h.label}`).join(', '),
+    };
+  },
 
   'summary': (a, n) => ({
     body: `**${n}.** ${a.intro ? a.intro + '\n\n' : ''}Tick the statements that are true, then copy them below as a summary paragraph.\n\n` +

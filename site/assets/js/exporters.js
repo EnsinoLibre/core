@@ -46,6 +46,7 @@ export function exportAnalogPDF(ws) {
   table { border-collapse: collapse; width: 100%; margin: 8pt 0; }
   th, td { border: 1px solid #999; padding: 4pt 6pt; text-align: left; font-size: 10.5pt; }
   code, pre { font-family: 'Consolas', monospace; font-size: 10pt; }
+  img { max-width: 100%; height: auto; display: block; margin: 8pt 0; }
   pre { background: #f5f5f5; padding: 8pt; border: 1px solid #ddd; white-space: pre; overflow: visible; }
   blockquote { border-left: 3px solid #ccc; margin: 6pt 0; padding: 2pt 0 2pt 10pt; color: #333; }
   ul, ol { margin: 6pt 0; }
