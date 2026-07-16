@@ -33,6 +33,14 @@ Classroom `context` and student `goals`/`needs` aren't just notes — they're ex
 
 Each student's content panel has an **Add observation** field — a dated note ("struggled with past perfect on Tuesday") that accumulates as a running log, separate from `goals`/`needs`. An [[mcp-connect|MCP agent]]'s `add_student_note` tool writes the same log, and the most recent few observations per student surface automatically in `get_workspace_context` so an agent planning a lesson sees what actually happened last time, not just the static profile.
 
+Claude Code (or any client that reads Anthropic-style skills) users can skip
+narrating this one call at a time — the bundled
+[`student-profile-update`](https://github.com/EnsinoLibre/core/blob/main/skills/student-profile-update/SKILL.md)
+skill takes a whole post-lesson brain-dump ("Ana nailed conditionals, Rui
+needs pronunciation drills"), splits it per student, files one
+`add_student_note` each verbatim, and only *proposes* a `needs`/`goals`
+change via `upsert_student` rather than applying it silently.
+
 ## Revising context via an agent
 
 `upsert_classroom`/`upsert_student` default to filling in only what was empty — safe for repeated imports, but it means an agent can't update stale context on its own. Pass `overwrite: true` (only on an explicit "update the class context" instruction from you) to have it replace the fields you give it instead.
