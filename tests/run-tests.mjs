@@ -491,6 +491,33 @@ test('image-hotspot: rejects scripts and external references in the svg', () => 
   const a = { type: 'image-hotspot', svg: '<svg onload="x()"></svg>', hotspots: [{ label: 'a', x: 1, y: 1 }, { label: 'b', x: 2, y: 2 }] };
   assert.ok(validateActivity(a).length >= 1);
 });
+test('image-hotspot: SVG sanitiser reject vectors (#71)', () => {
+  const hotspots = [{ label: 'a', x: 1, y: 1 }, { label: 'b', x: 2, y: 2 }];
+  const rejects = [
+    '<svg><script>alert(1)</script></svg>',
+    '<svg><script/></svg>',
+    '<svg onload="x()"><rect/></svg>',
+    '<svg><rect onclick="x()"/></svg>',
+    '<svg><foreignObject><body onload="x()"/></foreignObject></svg>',
+    '<svg><a href="https://evil.example">link</a></svg>',
+    '<svg><use xlink:href="https://evil.example#x"/></svg>',
+    '<svg><rect fill="url(javascript:alert(1))"/></svg>',
+  ];
+  for (const svg of rejects) {
+    assert.ok(validateActivity({ type: 'image-hotspot', svg, hotspots }).length >= 1, `should reject: ${svg}`);
+  }
+});
+test('image-hotspot: SVG sanitiser accept vectors, incl. the "onion =" false positive (#71)', () => {
+  const hotspots = [{ label: 'a', x: 1, y: 1 }, { label: 'b', x: 2, y: 2 }];
+  const accepts = [
+    '<svg viewBox="0 0 10 10"><rect width="10" height="10" fill="#fff"/><text>onion = a vegetable</text></svg>',
+    '<svg viewBox="0 0 10 10"><text>see references = footnotes</text><circle cx="5" cy="5" r="2"/></svg>',
+    '<svg viewBox="0 0 10 10"><rect width="10" height="10" fill="green"/><circle cx="5" cy="5" r="2" fill="red"/></svg>',
+  ];
+  for (const svg of accepts) {
+    assert.deepEqual(validateActivity({ type: 'image-hotspot', svg, hotspots }), [], `should accept: ${svg}`);
+  }
+});
 test('reading-comp: rejects questions without a type discriminator', () => {
   const a = { type: 'reading-comp', passage: 'p', questions: [{ question: 'q', options: ['a', 'b'], answer: 0 }] };
   assert.ok(validateActivity(a).some((e) => e.includes('type')));

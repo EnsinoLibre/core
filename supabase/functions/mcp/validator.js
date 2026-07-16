@@ -482,10 +482,32 @@ const V = {
     across.forEach((c) => place(c, 'across'));
     down.forEach((c) => place(c, 'down'));
   },
+  // #71: threat model — renderer.js mounts this SVG via
+  // `<img src="data:image/svg+xml,...">`, and the HTML spec treats an <img>
+  // as a non-scripting context: browsers do not execute <script>, run event
+  // handler attributes, or follow javascript: URIs inside an image-sourced
+  // SVG. So this sanitiser is defence-in-depth against the SVG being
+  // repurposed elsewhere (copy-pasted into a different context, exported,
+  // rendered by some future non-<img> path) rather than a live XSS vector
+  // today — it's still worth keeping strict and false-positive-free.
+  //
+  // Matching is regex/string-only (no DOM parser — this file also runs in
+  // the Deno edge function). Event-handler and href checks are anchored to
+  // TAG POSITION (`<[^>]*\son\w+\s*=`) so ordinary text content mentioning
+  // "onion = a vegetable" or "see references =" no longer false-positives —
+  // the old unanchored `on\w+\s*=`/`href\s*=` matched anywhere in the string.
   'image-hotspot': (a, at, e) => {
     if (!str(a.svg)) e.push(`${at} (image-hotspot): "svg" (a self-contained inline SVG scene) is required — external image paths are not allowed.`);
     else if (!/^\s*<svg[\s>]/i.test(a.svg)) e.push(`${at} (image-hotspot): "svg" must start with an <svg> tag.`);
-    else if (/<script|on\w+\s*=|href\s*=/i.test(a.svg)) e.push(`${at} (image-hotspot): "svg" must not contain scripts, event handlers or links.`);
+    else if (
+      /<script[\s/>]/i.test(a.svg)
+      || /<foreignobject[\s/>]/i.test(a.svg)
+      || /<[^>]*\son\w+\s*=/i.test(a.svg)
+      || /<[^>]*\s(?:href|xlink:href)\s*=/i.test(a.svg)
+      || /javascript\s*:/i.test(a.svg)
+    ) {
+      e.push(`${at} (image-hotspot): "svg" must not contain scripts, foreignObject, event handlers, links or javascript: URIs.`);
+    }
     if (!arr(a.hotspots, 2, 10)) { e.push(`${at} (image-hotspot): "hotspots" must be 2–10 entries.`); return; }
     a.hotspots.forEach((h, i) => {
       if (!h || !str(h.label) || typeof h.x !== 'number' || typeof h.y !== 'number' || h.x < 0 || h.x > 100 || h.y < 0 || h.y > 100) {
