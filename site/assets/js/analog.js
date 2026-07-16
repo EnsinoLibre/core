@@ -264,17 +264,25 @@ const E = {
     });
     const best = [];
     let cur = a.startNode;
+    let everyChoiceExplicit = true; // false if any non-end node on the path lacked a marked isCorrect choice
     const nodesById = new Map(a.nodes.map((x) => [x.id, x]));
     for (let guard = 0; guard < a.nodes.length + 1; guard++) {
       const node = nodesById.get(cur);
       best.push(boxNo.get(cur));
       if (!node || node.isEnd) break;
+      if (!node.choices.some((c) => c.isCorrect === true)) everyChoiceExplicit = false;
       const pick = node.choices.find((c) => c.isCorrect) || node.choices[0];
       cur = pick.nextNode;
     }
+    // Only assert a "Best path" when every step was an explicit isCorrect choice —
+    // otherwise the fallback to choices[0] would print an arbitrary path as if it
+    // were the answer key (#52).
+    const key = everyChoiceExplicit
+      ? `${n}. Best path: box ${best.join(' → box ')}`
+      : `${n}. This scenario has no fully marked correct path (some choices are missing "isCorrect") — see the box-by-box choices above; no single path can be asserted as the answer.`;
     return {
       body: `**${n}.** ${a.instruction || 'Choose your path — start at box 1.'}\n\n${boxes.join('\n\n')}`,
-      key: `${n}. Best path: box ${best.join(' → box ')}`,
+      key,
     };
   },
   'lesson': (a, n) => {

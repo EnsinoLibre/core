@@ -508,6 +508,35 @@ test('crossword: printed grid carries every clue number, so the paper puzzle is 
   // Answer-key grid is unaffected — still letters/■ only.
   assert.ok(key.includes('S E A') || key.includes('S U N'), 'answer key grid still shows letters, not clue numbers');
 });
+test('scenario without isCorrect must not emit a false "Best path" claim (#52)', () => {
+  const a = {
+    type: 'scenario',
+    startNode: 's1',
+    nodes: [
+      { id: 's1', speaker: 'Guide', text: 'Pick one.', choices: [
+        { text: 'A', nextNode: 's2' }, { text: 'B', nextNode: 's2' },
+      ] },
+      { id: 's2', speaker: 'Guide', text: 'Done.', isEnd: true, endMessage: 'Bye.' },
+    ],
+  };
+  assert.deepEqual(validateActivity(a, 0), []);
+  const { key } = ANALOG_EMITTERS['scenario'](a, 1);
+  assert.ok(!/Best path/.test(key), 'no isCorrect choices anywhere — must not assert a best path');
+});
+test('scenario with a fully-marked isCorrect path still emits a confident "Best path" (#52)', () => {
+  const a = {
+    type: 'scenario',
+    startNode: 's1',
+    nodes: [
+      { id: 's1', speaker: 'Guide', text: 'Pick one.', choices: [
+        { text: 'A', nextNode: 's2', isCorrect: true }, { text: 'B', nextNode: 's2' },
+      ] },
+      { id: 's2', speaker: 'Guide', text: 'Done.', isEnd: true, endMessage: 'Bye.' },
+    ],
+  };
+  const { key } = ANALOG_EMITTERS['scenario'](a, 1);
+  assert.ok(/Best path/.test(key));
+});
 test('image-hotspot: analog emits the scene as a data-URI image with one marker per hotspot (#51)', () => {
   const a = {
     type: 'image-hotspot',
