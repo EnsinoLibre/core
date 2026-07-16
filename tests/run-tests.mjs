@@ -32,6 +32,9 @@ const { RENDERERS, buildWordSearch } = await import(
 const { ANALOG_EMITTERS, emitAnalog } = await import(
   new URL('../site/assets/js/analog.js', import.meta.url)
 );
+const { toMoodleXML } = await import(
+  new URL('../site/assets/js/exporters.js', import.meta.url)
+);
 
 let passed = 0;
 let failed = 0;
@@ -638,6 +641,54 @@ test('image-hotspot: analog emits the scene as a data-URI image with one marker 
   assert.equal(markerCount, a.hotspots.length, 'one marker per hotspot');
   const textCount = (svg.match(/<text /g) || []).length;
   assert.equal(textCount, a.hotspots.length, 'one number label per hotspot');
+});
+
+console.log('\n9b) Moodle XML exporter');
+
+const moodleWs = {
+  title: 'Moodle test', subject: 'Reading', audience: 'Year 6', language: 'en-GB',
+  sections: [{
+    title: 'Comprehension',
+    activities: [{
+      type: 'reading-comp',
+      passage: 'The sun is a star. It gives us light and heat.',
+      questions: [
+        { type: 'mcq', question: 'What is the sun?', options: ['A planet', 'A star', 'A moon'], answer: 1 },
+        { type: 'true-false', statement: 'The sun gives us light.', answer: true },
+        { type: 'gap-fill', text: 'The sun gives us {{light|heat}}.' },
+        { type: 'matching', prompt: 'Match the words to their meaning.', pairs: [{ left: 'sun', right: 'a star' }, { left: 'light', right: 'brightness' }] },
+      ],
+    }],
+  }],
+};
+
+test('toMoodleXML prepends the reading-comp passage for all four question kinds (#57)', () => {
+  assert.deepEqual(validateWorksheet(moodleWs), []);
+  const xml = toMoodleXML(moodleWs);
+  const passageNeedle = 'The sun is a star. It gives us light and heat.';
+  const blocks = xml.split('<question ').slice(1); // one chunk per <question> element
+  assert.equal(blocks.length, 4, 'expected 4 Moodle questions (mcq, tf, gap, matching)');
+  for (const [i, block] of blocks.entries()) {
+    assert.ok(block.includes(passageNeedle), `question ${i + 1} (${['mcq', 'tf', 'gap', 'matching'][i]}) is missing the passage`);
+  }
+});
+test('toMoodleXML never runs the passage text through gap substitution (#57)', () => {
+  const wsWithBraceyPassage = {
+    ...moodleWs,
+    sections: [{
+      title: 'Comprehension',
+      activities: [{
+        type: 'reading-comp',
+        passage: 'A passage that mentions {{not a real gap}} literally.',
+        questions: [{ type: 'gap-fill', text: 'The sun gives us {{light|heat}}.' }],
+      }],
+    }],
+  };
+  const xml = toMoodleXML(wsWithBraceyPassage);
+  // The passage's own "{{...}}" must survive untouched — only the question's
+  // own gap should become a cloze SHORTANSWER field.
+  assert.ok(xml.includes('{{not a real gap}}'), 'passage braces must not be substituted as a cloze gap');
+  assert.ok(xml.includes('{1:SHORTANSWER:=light~=heat}'), 'the real gap-fill answer must still become a cloze field');
 });
 
 console.log('\n10) Animation layer');

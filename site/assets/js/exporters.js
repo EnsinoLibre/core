@@ -105,11 +105,15 @@ function clozeAnswer(answers) {
   const esc = (a) => a.replace(/[\\{}~=#|]/g, (m) => '\\' + m);
   return answers.map((a, i) => (i === 0 ? '=' : '~=') + esc(a)).join('');
 }
-function gapXML(q, i, GAP_RE) {
+function gapXML(q, i, GAP_RE, passage) {
+  // Gap substitution runs on the question text ONLY — the passage (if any)
+  // is prepended afterwards so a literal "{{...}}" inside the passage prose
+  // is never mistaken for a cloze gap (#57).
   let body = q.text.replace(GAP_RE, (_, inner) => {
     const answers = inner.split('|').map((s) => s.trim()).filter(Boolean);
     return `{1:SHORTANSWER:${clozeAnswer(answers)}}`;
   });
+  if (passage) body = `Passage: ${passage}\n\n${body}`;
   return `  <question type="cloze">
     ${qName(q.text, i)}
     <questiontext format="html">${htmlText('<p>' + escapeHtml(body).replace(/\{1:SHORTANSWER:[^}]*\}/g, (m) => m) + '</p>')}</questiontext>
@@ -156,15 +160,17 @@ export function toMoodleXML(ws) {
   const GAP_RE = /\{\{([^{}]+)\}\}/g;
   const items = collectQuestions(ws);
   const body = items.map((it, i) => {
-    // For reading-comp questions, prepend the passage into the question text once handled per-item.
+    // For reading-comp questions, prepend the passage into the question text
+    // once handled per-item — all four question kinds carry the passage,
+    // not just mcq/tf (#57). gap-fill gets it via gapXML (see there for why).
     let q = it.q;
-    if (it.passage && (it.kind === 'mcq' || it.kind === 'tf')) {
-      const field = it.kind === 'tf' ? 'statement' : 'question';
+    if (it.passage && (it.kind === 'mcq' || it.kind === 'tf' || it.kind === 'match')) {
+      const field = it.kind === 'tf' ? 'statement' : it.kind === 'match' ? 'prompt' : 'question';
       q = { ...q, [field]: `Passage: ${it.passage}\n\n${q[field]}` };
     }
     if (it.kind === 'mcq') return mcqXML(q, i + 1);
     if (it.kind === 'tf') return tfXML(q, i + 1);
-    if (it.kind === 'gap') return gapXML(q, i + 1, GAP_RE);
+    if (it.kind === 'gap') return gapXML(q, i + 1, GAP_RE, it.passage);
     if (it.kind === 'match') return matchXML(q, i + 1);
     return '';
   }).filter(Boolean).join('\n');
