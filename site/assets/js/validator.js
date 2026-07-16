@@ -37,8 +37,6 @@ export function parseGaps(text) {
   return segments;
 }
 
-function hasGap(text) { GAP_RE.lastIndex = 0; const r = GAP_RE.test(text); GAP_RE.lastIndex = 0; return r; }
-
 /* ---------- per-question primitives (reused by set types) ---------- */
 
 function vMcqCore(a, at, e) {
@@ -52,9 +50,19 @@ function vTfCore(a, at, e) {
   if (!str(a.statement)) e.push(`${at}: missing "statement".`);
   if (typeof a.answer !== 'boolean') e.push(`${at}: "answer" must be true or false.`);
 }
+// CONTRACTS documents "1–5 gaps" — validator.js is the behavioural source of
+// truth (#59), so both bounds are enforced here (and mirrored in the schema
+// pattern below). More than 5 gaps makes a gap-fill slow to complete; unlike
+// the option-count/survey drifts in #59, more gaps is a real usability
+// problem, not just a documentation mismatch, so this is a hard cap.
+const GAP_FILL_MAX = 5;
 function vGapCore(a, at, e) {
-  if (!str(a.text)) e.push(`${at}: missing "text".`);
-  else if (!hasGap(a.text)) e.push(`${at}: "text" must contain at least one gap written as {{answer}}.`);
+  if (!str(a.text)) { e.push(`${at}: missing "text".`); return; }
+  const gapCount = parseGaps(a.text).filter((s) => s.kind === 'gap').length;
+  if (gapCount < 1) e.push(`${at}: "text" must contain at least one gap written as {{answer}}.`);
+  else if (gapCount > GAP_FILL_MAX) {
+    e.push(`${at}: "text" has ${gapCount} gaps — keep gap-fill activities to at most ${GAP_FILL_MAX} gaps so they stay quick to complete.`);
+  }
 }
 /**
  * Which of `words` can't be placed in a size×size grid — the IDENTICAL
@@ -165,6 +173,12 @@ const V = {
       if (!t || !str(t.label) || !str(t.sentence)) e.push(`${at} (tense-shift): tense ${i + 1} needs "label" and "sentence".`);
     });
   },
+  // #59: renderer.js's word-transform view never reads step.derived (it only
+  // builds morpheme tiles + the pos badge) — BUT analog.js's word-transform
+  // emitter uses step.derived as the headline word of the printed table
+  // (`| ${s.derived} | ${built} | ${s.pos} |`). Since the analog (print/PDF)
+  // path is a first-class output of every activity type, "derived" stays
+  // required rather than being dropped to match the renderer alone.
   'word-transform': (a, at, e) => {
     if (!str(a.baseWord)) e.push(`${at} (word-transform): missing "baseWord".`);
     if (!arr(a.steps, 2, 8)) { e.push(`${at} (word-transform): "steps" must be 2–8 entries.`); return; }

@@ -181,6 +181,14 @@ test('prompt embeds contracts only for chosen types', () => {
 test('buildPrompt throws on an invalid spec', () => {
   assert.throws(() => buildPrompt({ subject: 'x' }), /Invalid spec/);
 });
+test('CONTRACTS text agrees with validator/schema limits (#59)', () => {
+  // single-choice-set: vMcqCore allows 2–6 options; CONTRACTS used to say 2–3.
+  assert.ok(CONTRACTS['single-choice-set'].includes('2–6 options'));
+  // survey: validator/schema allow 1–8 items; CONTRACTS used to say "≤6 items".
+  assert.ok(CONTRACTS['survey'].includes('1–8 items'));
+  // gap-fill: validator now enforces the documented 1–5 gap cap.
+  assert.ok(CONTRACTS['gap-fill'].includes('1–5 gaps'));
+});
 
 console.log('\n4) Worksheet validator rejects bad input with readable messages');
 
@@ -209,6 +217,14 @@ test('rejects true-false with string answer', () => {
 });
 test('rejects gap-fill without gaps', () => {
   assert.ok(validateActivity({ type: 'gap-fill', text: 'no gaps here' }).length === 1);
+});
+test('gap-fill: rejects more than 5 gaps in validator AND schema (#59)', () => {
+  const many = { type: 'gap-fill', text: '{{a}} {{b}} {{c}} {{d}} {{e}} {{f}}' };
+  assert.ok(validateActivity(many).some((e) => /at most 5 gaps/.test(e)), 'validator must reject a 6-gap text');
+  assert.ok(!validateSchema(ws([many])), 'schema must reject a 6-gap text');
+  const five = { type: 'gap-fill', text: '{{a}} {{b}} {{c}} {{d}} {{e}}' };
+  assert.deepEqual(validateActivity(five), []);
+  assert.ok(validateSchema(ws([five])), JSON.stringify(validateSchema.errors));
 });
 test('validator is not stateful across gap-fill calls (regex lastIndex)', () => {
   const a = { type: 'gap-fill', text: 'a {{b}} c' };

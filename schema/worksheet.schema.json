@@ -55,7 +55,11 @@
       "type": "object",
       "required": ["text"],
       "properties": {
-        "text": { "type": "string", "pattern": "\\{\\{[^{}]+\\}\\}" },
+        "text": {
+          "type": "string",
+          "description": "Prose with 1–5 gaps written as {{answer}} (alternatives separated by |). More than 5 gaps is rejected.",
+          "pattern": "^(?!(?:[\\s\\S]*?\\{\\{[^{}]+\\}\\}){6})[\\s\\S]*\\{\\{[^{}]+\\}\\}[\\s\\S]*$"
+        },
         "hint": { "$ref": "#/$defs/hint" },
         "explanation": { "type": "string" }
       }

@@ -70,7 +70,7 @@ export const CONTRACTS = {
   'memory-game': `{ "type": "memory-game", "pairs": [ { "left": "...", "right": "..." } ] } — 3–8 pairs; texts 1–3 words; every "right" unique.`,
   'word-search': `{ "type": "word-search", "words": ["...", "..."], "gridSize": 12 } — 4–14 themed words, letters only, each shorter than gridSize.`,
   'quiz': `{ "type": "quiz", "questions": [ { "question": "...", "options": [...], "answer": <index>, "hint": "...", "explanation": "..." } ], "passMark": <integer ≈ 70% of questions> } — 2–12 questions.`,
-  'single-choice-set': `{ "type": "single-choice-set", "questions": [ { "question": "...", "options": [...], "answer": <index> } ] } — 3–12 short questions drilling ONE narrow pattern; 2–3 options each.`,
+  'single-choice-set': `{ "type": "single-choice-set", "questions": [ { "question": "...", "options": [...], "answer": <index> } ] } — 3–12 short questions drilling ONE narrow pattern; 2–6 options each.`,
   'question-set': `{ "type": "question-set", "questions": [ { "subtype": "mcq", "question": "...", "options": [...], "answer": <index> }, { "subtype": "true-false", "statement": "...", "answer": false }, { "subtype": "gap-fill", "text": "... {{answer}} ..." } ], "passMark": <integer> } — every item MUST carry "subtype"; alternate the subtypes.`,
   'mark-words': `{ "type": "mark-words", "instruction": "Underline every <criterion>", "text": "30–80 words of prose", "targets": ["word1", "word2"] } — every target must appear verbatim as a word in the text; the criterion must be unambiguous.`,
   'reading-comp': `{ "type": "reading-comp", "passage": "<the text>", "questions": [ ...objects of type mcq / true-false / gap-fill / matching, EACH with its "type" field... ] } — all questions answerable from the passage, ordered by where their evidence appears.`,
@@ -80,7 +80,7 @@ export const CONTRACTS = {
   'crossword': `{ "type": "crossword", "clues": { "across": [ { "number": 1, "clue": "...", "answer": "WORD", "row": 0, "col": 0 } ], "down": [...] } } — row/col are 0-based; CROSSING CELLS MUST SHARE THE SAME LETTER (check every intersection letter by letter before answering); answers letters-only.`,
   'image-hotspot': `{ "type": "image-hotspot", "instruction": "...", "svg": "<svg viewBox=\\"0 0 400 300\\" xmlns=\\"http://www.w3.org/2000/svg\\">...simple flat shapes, no scripts/links...</svg>", "hotspots": [ { "label": "...", "x": <0–100>, "y": <0–100>, "description": "optional" } ] } — draw a simple self-contained SVG scene; x/y are percentages matching where each labelled thing is in the SVG.`,
   'summary': `{ "type": "summary", "intro": "optional context", "statements": [ { "text": "...", "correct": true, "explanation": "..." } ] } — 4–12 statements, roughly half correct; incorrect ones are near-misses; the correct ones read in order must form a coherent summary.`,
-  'survey': `{ "type": "survey", "items": [ { "question": "...", "itemType": "scale", "scale": 5, "labels": ["low end", "high end"] }, { "question": "...", "itemType": "choice", "options": [...] }, { "question": "...", "itemType": "opentext" } ] } — ≤6 items, no right answers.`,
+  'survey': `{ "type": "survey", "items": [ { "question": "...", "itemType": "scale", "scale": 5, "labels": ["low end", "high end"] }, { "question": "...", "itemType": "choice", "options": [...] }, { "question": "...", "itemType": "opentext" } ] } — 1–8 items, no right answers.`,
   'poll': `{ "type": "poll", "question": "...", "options": [ { "text": "...", "followUp": "guidance shown for this choice" } ] } — 2–5 options, no wrong answers.`,
 };
 
