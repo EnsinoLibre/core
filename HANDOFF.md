@@ -58,7 +58,7 @@ core/
 │   └── dist/                  ← build output (gitignored)
 ├── docs/                      ← Obsidian markdown docs (served by docs.html; WORKING COPY — EnsinoLibre/docs is synced from here, not the other way round, see below)
 ├── schema/worksheet.schema.json
-├── tests/run-tests.mjs        ← 128 tests for the worksheet engine (node), incl. an MCP-copy drift check (§10)
+├── tests/run-tests.mjs        ← 150 tests for the worksheet engine (node), incl. an MCP-copy drift check (§10)
 ├── server.mjs                 ← tiny static dev server (serves directory indexes)
 └── netlify.toml
 ```
@@ -99,7 +99,12 @@ NPM  = C:\Users\User\Documents\Claude\english-with-sara-pwa\.runtime\npm.cmd
 - **Platform dev:** `cd platform && <NPM> run dev` (Vite, port 4180).
 - **Platform build:** `cd platform && <NPM> run build`, then copy `platform/dist`
   → `core/site/app` (both gitignored; the deploy ships them from disk).
-- **Worksheet engine tests:** `node core/tests/run-tests.mjs` (should be 121/0).
+- **Platform tests:** `cd platform && <NPM> run test` (Vitest + jsdom + Testing
+  Library — `store.js` hydrate/optimistic-write/error-surfacing,
+  `graph.js` edge derivation, `vault.js` export shape, `agentkeys.ts` key
+  lifecycle; see #44). Supabase is mocked (`src/test/fakeSupabase.ts`), so
+  these run offline and don't touch the real project.
+- **Worksheet engine tests:** `node core/tests/run-tests.mjs` (should be 150/0).
 
 ---
 
@@ -111,12 +116,13 @@ under `/site/...` (landing at `/site/index.html`, platform at `/site/app/`,
 student at `/site/aula.html`).
 
 **CI gate:** `.github/workflows/ci.yml` runs on every push/PR to `main` — the
-worksheet-engine test suite (`npm test`, 128 tests) and the platform's
-`typecheck` + `vite build`, on GitHub's own Ubuntu runners with a real `npm`
-(no `<NPM>`/`<NETLIFY>` runtime-path workarounds needed there — those are
-only for this Windows dev box). It does **not** deploy: that needs a
-`NETLIFY_AUTH_TOKEN`/`NETLIFY_SITE_ID` repo secret nobody has added yet, so
-CI is a build/test gate only, not an auto-deploy pipeline. Deploy is still
+worksheet-engine test suite (`npm test`, 150 tests), the platform's
+`typecheck` + `vitest run` (25 tests, #44) + `vite build`, on GitHub's own
+Ubuntu runners with a real `npm` (no `<NPM>`/`<NETLIFY>` runtime-path
+workarounds needed there — those are only for this Windows dev box). It does
+**not** deploy: that needs a `NETLIFY_AUTH_TOKEN`/`NETLIFY_SITE_ID` repo
+secret nobody has added yet, so CI is a build/test gate only, not an
+auto-deploy pipeline. Deploy is still
 one of the two paths below.
 
 **Manual deploy:**

@@ -28,7 +28,7 @@ jobs:
       - run: npm test
 
   platform-build:
-    name: Platform typecheck + build
+    name: Platform typecheck, tests + build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -40,6 +40,8 @@ jobs:
       - run: npm ci
         working-directory: platform
       - run: npm run typecheck
+        working-directory: platform
+      - run: npm test
         working-directory: platform
       - run: npm run build
         working-directory: platform
