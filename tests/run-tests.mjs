@@ -212,6 +212,19 @@ test('rejects unknown activity type', () => {
 test('rejects mcq with out-of-range answer', () => {
   assert.ok(validateWorksheet(ws([{ ...validMcq, answer: 5 }])).length === 1);
 });
+test('rejects mcq with duplicate options in validator AND schema (#60)', () => {
+  // Case/whitespace-only duplicates are indistinguishable to a learner —
+  // validator.js catches these via trim+lowercase; plain JSON Schema
+  // uniqueItems can only catch byte-identical duplicates, so it's checked
+  // separately with an exact-duplicate case.
+  const caseDupe = { type: 'mcq', question: 'Capital of France?', options: ['Paris', ' paris ', 'Rome'], answer: 0 };
+  assert.ok(validateActivity(caseDupe).some((e) => /unique/.test(e)), 'validator must reject case/whitespace-only duplicate options');
+  const exactDupe = { type: 'mcq', question: 'Capital of France?', options: ['Paris', 'Paris', 'Rome'], answer: 0 };
+  assert.ok(validateActivity(exactDupe).some((e) => /unique/.test(e)), 'validator must reject exact-duplicate options');
+  assert.ok(!validateSchema(ws([exactDupe])), 'schema must reject exact-duplicate options via uniqueItems');
+  const unique = { type: 'mcq', question: 'Capital of France?', options: ['Paris', 'Rome', 'Berlin'], answer: 0 };
+  assert.deepEqual(validateActivity(unique), []);
+});
 test('rejects true-false with string answer', () => {
   assert.ok(validateActivity({ type: 'true-false', statement: 's', answer: 'true' }).length === 1);
 });

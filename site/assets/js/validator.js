@@ -42,6 +42,20 @@ export function parseGaps(text) {
 function vMcqCore(a, at, e) {
   if (!str(a.question)) e.push(`${at}: missing "question".`);
   if (!arr(a.options, 2, 6) || !a.options.every(str)) e.push(`${at}: "options" must be 2–6 non-empty strings.`);
+  else {
+    // #60: two options that only differ by case/whitespace are visually
+    // identical to a learner, so picking either the correct index or its
+    // look-alike would be indistinguishable — matching already enforces
+    // unique "right" values, MCQ-shaped types need the same guarantee.
+    const seen = new Set();
+    const dupes = new Set();
+    for (const o of a.options) {
+      const key = o.trim().toLowerCase();
+      if (seen.has(key)) dupes.add(o.trim());
+      seen.add(key);
+    }
+    if (dupes.size) e.push(`${at}: "options" has duplicate option(s) (${[...dupes].join(', ')}) — every option must be unique.`);
+  }
   if (!int(a.answer, 0) || (Array.isArray(a.options) && a.answer >= a.options.length)) {
     e.push(`${at}: "answer" must be the zero-based index of the correct option.`);
   }

@@ -35,7 +35,11 @@
       "required": ["question", "options", "answer"],
       "properties": {
         "question": { "$ref": "#/$defs/nonEmpty" },
-        "options": { "type": "array", "minItems": 2, "maxItems": 6, "items": { "$ref": "#/$defs/nonEmpty" } },
+        "options": {
+          "type": "array", "minItems": 2, "maxItems": 6, "items": { "$ref": "#/$defs/nonEmpty" },
+          "uniqueItems": true,
+          "description": "Every option must be unique (validator.js also rejects options that only differ by case/whitespace — see #60)."
+        },
         "answer": { "type": "integer", "minimum": 0 },
         "hint": { "$ref": "#/$defs/hint" },
         "explanation": { "type": "string" }
