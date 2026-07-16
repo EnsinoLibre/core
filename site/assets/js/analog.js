@@ -172,13 +172,16 @@ const E = {
   'translation-compare': (a, n) => ({
     body: a.pairs.map((p) => {
       const marks = p.links.map((l, i) => i + 1);
+      // A source/target token can participate in more than one link — use
+      // filter (not findIndex) so every mark for that token is printed,
+      // not just the first (#58).
       const src = p.sourceTokens.map((t, i) => {
-        const li = p.links.findIndex((l) => l.s === i);
-        return li >= 0 ? `${t}⁽${marks[li]}⁾` : t;
+        const nums = p.links.map((l, li) => (l.s === i ? marks[li] : null)).filter((x) => x != null);
+        return nums.length ? `${t}⁽${nums.join(',')}⁾` : t;
       }).join(' ');
       const tgt = p.targetTokens.map((t, i) => {
-        const li = p.links.findIndex((l) => l.t === i);
-        return li >= 0 ? `${t}⁽${marks[li]}⁾` : t;
+        const nums = p.links.map((l, li) => (l.t === i ? marks[li] : null)).filter((x) => x != null);
+        return nums.length ? `${t}⁽${nums.join(',')}⁾` : t;
       }).join(' ');
       const notes = p.links.filter((l) => l.note).map((l) => `> ⁽${marks[p.links.indexOf(l)]}⁾ ${l.note}`).join('\n');
       return `${p.headline ? `**${p.headline}**\n\n` : ''}> ${src}\n> ${tgt}${notes ? `\n${notes}` : ''}`;

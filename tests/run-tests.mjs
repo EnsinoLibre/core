@@ -521,6 +521,25 @@ test('crossword: printed grid carries every clue number, so the paper puzzle is 
   // Answer-key grid is unaffected — still letters/■ only.
   assert.ok(key.includes('S E A') || key.includes('S U N'), 'answer key grid still shows letters, not clue numbers');
 });
+test('translation-compare: a token in multiple links keeps every superscript mark (#58)', () => {
+  const a = {
+    type: 'translation-compare',
+    pairs: [{
+      sourceTokens: ['the', 'big', 'dog'],
+      targetTokens: ['o', 'cão', 'grande'],
+      links: [
+        { s: 2, t: 1 }, // dog -> cão  (mark 1)
+        { s: 1, t: 2 }, // big -> grande (mark 2)
+        { s: 2, t: 2, note: 'word order differs' }, // dog also aligns to grande (mark 3)
+      ],
+    }],
+  };
+  assert.deepEqual(validateActivity(a, 0), []);
+  const { body } = ANALOG_EMITTERS['translation-compare'](a, 1);
+  // "dog" participates in links 1 and 3 — both marks must survive.
+  assert.ok(body.includes('dog⁽1,3⁾'), `expected both marks on "dog", got: ${body}`);
+  assert.ok(body.includes('grande⁽2,3⁾'), `expected both marks on "grande", got: ${body}`);
+});
 test('emitAnalog escapes hostile YAML frontmatter values (#56)', () => {
   const hostileWs = {
     title: 'Fractions: a "first" look\nwith a newline and a \\backslash',
