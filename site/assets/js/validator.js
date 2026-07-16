@@ -382,6 +382,19 @@ const V = {
       n.choices.forEach((c, j) => {
         if (!c || !str(c.text) || !str(c.nextNode)) e.push(`${nt}: choice ${j + 1} needs "text" and "nextNode".`);
         else if (!ids.has(c.nextNode)) e.push(`${nt}: choice ${j + 1} points to unknown node "${c.nextNode}".`);
+        // #52 (validator half — analog.js half handles the "Best path" claim
+        // itself): isCorrect is optional (plenty of scenarios are open-ended
+        // conversation practice with no single right route), but if present
+        // it must be a real boolean — a truthy string like "true" would
+        // silently be picked up by analog.js's `.find(c => c.isCorrect)`.
+        // Not requiring at least one isCorrect per node is a deliberate
+        // choice: analog.js already degrades gracefully (prints a neutral
+        // "no fully marked correct path" note) when none is marked, so
+        // forcing every author to mark one would reject a lot of previously
+        // valid, intentionally-open scenarios for no behavioural gain.
+        if (c && c.isCorrect != null && typeof c.isCorrect !== 'boolean') {
+          e.push(`${nt}: choice ${j + 1} — "isCorrect" must be true or false (a truthy string like "true" would be silently treated as correct).`);
+        }
       });
     });
     if (!endSeen) e.push(`${at} (scenario): at least one node must have "isEnd": true.`);

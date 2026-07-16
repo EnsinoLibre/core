@@ -383,6 +383,25 @@ test('scenario: rejects a choice pointing at a missing node', () => {
   ] };
   assert.ok(validateActivity(a).some((e) => e.includes('ghost')));
 });
+test('scenario: rejects a non-boolean isCorrect, accepts a boolean one or none at all (#52)', () => {
+  const badType = { type: 'scenario', startNode: 'n1', nodes: [
+    { id: 'n1', speaker: 'W', text: 't', choices: [{ text: 'x', nextNode: 'end', isCorrect: 'true' }] },
+    { id: 'end', speaker: 'W', text: 't', isEnd: true },
+  ] };
+  assert.ok(validateActivity(badType).some((e) => /isCorrect.*must be true or false/.test(e)), JSON.stringify(validateActivity(badType)));
+  const withBoolean = { type: 'scenario', startNode: 'n1', nodes: [
+    { id: 'n1', speaker: 'W', text: 't', choices: [{ text: 'x', nextNode: 'end', isCorrect: true }] },
+    { id: 'end', speaker: 'W', text: 't', isEnd: true },
+  ] };
+  assert.deepEqual(validateActivity(withBoolean), []);
+  // Omitting isCorrect entirely is fine — analog.js degrades gracefully
+  // (no false "Best path" claim), so the validator doesn't force it (#52).
+  const withoutIsCorrect = { type: 'scenario', startNode: 'n1', nodes: [
+    { id: 'n1', speaker: 'W', text: 't', choices: [{ text: 'x', nextNode: 'end' }] },
+    { id: 'end', speaker: 'W', text: 't', isEnd: true },
+  ] };
+  assert.deepEqual(validateActivity(withoutIsCorrect), []);
+});
 test('scenario: requires an end node', () => {
   const a = { type: 'scenario', startNode: 'n1', nodes: [
     { id: 'n1', speaker: 'W', text: 't', choices: [{ text: 'x', nextNode: 'n2' }] },
