@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { store } from '../lib/api';
 import { RelationPicker, type RelationOption } from './bits';
 
-function ModalShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+export function ModalShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <motion.div className="app-modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
       <motion.div className="app-modal" onClick={(e) => e.stopPropagation()}

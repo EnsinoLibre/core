@@ -1,7 +1,22 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { CopyButton } from './SeedKB';
+import { ModalShell } from './AddEntity';
 import { listAgentKeys, createAgentKey, revokeAgentKey, connectionSnippets, MCP_ENDPOINT, type AgentKey } from '../lib/agentkeys';
+
+/** Relative time for a key's last-used timestamp — unlike the graph's timeAgo
+ * (which only needs to cover the last few minutes of live activity), a key
+ * can go unused for days, so this covers the full range down to "never". */
+function relativeTime(iso: string) {
+  const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 5) return 'just now';
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.round(s / 60)}m ago`;
+  if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+  return `${Math.round(s / 86400)}d ago`;
+}
+
+const KEY_LIST_REFRESH_MS = 15_000;
 
 /**
  * Agent-key management + connection snippets, shared by every "Connect via
@@ -26,6 +41,7 @@ export function McpConnectTab({ intro, tools, checkLabel, onCheck, skillHint }: 
   const [error, setError] = useState('');
   const [checking, setChecking] = useState(false);
   const [checkResult, setCheckResult] = useState<string | null>(null);
+  const [revoking, setRevoking] = useState<AgentKey | null>(null);
 
   const refresh = async () => {
     try {
@@ -34,7 +50,11 @@ export function McpConnectTab({ intro, tools, checkLabel, onCheck, skillHint }: 
     } catch (e: any) { setError(e.message); }
     setLoading(false);
   };
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => {
+    refresh();
+    const id = setInterval(refresh, KEY_LIST_REFRESH_MS);
+    return () => clearInterval(id);
+  }, []);
 
   const create = async () => {
     setError('');
@@ -50,6 +70,7 @@ export function McpConnectTab({ intro, tools, checkLabel, onCheck, skillHint }: 
     setChecking(true); setCheckResult(null);
     try { setCheckResult(await onCheck()); }
     catch (e: any) { setCheckResult('Refresh failed: ' + e.message); }
+    refresh();
     setChecking(false);
   };
 
@@ -78,9 +99,9 @@ export function McpConnectTab({ intro, tools, checkLabel, onCheck, skillHint }: 
                 return (
                   <li key={k.id}>
                     <span className="app-seed-file-name">🔑 {k.label}{expired && <span className="app-seed-error" style={{ marginLeft: 6 }}>(expired)</span>}</span>
-                    <span className="app-muted">{k.lastUsedAt ? 'used ' + new Date(k.lastUsedAt).toLocaleDateString() : 'never used'} · {expiryLabel}</span>
+                    <span className="app-muted">{k.lastUsedAt ? 'used ' + relativeTime(k.lastUsedAt) : 'never used'} · {expiryLabel}</span>
                     <button className="app-icon-btn" title="Revoke" aria-label={`Revoke ${k.label}`}
-                      onClick={() => { if (confirm(`Revoke "${k.label}"? Agents using it lose access.`)) revokeAgentKey(k.id).then(refresh); }}>✕</button>
+                      onClick={() => setRevoking(k)}>✕</button>
                   </li>
                 );
               })}
@@ -135,6 +156,20 @@ export function McpConnectTab({ intro, tools, checkLabel, onCheck, skillHint }: 
         <button className="el-button el-button--ghost" onClick={runCheck} disabled={checking}>{checking ? 'Checking…' : checkLabel}</button>
         {checkResult && <span className="app-muted">{checkResult}</span>}
       </div>
+
+      {revoking && (
+        <ModalShell title="Revoke agent key" onClose={() => setRevoking(null)}>
+          <p className="app-muted">
+            Revoke <strong>"{revoking.label}"</strong>? Any agent using this key loses access
+            immediately — it gets an "unauthorized" error on its next call and needs a new key to
+            reconnect. This can't be undone.
+          </p>
+          <div className="app-form-actions">
+            <button className="el-button el-button--ghost" onClick={() => setRevoking(null)}>Cancel</button>
+            <button className="el-button" onClick={() => { revokeAgentKey(revoking.id).then(refresh); setRevoking(null); }}>Revoke</button>
+          </div>
+        </ModalShell>
+      )}
     </div>
   );
 }

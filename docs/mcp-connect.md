@@ -70,7 +70,7 @@ The read/write loop this enables: `search_resources` to find the relevant note(s
 ## Connecting
 
 1. In the teacher platform, open **Worksheets → + Create worksheet → Connect via MCP**.
-2. Generate an **agent key** (`elk_…`). It is shown once — EnsinoLibre stores only its hash. Revoke it any time.
+2. Generate an **agent key** (`elk_…`). It is shown once — EnsinoLibre stores only its hash. Revoke it any time from the same key list (a confirm step protects against an accidental click).
 3. Point your client at the endpoint with the key as a bearer token. For Claude Code:
 
 ```
@@ -88,6 +88,7 @@ Other clients take the equivalent JSON config (shown in the app when you generat
 - Worksheets are validated with the same validator the platform uses before anything is written.
 - **Keys expire.** Pick 30 days, 90 days (default), 1 year, or never when you generate one — a leaked key isn't valid forever. An expired key gets a distinct "expired, generate a new one" error rather than a generic unauthorized, and shows as expired in your key list until you revoke or replace it.
 - **Rate limited** to 60 requests/minute per key, so a leaked or misbehaving key can't hammer your workspace unbounded — past that it gets a 429 until the window clears.
+- **What a revoked or expired agent sees.** The very next call after a key is revoked (or past its expiry) gets a `401` with a `WWW-Authenticate` header and a plain-language message telling it the key is no longer valid — not a silent failure or a generic error. There's no grace period and no way to un-revoke: reconnecting means generating a fresh key and pointing the client at it again.
 
 ## Trust, audit trail & undo
 
