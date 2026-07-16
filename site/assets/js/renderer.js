@@ -319,6 +319,9 @@ R['ordering'] = (a, index) => {
   if (order.join(' ') === a.items.join(' ')) order = [order[1], order[0], ...order.slice(2)];
   const list = el('ol', 'oc-order');
   let busy = false;
+  // The new position after ↑/↓ was silent to assistive tech — announce it (#68).
+  const status = el('p', 'oc-word-count');
+  status.setAttribute('aria-live', 'polite');
   function draw() {
     list.textContent = '';
     order.forEach((item, i) => {
@@ -329,12 +332,12 @@ R['ordering'] = (a, index) => {
       up.type = 'button';
       up.disabled = busy || i === 0;
       up.setAttribute('aria-label', `move "${item}" up`);
-      up.addEventListener('click', () => swap(i - 1, i));
+      up.addEventListener('click', () => swap(i - 1, i, item));
       const down = el('button', 'oc-btn oc-btn--mini', '↓');
       down.type = 'button';
       down.disabled = busy || i === order.length - 1;
       down.setAttribute('aria-label', `move "${item}" down`);
-      down.addEventListener('click', () => swap(i, i + 1));
+      down.addEventListener('click', () => swap(i, i + 1, item));
       controls.appendChild(up);
       controls.appendChild(down);
       li.appendChild(controls);
@@ -346,7 +349,7 @@ R['ordering'] = (a, index) => {
   // position back to identity. Buttons are disabled for the swap's duration
   // so state and DOM can't race further clicks; reduced motion / no
   // `animate` resolves instantly via anim.js's canAnimate no-op.
-  async function swap(i, j) {
+  async function swap(i, j, movedItem) {
     if (busy || i < 0 || j >= order.length) return;
     const lis = [...list.children];
     const liA = lis[i];
@@ -362,10 +365,13 @@ R['ordering'] = (a, index) => {
     } finally {
       busy = false;
       draw();
+      const newIndex = order.indexOf(movedItem);
+      status.textContent = `Moved to position ${newIndex + 1} of ${order.length}`;
     }
   }
   draw();
   card.appendChild(list);
+  card.appendChild(status);
   const fb = makeFeedback(card, a, () => a.items.join(' → '));
   card.appendChild(checkButton(() => { order.join(' ') === a.items.join(' ') ? fb.correct() : fb.wrong(); }));
   return card;
@@ -762,6 +768,7 @@ R['flashdeck'] = (a, index) => {
   let busy = false;
   const face = el('button', 'oc-flashcard');
   face.type = 'button';
+  face.setAttribute('aria-live', 'polite'); // the face swap mid-flip was silent (#68)
   const counter = el('p', 'oc-word-count');
   async function doFlip(mutate) {
     // Serialise flips: a click landing mid-animation used to desync showBack
@@ -779,9 +786,11 @@ R['flashdeck'] = (a, index) => {
       face.appendChild(el('span', 'oc-flash-front', c.front));
       if (c.pronunciation) face.appendChild(el('span', 'oc-bubble-gloss', `/${c.pronunciation}/`));
       face.appendChild(el('span', 'oc-word-count', 'tap to flip'));
+      face.setAttribute('aria-label', `front: ${c.front}`);
     } else {
       face.appendChild(el('span', 'oc-flash-front', c.back));
       if (c.example) face.appendChild(el('span', 'oc-bubble-gloss', c.example));
+      face.setAttribute('aria-label', `back: ${c.back}`);
     }
     counter.textContent = `Card ${current + 1} of ${a.cards.length}`;
   }
@@ -958,6 +967,11 @@ R['word-search'] = (a, index) => {
   const placedWords = placed.map((p) => p.word);
   const listEl = el('p', 'oc-word-count', 'Find: ' + placedWords.join(', '));
   card.appendChild(listEl);
+  // The two-tap selection model is invisible to assistive tech — announce
+  // each step (#68): which letter was picked as the start, and the result
+  // of completing a selection.
+  const status = el('p', 'oc-feedback');
+  status.setAttribute('aria-live', 'polite');
   const found = new Set();
   let start = null;
   function cellAt(r, c) { return cells[r * size + c]; }
@@ -967,6 +981,7 @@ R['word-search'] = (a, index) => {
     if (!start) {
       start = cell;
       cell.classList.add('oc-ws-cell--sel');
+      status.textContent = `Start letter selected: ${cell.textContent}, row ${+cell.dataset.r + 1} column ${+cell.dataset.c + 1}`;
       return;
     }
     const r0 = +start.dataset.r; const c0 = +start.dataset.c;
@@ -975,7 +990,7 @@ R['word-search'] = (a, index) => {
     start = null;
     const dr = Math.sign(r1 - r0); const dc = Math.sign(c1 - c0);
     const len = Math.max(Math.abs(r1 - r0), Math.abs(c1 - c0)) + 1;
-    if (!(dr === 0 || dc === 0 || Math.abs(r1 - r0) === Math.abs(c1 - c0))) return;
+    if (!(dr === 0 || dc === 0 || Math.abs(r1 - r0) === Math.abs(c1 - c0))) { status.textContent = 'Not a straight line — try again.'; return; }
     let word = '';
     const lineCells = [];
     for (let i = 0; i < len; i++) {
@@ -993,10 +1008,14 @@ R['word-search'] = (a, index) => {
       lineCells.forEach((lc) => lc.classList.add('oc-ws-cell--found'));
       popTiles(lineCells); // pulse the found word (#16)
       listEl.textContent = 'Find: ' + placedWords.filter((w) => !found.has(w)).join(', ');
-      if (found.size === placed.length) listEl.textContent = 'All words found! 🎉';
+      status.textContent = `Found: ${hit.word}`;
+      if (found.size === placed.length) { listEl.textContent = 'All words found! 🎉'; status.textContent = 'All words found!'; }
+    } else {
+      status.textContent = 'No word there — try again.';
     }
   });
   card.appendChild(el('p', 'oc-word-count', 'Tap the first letter of a word, then its last letter.'));
+  card.appendChild(status);
   return card;
 };
 
