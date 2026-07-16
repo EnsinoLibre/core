@@ -56,7 +56,7 @@ core/
 │   │   └── styles/            ← index.css, tokens.css, primitives/, app.css, graph.css
 │   ├── package.json, vite.config.ts, tsconfig.json, index.html
 │   └── dist/                  ← build output (gitignored)
-├── docs/                      ← Obsidian markdown docs (served by docs.html; mirror of EnsinoLibre/docs)
+├── docs/                      ← Obsidian markdown docs (served by docs.html; WORKING COPY — EnsinoLibre/docs is synced from here, not the other way round, see below)
 ├── schema/worksheet.schema.json
 ├── tests/run-tests.mjs        ← 128 tests for the worksheet engine (node), incl. an MCP-copy drift check (§10)
 ├── server.mjs                 ← tiny static dev server (serves directory indexes)
@@ -73,6 +73,15 @@ core/
   shadow were dead (zero importers, superseded once the teacher platform
   moved off localStorage) and were deleted in #32 — there is no site-side
   copy left to keep in sync.
+- **`core/docs/` vs. the sibling [`EnsinoLibre/docs`](https://github.com/EnsinoLibre/docs)
+  repo** — `core/docs` is the working copy (edits land here first, `docs.html`
+  serves it live). The sibling repo had drifted 11 pages behind — the entire
+  teacher-platform surface — and three more pages had stale content even
+  where they existed (#41, fixed 2026‑07‑16). There is no automated sync yet
+  (would need a cross-repo push token as a `core` CI secret, same blocker as
+  #43's deploy automation); until then, syncing `core/docs/*` →
+  `EnsinoLibre/docs` after a docs change is a manual step — don't let it drift
+  again.
 
 ---
 

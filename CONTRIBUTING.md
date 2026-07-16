@@ -23,7 +23,7 @@ There's no build step — the app is plain HTML, CSS and ES modules. There's no 
 ## Before opening a PR
 
 - Run `npm test` and make sure all tests pass. The suite cross-checks that the validator, renderer, analog emitter, prompt contracts, JSON Schema and docs all cover the same set of activity types — so adding a type touches all of them by design.
-- Adding or changing an activity type? Update its page in [docs](https://github.com/EnsinoLibre/docs) with a live example, and mirror the contract in [blocks](https://github.com/EnsinoLibre/blocks).
+- Adding or changing an activity type? Update its page under [`docs/activities/`](docs/activities/) — this repo's `docs/` is the working copy ([EnsinoLibre/docs](https://github.com/EnsinoLibre/docs) is synced from it periodically, manually as of 2026-07; see [HANDOFF.md](HANDOFF.md) §2) — with a live example, and mirror the contract in [blocks](https://github.com/EnsinoLibre/blocks).
 
 ## Get help
 
