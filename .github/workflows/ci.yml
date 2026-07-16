@@ -1,0 +1,45 @@
+name: CI
+
+# Build + test gate (issue #43). Every push and PR against main must pass the
+# worksheet-engine test suite, the platform's typecheck, and a real Vite
+# build before anything is trusted to ship — closing the "no automated check
+# that the build even succeeds" gap. Deploy stays on Netlify's own git
+# integration / manual CLI flow (see HANDOFF.md §4); wiring an actual deploy
+# step in here needs a NETLIFY_AUTH_TOKEN / NETLIFY_SITE_ID repo secret that
+# nobody has added yet.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  engine-tests:
+    name: Worksheet engine tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm test
+
+  platform-build:
+    name: Platform typecheck + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: platform/package-lock.json
+      - run: npm ci
+        working-directory: platform
+      - run: npm run typecheck
+        working-directory: platform
+      - run: npm run build
+        working-directory: platform
