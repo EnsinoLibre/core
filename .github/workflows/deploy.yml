@@ -1,0 +1,102 @@
+name: Deploy to Netlify (manual)
+
+# Production deploy for issue #43, deliberately MANUAL-ONLY.
+#
+# Why manual: CI (ci.yml) already gates every push on tests + typecheck +
+# build, but nothing here has ever run a real deploy end to end. Until someone
+# has watched a first green run, an automatic deploy-on-push would be shipping
+# to production through an unverified pipeline. This workflow therefore only
+# runs from the Actions tab ("Run workflow"), and only when you type `deploy`
+# into the confirmation box.
+#
+# It also sidesteps the open question in HANDOFF.md §4 — whether the Netlify
+# site's own git integration is already deploying on push. A manual CLI deploy
+# can't collide with that the way a second push-triggered pipeline would.
+#
+# To switch to automatic deploys LATER (only after a verified manual run, and
+# after confirming the Netlify dashboard git integration is OFF), add:
+#
+#   workflow_run:
+#     workflows: [CI]
+#     types: [completed]
+#     branches: [main]
+#
+# and gate the job on `github.event.workflow_run.conclusion == 'success'`.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   NETLIFY_AUTH_TOKEN  — a Netlify personal access token
+#   NETLIFY_SITE_ID     — d0da070a-0639-404e-9f7a-2b9fa62ff370
+# Optional repo variable:
+#   DEPLOY_URL          — public origin to smoke-check (defaults to the live site)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "deploy" to confirm a PRODUCTION deploy'
+        required: true
+        default: ''
+
+# Never let two production deploys overlap.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build, deploy, smoke-check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Preflight — confirmation and secrets
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        run: |
+          if [ "$CONFIRM" != "deploy" ]; then
+            echo "::error::Confirmation failed. Re-run and type exactly: deploy"
+            exit 1
+          fi
+          if [ -z "$NETLIFY_AUTH_TOKEN" ] || [ -z "$NETLIFY_SITE_ID" ]; then
+            echo "::error::Missing NETLIFY_AUTH_TOKEN and/or NETLIFY_SITE_ID repo secret — see the header of this workflow."
+            exit 1
+          fi
+          echo "Preflight OK."
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      # Re-run the same gates as CI: never deploy something that isn't green.
+      - name: Worksheet engine tests
+        run: |
+          npm ci
+          npm test
+
+      - name: Platform typecheck, tests + build
+        working-directory: platform
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run build
+
+      # Copy platform/dist -> site/app (the path the published site serves).
+      - name: Sync built platform into site/app
+        run: node scripts/sync-app.mjs
+
+      - name: Deploy to Netlify
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        run: npx --yes netlify-cli@17 deploy --prod --dir . --site "$NETLIFY_SITE_ID"
+
+      # Prove the deploy actually went live: routes resolve AND the deployed
+      # app references the exact hashed bundle we just built (cache-busted).
+      - name: Smoke-check the deployed site
+        env:
+          DEPLOY_URL: ${{ vars.DEPLOY_URL || 'https://ensinolibre-app.netlify.app' }}
+        run: node scripts/smoke-check.mjs --base "$DEPLOY_URL" --verify-fresh
