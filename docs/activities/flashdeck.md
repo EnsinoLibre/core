@@ -9,6 +9,9 @@ analog-strategy: transform
 
 A flip-card vocabulary deck: target word on the front, meaning on the back, with optional pronunciation, example and emoji. Built-in read-aloud speaks the **word only**.
 
+> [!note] Read-aloud appears only when the device can do it well
+> The 🔊 button uses the browser's own speech engine — nothing is downloaded. EnsinoLibre picks the best voice installed for the worksheet's `language` and **hides the button when the device has no voice for that language**. Voice availability varies by device and operating system, so treat read-aloud as an enhancement, not something an activity depends on.
+
 | Field | Type | Required |
 |-------|------|----------|
 | `type` | `"flashdeck"` | **yes** |

@@ -27,7 +27,7 @@ const { buildPrompt, validateSpec, ACTIVITY_TYPES, CONTRACTS } = await import(
 const { validateWorksheet, validateActivity, parseGaps, KNOWN_TYPES } = await import(
   new URL('../site/assets/js/validator.js', import.meta.url)
 );
-const { RENDERERS, buildWordSearch, renderWorksheet } = await import(
+const { RENDERERS, buildWordSearch, renderWorksheet, pickVoice } = await import(
   new URL('../site/assets/js/renderer.js', import.meta.url)
 );
 const { ANALOG_EMITTERS, emitAnalog } = await import(
@@ -946,6 +946,76 @@ await test('every RENDERERS[type] can be invoked directly and returns an element
       const node = RENDERERS[type](activity, i);
       assert.ok(node instanceof dom.window.HTMLElement, `RENDERERS.${type} must return an HTMLElement`);
     }, `RENDERERS.${type} threw`);
+  }
+});
+
+// NOTE: this must run BEFORE the ranking test below. renderer.js caches the
+// last non-empty voice list (so buttons don't flicker away if getVoices()
+// transiently empties), and the ranking test populates that cache.
+await test('read-aloud: no usable voice means no visible button (#2)', async () => {
+  // The jsdom setup stubs speechSynthesis with an EMPTY voice list — exactly
+  // the "speech API exists but this device has no voice for the worksheet's
+  // language" case, which must degrade to no offered button rather than a
+  // button that stays silent when tapped.
+  assert.deepEqual(window.speechSynthesis.getVoices(), [], 'precondition: stub exposes no voices');
+  assert.equal(pickVoice('en-GB'), null, 'no voices means no pick');
+
+  const dialogue = {
+    type: 'dialogue', speakerA: 'Ana', speakerB: 'Bea',
+    lines: [{ speaker: 'a', text: 'Ola' }, { speaker: 'b', text: 'Oi' }],
+  };
+  const flashdeck = {
+    type: 'flashdeck',
+    cards: [{ front: 'gato', back: 'cat' }, { front: 'cao', back: 'dog' }, { front: 'ave', back: 'bird' }],
+  };
+  for (const [label, activity] of [['dialogue', dialogue], ['flashdeck', flashdeck]]) {
+    const node = RENDERERS[activity.type](activity, 1);
+    assert.ok(node instanceof dom.window.HTMLElement, `${label} must still render`);
+    for (const btn of node.querySelectorAll('.oc-tts')) {
+      assert.ok(btn.hidden, `${label}: read-aloud button must be hidden when no voice exists`);
+    }
+  }
+
+  // And with no speech API at all, no button is even constructed.
+  const saved = dom.window.speechSynthesis;
+  delete dom.window.speechSynthesis;
+  try {
+    const node = RENDERERS.dialogue(dialogue, 1);
+    assert.equal(node.querySelectorAll('.oc-tts').length, 0, 'no speech support must render no read-aloud button');
+  } finally {
+    dom.window.speechSynthesis = saved;
+  }
+});
+
+await test('read-aloud: pickVoice picks the best available voice, or null (#2)', async () => {
+  // jsdom implements no speechSynthesis, so drive the selection logic with a
+  // stub voice list. This pins the RANKING — the part that decides whether a
+  // learner hears a good voice or a robotic default.
+  const voices = [
+    { name: 'Microsoft David', lang: 'en-US', localService: true },
+    { name: 'Microsoft Aria Natural', lang: 'en-US', localService: false },
+    { name: 'Microsoft Ryan Natural', lang: 'en-GB', localService: false },
+    { name: 'Google Portugues do Brasil', lang: 'pt-BR', localService: false },
+  ];
+  const original = Object.getOwnPropertyDescriptor(window, 'speechSynthesis');
+  Object.defineProperty(window, 'speechSynthesis', {
+    value: { getVoices: () => voices, addEventListener() {}, cancel() {}, speak() {} },
+    configurable: true,
+  });
+  try {
+    // exact-locale high-quality voice wins
+    assert.equal(pickVoice('en-GB').name, 'Microsoft Ryan Natural');
+    // high-quality beats a local-but-basic voice at the same locale
+    assert.equal(pickVoice('en-US').name, 'Microsoft Aria Natural');
+    // base-language fallback resolves (pt matches pt-BR)
+    assert.equal(pickVoice('pt').name, 'Google Portugues do Brasil');
+    // a language with no voice yields null, so no button is rendered at all
+    assert.equal(pickVoice('ja-JP'), null);
+    assert.equal(pickVoice(''), null);
+    assert.equal(pickVoice(undefined), null);
+  } finally {
+    if (original) Object.defineProperty(window, 'speechSynthesis', original);
+    else delete window.speechSynthesis;
   }
 });
 

@@ -6,8 +6,9 @@
  * two wrong tries, answer revealed on the third. All worksheet data is
  * rendered with textContent (untrusted input); the only exception is
  * image-hotspot's svg field, which is validated and mounted via a data URI
- * (no script execution). Audio types use the browser's built-in
- * speechSynthesis — fully self-contained, no assets.
+ * (no script execution). Read-aloud uses the browser's built-in
+ * speechSynthesis — fully self-contained, no assets — and only appears when
+ * the device actually has a voice for the worksheet's language (see #2).
  *
  * Browser-only module; pure logic lives in validator.js.
  */
@@ -49,26 +50,89 @@ function richText(target, text) {
   return target;
 }
 
-/**
- * Speech / audio playback is disabled for now: the browser speechSynthesis
- * voice is too low-quality to ship, and dedicated audio exercises are out of
- * scope until a high-quality browser TTS lands. Flip this to re-enable every
- * 🔊 button at once. See EnsinoLibre/core#2.
- */
-const AUDIO_ENABLED = false;
+/* ================= read-aloud (capability-gated, #2) ===================== */
 
-/** Built-in TTS. Returns a play button; no-ops gracefully if unsupported. */
-function ttsButton(text, { label = '🔊 Play', lang, pitch = 1 } = {}) {
+/**
+ * Read-aloud runs on the browser's own speechSynthesis: 0 KB, nothing
+ * vendored, which is the only option compatible with the inline-dependency
+ * budget (a neural TTS voice model is megabytes — see EnsinoLibre/core#2).
+ *
+ * Previously every 🔊 button was hard-disabled because the *default* voice
+ * sounds poor. But getVoices() exposes the platform's whole voice set, and
+ * modern OS voices (Windows "… Natural", Apple Siri/Enhanced, Google) are
+ * good. So rather than judging the default, we pick the best voice available
+ * for the worksheet's language and show the button ONLY when one exists —
+ * a device with no matching voice gets no button, never a dead one.
+ */
+const HQ_VOICE = /natural|neural|siri|premium|enhanced|google|online/i;
+
+const hasSpeech = () => typeof window !== 'undefined' && 'speechSynthesis' in window;
+
+let voicesCache = null;
+let currentLang = '';
+const voiceWaiters = new Set();
+
+function allVoices() {
+  if (!hasSpeech()) return [];
+  const live = window.speechSynthesis.getVoices() || [];
+  if (live.length) voicesCache = live;
+  return voicesCache || [];
+}
+
+/**
+ * Prime the voice list. getVoices() is commonly empty on the first call and
+ * only populated later via 'voiceschanged', so buttons built before that
+ * fires re-check themselves once the list arrives.
+ */
+export function warmVoices() {
+  if (!hasSpeech()) return;
+  allVoices();
+  window.speechSynthesis.addEventListener?.('voiceschanged', () => {
+    voicesCache = window.speechSynthesis.getVoices() || voicesCache;
+    for (const recheck of [...voiceWaiters]) { try { recheck(); } catch { /* ignore */ } }
+    voiceWaiters.clear();
+  }, { once: true });
+}
+
+/** Best voice for a BCP-47 tag, or null when the device has none for it. */
+export function pickVoice(lang) {
+  const want = String(lang || '').toLowerCase().replace(/_/g, '-');
+  if (!want) return null;
+  const base = want.split('-')[0];
+  const matches = allVoices().filter((v) => {
+    const vl = String(v.lang || '').toLowerCase().replace(/_/g, '-');
+    return vl === want || vl.split('-')[0] === base;
+  });
+  if (!matches.length) return null;
+  // Prefer a known-good voice, then an exact locale match, then an offline one.
+  const score = (v) => (HQ_VOICE.test(v.name) ? 4 : 0)
+    + (String(v.lang).toLowerCase().replace(/_/g, '-') === want ? 2 : 0)
+    + (v.localService ? 1 : 0);
+  return matches.slice().sort((a, b) => score(b) - score(a))[0];
+}
+
+/**
+ * A 🔊 button, or null when speech is unavailable at all. `getText` may be a
+ * string or a function resolved at click time (for decks that change card).
+ * The button stays hidden until a voice for `lang` is known to exist.
+ */
+function readAloudButton(getText, { lang, label = '🔊 Play', onSpeak } = {}) {
+  if (!hasSpeech()) return null;
   const btn = el('button', 'oc-btn oc-btn--check oc-tts', label);
   btn.type = 'button';
+  const recheck = () => { btn.hidden = !pickVoice(lang); };
+  recheck();
+  if (btn.hidden) voiceWaiters.add(recheck); // voices may still be loading
   btn.addEventListener('click', () => {
-    if (!('speechSynthesis' in window)) { btn.textContent = 'Audio not supported here'; return; }
+    const voice = pickVoice(lang);
+    if (!voice) return;
     window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    if (lang) u.lang = lang;
-    u.pitch = pitch;
+    const u = new SpeechSynthesisUtterance(typeof getText === 'function' ? getText() : getText);
+    u.voice = voice;
+    u.lang = voice.lang;
     u.rate = 0.95;
     window.speechSynthesis.speak(u);
+    if (onSpeak) onSpeak();
   });
   return btn;
 }
@@ -501,10 +565,11 @@ R['dialogue'] = (a, index) => {
   });
   card.appendChild(chat);
   enterTiles(bubbles); // bubbles arrive one after another (#15)
-  if (AUDIO_ENABLED) {
-    const script = a.lines.map((l) => l.text).join('\n');
-    card.appendChild(ttsButton(script, { label: '🔊 Play dialogue' }));
-  }
+  const playDialogue = readAloudButton(
+    a.lines.map((l) => l.text).join('\n'),
+    { lang: currentLang, label: '🔊 Play dialogue' },
+  );
+  if (playDialogue) card.appendChild(playDialogue);
   return card;
 };
 
@@ -596,21 +661,11 @@ function formsTabs(card, entries, headline) {
   card.appendChild(stage);
   card.appendChild(glossEl);
 
-  if (AUDIO_ENABLED) {
-    const listen = ttsButton('', { label: '🔊 Read aloud' });
-    listen.onclick = () => {
-      const sentence = entries[currentIndex].sentence.replace(/\*\*/g, '');
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(sentence);
-        u.lang = 'en-GB';
-        u.rate = 0.9;
-        window.speechSynthesis.speak(u);
-      }
-      pulseWave(currentTiles);
-    };
-    card.appendChild(listen);
-  }
+  const listen = readAloudButton(
+    () => entries[currentIndex].sentence.replace(/\*\*/g, ''),
+    { lang: currentLang, label: '🔊 Read aloud', onSpeak: () => pulseWave(currentTiles) },
+  );
+  if (listen) card.appendChild(listen);
 
   // Initial paint + entrance animation.
   buttons[0].classList.add('oc-tab--active');
@@ -806,15 +861,8 @@ R['flashdeck'] = (a, index) => {
   next.addEventListener('click', () => doFlip(() => { current = (current + 1) % a.cards.length; showBack = false; }));
   row.appendChild(prev);
   row.appendChild(counter);
-  if (AUDIO_ENABLED) {
-    const say = ttsButton('', { label: '🔊 Word' });
-    say.onclick = () => {
-      if (!('speechSynthesis' in window)) return;
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(new SpeechSynthesisUtterance(a.cards[current].front));
-    };
-    row.appendChild(say);
-  }
+  const say = readAloudButton(() => a.cards[current].front, { lang: currentLang, label: '🔊 Word' });
+  if (say) row.appendChild(say);
   row.appendChild(next);
   card.appendChild(row);
   draw();
@@ -1496,6 +1544,11 @@ export const RENDERERS = R;
  */
 export function renderWorksheet(ws, container) {
   warmAnime();
+  warmVoices();
+  // Read-aloud picks a voice for the worksheet's own language (#2). Renderers
+  // are called synchronously below, so a module-level value is enough and the
+  // R[type](activity, index) signature stays unchanged.
+  currentLang = ws.language || '';
   container.textContent = '';
   const root = el('article', 'oc-worksheet');
   const header = el('header', 'oc-worksheet-header');

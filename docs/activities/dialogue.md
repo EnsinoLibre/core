@@ -9,6 +9,9 @@ analog-strategy: transform
 
 A two-speaker model conversation shown as chat bubbles, with optional glosses and built-in read-aloud (browser speech, no audio files). Model the language before productive practice.
 
+> [!note] Read-aloud appears only when the device can do it well
+> The 🔊 button uses the browser's own speech engine — nothing is downloaded, and no audio files are ever part of a worksheet. EnsinoLibre picks the best voice installed for the worksheet's `language` and **hides the button entirely when the device has no voice for that language**, so learners never meet a button that does nothing. Voice availability varies by device and operating system.
+
 | Field | Type | Required |
 |-------|------|----------|
 | `type` | `"dialogue"` | **yes** |

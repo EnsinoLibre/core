@@ -9,6 +9,9 @@ analog-strategy: transform
 
 Sibling of [[activities/grammar-forms|Grammar forms]]: the tabs morph one sentence between **tenses**. Same subject and complement throughout; only tense-bearing words change (write them in `**bold**`), each with a natural time expression.
 
+> [!note] Optional read-aloud
+> As with [[activities/grammar-forms|Grammar forms]], a 🔊 button reads the current sentence aloud using the browser's own speech engine. It appears only when the device has a voice for the worksheet's `language`.
+
 | Field | Type | Required |
 |-------|------|----------|
 | `type` | `"tense-shift"` | **yes** |

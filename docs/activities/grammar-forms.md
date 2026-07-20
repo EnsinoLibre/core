@@ -9,6 +9,9 @@ analog-strategy: transform
 
 One sentence shown across its forms (positive / negative / question) behind tabs, with the changing part in `**bold**`. Makes the *structure change* visible while the vocabulary stays constant.
 
+> [!note] Optional read-aloud
+> A 🔊 button reads the currently shown sentence aloud (and pulses the words as it goes) using the browser's own speech engine. It appears only when the device has a voice for the worksheet's `language`, and is hidden otherwise — the activity works fully without it.
+
 | Field | Type | Required |
 |-------|------|----------|
 | `type` | `"grammar-forms"` | **yes** |
