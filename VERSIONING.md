@@ -121,14 +121,15 @@ Sits on the tenancy seam, in a **separate** module (not this MIT repo):
 `migrations/0001_org_schema.sql` is the follow-up migration and `DESIGN.md`
 records the open product decisions.
 
-- [x] **Draft the schema + seam swap.** `../organization/migrations/0001_org_schema.sql`:
-      `org.organizations` + `org.org_members(role)` + `org.org_invites`, an
-      `org.is_member` helper, the `CREATE OR REPLACE` of
-      `el_can_read`/`el_can_write` (signatures verified to match core exactly),
-      the reserved `org_id` FKs, and RLS on the org tables. Draft only.
-- [ ] **Validate on a Supabase branch** — apply the draft to a branch DB, insert
-      org + members + a shared row, verify by role simulation (member reads,
-      viewer can't write, non-member sees nothing). Not yet run.
+- [x] **Schema + seam swap — applied to prod & verified (2026-07-23).**
+      `../organization/migrations/0001_org_schema.sql`: `org.organizations` +
+      `org.org_members(role)` + `org.org_invites`, `org.is_member`/`is_admin`
+      helpers, the `CREATE OR REPLACE` of `el_can_read`/`el_can_write`, the
+      reserved `org_id` FKs, org-table RLS, and the schema/execute grants the
+      seam functions need. Verified by role simulation: no regression for
+      existing teachers/anon; a viewer member reads an org-tagged row but can't
+      write it; a non-member sees nothing. Test data torn down; advisors clean.
+      (No org rows exist yet, so OSS behaviour is unchanged.)
 - [ ] **`org_id`-on-write** — set `org_id` at core's MCP + `store.js` insert
       sites (the only core-side change; DESIGN.md decision 1).
 - [ ] **Org KB sharing** — resources/worksheets pooled at org scope, with the
