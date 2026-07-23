@@ -64,21 +64,23 @@ friction, and the seam already gives us a clean layering point in-repo).
 Three tracks. Track 1 is time-sensitive (it must land before the v1.0 schema
 freezes); Tracks 2 and 3 are the OSS-core finish line and the paid build.
 
-### Track 1 — Reserve the seam (before v1.0 freeze) — **IN PROGRESS**
+### Track 1 — Reserve the seam (before v1.0 freeze) — **DONE**
 
 - [x] **Design the seam.** Delegate RLS to replaceable `el_can_read` /
       `el_can_write`; reserve nullable `org_id`. See
       [docs/architecture/tenancy-seam.md](docs/architecture/tenancy-seam.md).
 - [x] **Write the migration.**
       [`20260723120000_tenancy_seam.sql`](supabase/migrations/20260723120000_tenancy_seam.sql).
-- [ ] **Apply + verify equivalence** on the live project (owner sees exactly
-      their rows; anon sees zero) — behaviour-preserving.
-- [ ] **Keep the MCP edge function seam-ready.** Its writes are service-role and
-      teacher-scoped; confirm they set `teacher_id` (and, later, `org_id`) and
-      do not assume the old policy names. No functional change needed now.
-- [ ] **Regression-guard.** Add a Postgres/RLS check to the test story so a
-      future migration can't silently re-inline the owner check and break the
-      seam.
+- [x] **Apply + verify equivalence** on the live project — verified by role
+      simulation: each teacher sees exactly their own rows, anon sees zero, no
+      cross-tenant leakage; no new security-advisor warnings.
+- [x] **MCP edge function audited seam-ready.** It writes with the service role,
+      scopes every query by `teacher_id` explicitly, and references no policy
+      names — the seam is transparent to it. (Its insert sites set `teacher_id`
+      only; Track 3 extends them to set `org_id`.)
+- [x] **Regression guard.** `tests/run-tests.mjs` §11b: three static guards
+      fail the build if the seam loses a helper or a later migration re-inlines
+      `auth.uid()` on a seam-governed table (enforces invariant #1).
 
 ### Track 2 — Finish the OSS core as a *self-hostable* v1.0
 
@@ -86,14 +88,20 @@ The platform is feature-complete for one teacher; what's missing is the
 *self-host packaging* and honest docs. (See ROADMAP.md for the agent-native
 v1.0 bar; these are the additional open-core-specific items.)
 
-- [ ] **Self-host configuration.** Remove the hardcoded Supabase project id /
-      publishable key / demo creds from source; read them from env
-      (`.env` + `.env.example`). Today a self-hoster would run against *our* DB.
-- [ ] **One-command backend setup.** Bundle the migrations + a seed script + a
-      `supabase db push` runbook so a third party can stand up their own
-      project. (The migrations already exist under `supabase/migrations/`.)
-- [ ] **Deploy story for self-hosters.** Document a static-host + Supabase
-      deploy that isn't our Netlify site; ideally a Docker/one-click path.
+- [x] **Self-host configuration.** Supabase URL/key are no longer hardcoded:
+      the platform reads `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`
+      ([`platform/.env.example`](platform/.env.example)); the zero-build site
+      reads [`site/assets/js/config.js`](site/assets/js/config.js) (editable
+      defaults or a `window.__ENSINOLIBRE__` override). Both fall back to the
+      demo project so the current deploy is unaffected. Verified: typecheck +
+      build + a live aula RPC round-trip through the new config.
+- [x] **Backend setup runbook.** [SELF-HOSTING.md](SELF-HOSTING.md) documents
+      `supabase link` → `db push` (migrations already under
+      `supabase/migrations/`) → `functions deploy mcp`, plus first-teacher
+      signup.
+- [ ] **One-command / Docker path.** A `docker-compose` or single script that
+      stands up Supabase + the static site (SELF-HOSTING.md is currently a
+      manual runbook).
 - [x] **Fix stale status docs.** `core/README.md` no longer claims
       "boilerplate, front-end only" (backend, real auth and realtime shipped).
 - [ ] **Licence headers / NOTICE** clarifying MIT core vs. the reserved-name

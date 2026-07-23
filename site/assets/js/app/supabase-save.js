@@ -11,9 +11,7 @@
  * generator with no second login. RLS scopes the insert to `teacher_id`.
  */
 import { createClient } from '../../vendor/supabase.esm.js';
-
-const SUPABASE_URL = 'https://edgdxuvzyhwqidjjbidq.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_E1qrfBQlbs6BVRksbX6zbQ_hc_63063';
+import { SUPABASE_URL, SUPABASE_KEY } from '../config.js';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, storageKey: 'ensinolibre.teacher.auth' },

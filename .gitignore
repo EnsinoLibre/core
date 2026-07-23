@@ -7,3 +7,8 @@ Thumbs.db
 # Built platform (source in platform/src; build artifact deployed from disk)
 platform/dist/
 site/app/
+
+# Local self-host config (see SELF-HOSTING.md; .env.example is committed)
+platform/.env
+platform/.env.local
+site/assets/js/config.local.js
