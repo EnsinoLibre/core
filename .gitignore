@@ -9,6 +9,7 @@ platform/dist/
 site/app/
 
 # Local self-host config (see SELF-HOSTING.md; .env.example is committed)
+.env
 platform/.env
 platform/.env.local
 site/assets/js/config.local.js

@@ -1,0 +1,19 @@
+# EnsinoLibre core — one-command self-host.
+#
+#   1. Point it at your Supabase project (see SELF-HOSTING.md for creating one):
+#        cp .env.example .env      # then fill SUPABASE_URL / SUPABASE_KEY
+#   2. docker compose up --build
+#   3. open http://localhost:8080
+#
+# Unset vars fall back to the public EnsinoLibre demo project. The backend
+# (Postgres + auth + RPCs) is Supabase itself — this image is just the web app.
+services:
+  web:
+    build:
+      context: .
+      args:
+        SUPABASE_URL: ${SUPABASE_URL:-}
+        SUPABASE_KEY: ${SUPABASE_KEY:-}
+    ports:
+      - "8080:80"
+    restart: unless-stopped

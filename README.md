@@ -110,6 +110,16 @@ A worksheet is one JSON object: metadata plus titled sections of activities. Thi
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md). Code is MIT; worksheets shared to [examples](https://github.com/EnsinoLibre/examples) are CC BY-SA.
 
+## Licensing
+
+This repository — the worksheet builder and the **single-tenant** teacher
+platform — is open source under the [MIT License](./LICENSE) and
+[self-hostable](./SELF-HOSTING.md). The multi-tenant, per-seat **Organisation**
+product (shared org-wide knowledge base for schools) is a separate commercial
+layer that is **not** part of this repository; "EnsinoLibre" and the
+Organisation product name are not licensed for commercial resale of a hosted
+service. See [NOTICE](./NOTICE) and [VERSIONING.md](./VERSIONING.md).
+
 <div align="center">
 <sub>Made in the open by teachers, for teachers.</sub>
 </div>

@@ -99,13 +99,20 @@ v1.0 bar; these are the additional open-core-specific items.)
       `supabase link` → `db push` (migrations already under
       `supabase/migrations/`) → `functions deploy mcp`, plus first-teacher
       signup.
-- [ ] **One-command / Docker path.** A `docker-compose` or single script that
-      stands up Supabase + the static site (SELF-HOSTING.md is currently a
-      manual runbook).
+- [x] **One-command / Docker path.** [`Dockerfile`](Dockerfile) +
+      [`docker-compose.yml`](docker-compose.yml) build the platform and serve it
+      with the public site under nginx (`docker compose up --build` →
+      `:8080`), baked with your Supabase URL/key via
+      [`scripts/gen-config.mjs`](scripts/gen-config.mjs). The backend stays
+      Supabase (cloud or `supabase start`).
 - [x] **Fix stale status docs.** `core/README.md` no longer claims
       "boilerplate, front-end only" (backend, real auth and realtime shipped).
-- [ ] **Licence headers / NOTICE** clarifying MIT core vs. the reserved-name
-      Organisation module.
+- [x] **Licence NOTICE.** [NOTICE](NOTICE) + a README "Licensing" section
+      state the MIT single-tenant core vs. the commercial Organisation layer and
+      the marks carve-out.
+
+**Track 2 complete** — the OSS core is genuinely self-hostable (config, runbook,
+Docker) with an explicit licence boundary.
 
 ### Track 3 — Build the Organisation layer (paid)
 

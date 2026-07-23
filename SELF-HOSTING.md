@@ -15,6 +15,22 @@ Supabase project and your own static host. This guide is the end-to-end setup.
 - Node + npm (only to build the teacher platform; the public site is zero-build).
 - Any static host for the built site (Netlify, Cloudflare Pages, Nginx, S3…).
 
+## Quickstart (Docker)
+
+If you just want the web app running against a Supabase project you already
+created (step 1 below), Docker is one command:
+
+```bash
+cp .env.example .env      # fill in SUPABASE_URL and SUPABASE_KEY
+docker compose up --build # → http://localhost:8080
+```
+
+That builds the teacher platform and serves it with the public site under
+nginx, baked with your Supabase URL/key. The backend itself is still Supabase —
+Docker only runs the web app. To rebuild against a different project, change
+`.env` and re-run `docker compose up --build`. The rest of this guide is the
+manual, non-Docker path and the backend setup the Docker image assumes.
+
 ## 1. Create your Supabase project and apply the schema
 
 ```bash

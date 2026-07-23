@@ -1,0 +1,44 @@
+EnsinoLibre core
+Copyright (c) 2026 EnsinoLibre contributors
+
+This product includes software developed by the EnsinoLibre contributors.
+
+------------------------------------------------------------------------------
+Licensing summary
+------------------------------------------------------------------------------
+
+The source code in this repository is licensed under the MIT License (see the
+LICENSE file). This covers the worksheet builder, the worksheet/block engine,
+and the SINGLE-TENANT teacher platform — everything needed to self-host one
+teacher's workspace (see SELF-HOSTING.md).
+
+Worksheets contributed to the EnsinoLibre/examples repository are licensed
+CC BY-SA, not MIT.
+
+------------------------------------------------------------------------------
+What is NOT covered by the MIT grant
+------------------------------------------------------------------------------
+
+The multi-tenant, per-seat "Organisation" product — the layer that adds an
+organisation namespace above the teacher, a shared org-wide knowledge base,
+role/admin management, seat billing, and SSO — is a separate commercial layer.
+Its source is not part of this repository and is not distributed under the MIT
+License. See VERSIONING.md and docs/architecture/tenancy-seam.md for how the
+open-source schema reserves a seam for that layer.
+
+The MIT License grants broad rights to the code in this repository. It does NOT
+grant rights to the "EnsinoLibre" name, logo, wordmark, or the "Organisation"
+product name/branding (see the EnsinoLibre/assets repository). You may run,
+modify, and self-host this code, including for your own institution; you may not
+use the EnsinoLibre marks to offer a competing hosted service or otherwise imply
+official affiliation without permission.
+
+------------------------------------------------------------------------------
+Third-party components
+------------------------------------------------------------------------------
+
+The teacher platform bundles third-party open-source dependencies (React, Vite,
+@supabase/supabase-js, and others) under their respective licenses; see
+platform/package.json and the packages' own license files. The public site
+vendors marked (MIT) and a bundled @supabase/supabase-js client (MIT) under
+site/assets/vendor/.

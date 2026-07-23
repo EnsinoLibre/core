@@ -1,0 +1,12 @@
+# Keep the build context lean and force a clean `npm ci` in the image.
+node_modules
+platform/node_modules
+platform/dist
+site/app
+.git
+.github
+.netlify
+.runtime
+**/.DS_Store
+*.log
+.env
