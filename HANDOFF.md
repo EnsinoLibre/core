@@ -36,11 +36,14 @@ core/
 │   ├── index.html             ← landing + worksheet generator
 │   ├── docs.html              ← docs viewer (Obsidian markdown in core/docs)
 │   ├── aula.html              ← STUDENT page (Supabase-backed, code-gated)
+│   ├── manifest.webmanifest   ← PWA manifest (installable; scope /site/)
+│   ├── sw.js                  ← PWA service worker (offline; skips Supabase traffic)
 │   ├── app/                   ← BUILT platform output (gitignored; copied from platform/dist)
 │   └── assets/
 │       ├── styles.css         ← public site styles (bridged onto design tokens)
 │       ├── app.css            ← shared app-chrome styles
 │       ├── brand/             ← wordmark + favicon (theme-adaptive)
+│       ├── icons/             ← PWA icons (icon-192.png, icon.svg, icon-maskable.svg)
 │       ├── vendor/            ← tokens.css, primitives/, marked, supabase.esm.js
 │       └── js/
 │           ├── prompt-builder / validator / renderer / anim / analog / exporters  ← the worksheet "blocks" engine (canonical here — supabase/functions/mcp/{validator,prompt-builder}.js are verbatim copies, see §10)
@@ -300,13 +303,33 @@ dashboard show that progress — all with no localStorage for data.
   graphology rejects duplicate/bidirectional edges — dedupe both directions.
   The preview screenshot tool times out on the WebGL page (harmless); verify via
   DOM `eval` instead.
-- **Worksheet engine** is schema v2, **30 activity types, audio types removed**
-  (dictation/listen‑mcq). Speech buttons are hidden behind `AUDIO_ENABLED=false`
-  in `renderer.js`. Don't reintroduce audio without the browser‑TTS work
-  (tracked in issue EnsinoLibre/core#2).
+- **Worksheet engine** is schema v2, **30 activity types, audio *activity types*
+  removed** (dictation/listen‑mcq — an activity whose whole premise is audio is
+  unusable on a device with no voice). **Read‑aloud, however, is back** as of
+  #2 (closed): `renderer.js` `pickVoice(lang)` chooses the best installed voice
+  for the worksheet's language and the 🔊 button renders *only when one exists*
+  (dialogue, flashdeck, grammar‑forms/tense‑shift). Uses the browser speech
+  engine only — 0 KB. Don't reintroduce a neural TTS model (megabytes, breaks
+  the inline‑dependency budget).
 - **Design system is the source of truth** for styling: use the `el-*` primitives
   and `--color-*/--space-*/--font-*` tokens (light + `[data-theme="dark"]`).
   Never hardcode colours.
+- **PWA**: the public site is installable/offline‑capable — `site/manifest.webmanifest`,
+  `site/sw.js` (network‑first navigations, stale‑while‑revalidate assets,
+  **skips cross‑origin Supabase traffic entirely**), icons in `site/assets/icons/`.
+  Registered from index/aula/docs and `platform/index.html` (absolute `/site/…`
+  paths so Vite leaves them untouched). Bump `CACHE_VERSION` in `sw.js` when the
+  precache list changes.
+- **Seeding an auth user via raw SQL** (for E2E tests) needs two things GoTrue
+  requires or login 500s with *"Database error querying schema"*: (1) an
+  `auth.identities` row with `provider='email'`, and (2) the token columns
+  (`confirmation_token`, `recovery_token`, `email_change*`, …) set to `''`, not
+  `NULL`. The product's real signup path creates these correctly — this only
+  bites manual seeds. Delete via cascade from `auth.users` after the test.
+- **Driving the React app in a browser tool**: `form_input`/setting `.value` does
+  not fire React's `onChange`, so the login submits empty fields. Use the native
+  value setter + dispatch a bubbling `input` event (see the E2E run) so React
+  state updates. The demo teacher is `teacher@ensinolibre.org / ensinolibre`.
 
 ---
 
