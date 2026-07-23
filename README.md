@@ -66,7 +66,22 @@ core/
 - **The teacher workspace** (`app.html`) is where the product's real value lives: teachers keep **classrooms**, **students**, **resources**, and persistent **per-class and per-student context** that an AI teaching assistant will read and write. Each classroom and student view carries an *Assistant* panel primed with that context (a UI stub today).
 - **The live classroom / aula** — teachers *deploy* a set of worksheets to a class (with a join **code**); students open `aula.html`, join with the code and their name, and work through the worksheets (rendered by the same engine as the generator). The teacher's **Live classroom** dashboard (`app.html#/aula`) shows every student's progress and score **in real time**, lets the teacher **validate** each submission (validated / needs review), and **exports** the results as **CSV or JSON**.
 
-> **Status: boilerplate, front-end only.** No backend yet. Teacher auth is faked (any credentials); student "auth" is just a class code + name. All data lives in `localStorage`, seeded on first run (including one live aula with two worksheets and enrolled students so the monitor looks alive immediately). "Live" updates use `BroadcastChannel`, so a student working in one tab updates the teacher's monitor in another — no server involved. The data layer is isolated in `assets/js/app/store.js`; wiring a real backend later means swapping that module's read/write helpers — the views don't change. Reset from **Profile → Reset demo data**. Demo class code: **A2LIVE**.
+> **Status: backend-backed, single-tenant.** The teacher platform (`platform/`,
+> Vite/React/TS, built to `site/app/`) runs on **Supabase** with real auth
+> (email + password), teacher data in Postgres under row-level security scoped
+> to each teacher, and a **realtime** live-classroom monitor (Supabase Realtime
+> on `progress`/`enrollments`). Students join an aula by code through
+> `SECURITY DEFINER` RPCs. An MCP edge function gives connected AI agents real,
+> teacher-scoped tools. Demo teacher: `teacher@ensinolibre.org` / `ensinolibre`;
+> demo class code **A2LIVE**. See [HANDOFF.md](HANDOFF.md) for the full backend
+> map and [ROADMAP.md](ROADMAP.md) for the road to v1.0.
+>
+> The platform is **single-tenant by design** — one teacher owns their
+> workspace. That is the open-source, self-hostable core. The multi-tenant,
+> per-seat **Organisation** product (shared org-wide knowledge base) is the
+> commercial layer; the schema already reserves a non-breaking seam for it —
+> see [VERSIONING.md](VERSIONING.md) and
+> [docs/architecture/tenancy-seam.md](docs/architecture/tenancy-seam.md).
 
 ## How it relates to the other repos
 
