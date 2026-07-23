@@ -116,10 +116,10 @@ Docker) with an explicit licence boundary.
 
 ### Track 3 — Build the Organisation layer (paid)
 
-Sits on the tenancy seam, in a **separate** module (not this MIT repo):
-`../organization/` — **drafted, not applied.** Its README explains the boundary;
-`migrations/0001_org_schema.sql` is the follow-up migration and `DESIGN.md`
-records the open product decisions.
+Sits on the tenancy seam, in a **separate** private repo (not this MIT repo):
+`EnsinoLibre/organization`. Its README explains the boundary; `DESIGN.md` records
+the open product decisions. Schema, RPCs and the admin console are live/verified;
+what remains is org-scoped content sharing and commercial hardening.
 
 - [x] **Schema + seam swap — applied to prod & verified (2026-07-23).**
       `../organization/migrations/0001_org_schema.sql`: `org.organizations` +
@@ -130,11 +130,20 @@ records the open product decisions.
       existing teachers/anon; a viewer member reads an org-tagged row but can't
       write it; a non-member sees nothing. Test data torn down; advisors clean.
       (No org rows exist yet, so OSS behaviour is unchanged.)
+- [x] **Org CRUD + membership RPCs — applied to prod & verified (2026-07-24).**
+      `organization/migrations/0002_org_rpcs.sql`: public `SECURITY DEFINER`
+      RPCs (create_org, my_orgs, roster, invite/accept/revoke, role/remove,
+      rename) — the only client access path, since the `org` schema isn't
+      PostgREST-exposed. Guardrails: authenticated-only, admin-gated, last-admin
+      protection, email-matched invite acceptance, seat cap. Verified by role
+      simulation.
+- [x] **Admin console — built & verified end-to-end (2026-07-24).**
+      `organization/admin/` — zero-build console (create org, roster, roles,
+      seats, invites). Browser-driven against the live RPCs.
 - [ ] **`org_id`-on-write** — set `org_id` at core's MCP + `store.js` insert
-      sites (the only core-side change; DESIGN.md decision 1).
+      sites (the only core-side change; DESIGN.md decision 1). **Next up.**
 - [ ] **Org KB sharing** — resources/worksheets pooled at org scope, with the
       knowledge graph and MCP tools honouring org visibility.
-- [ ] **Admin console** — members, seats, roles, invites.
 - [ ] **Billing** — Stripe per-seat, seat count ⇄ `org_members`.
 - [ ] **SSO/SAML + provisioning** (SCIM optional, later).
 - [ ] **Org reporting** — cross-teacher progress and KB analytics.
