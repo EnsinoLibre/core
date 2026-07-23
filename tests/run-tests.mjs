@@ -867,6 +867,57 @@ await test('supabase/functions/mcp/prompt-builder.js matches site/assets/js/prom
   assert.equal(a, b, 'mcp/prompt-builder.js has drifted from site/assets/js/prompt-builder.js — re-read both fresh and redeploy (see HANDOFF.md §10)');
 });
 
+console.log('\n11b) Tenancy seam invariant (see VERSIONING.md / docs/architecture/tenancy-seam.md)');
+
+// The commercial Organisation layer relies on the OSS content-table RLS
+// policies delegating their authorization to the el_can_read / el_can_write
+// helper functions, so it can add multi-tenancy by swapping the helper bodies
+// instead of rewriting policies. These guards fail the build if that seam is
+// broken — either the seam migration loses a helper, or a *later* migration
+// re-inlines `auth.uid()` on a seam-governed table instead of going through the
+// helpers. Static (no DB), so it runs in CI.
+const SEAM_MIGRATION = '20260723120000_tenancy_seam.sql';
+const SEAM_TABLES = [
+  'classrooms', 'students', 'student_notes', 'worksheets', 'resources', 'aulas',
+  'aula_worksheets', 'enrollments', 'progress',
+];
+
+await test('the tenancy-seam migration exists and defines both authorization helpers', async () => {
+  const sql = await readFile(join(ROOT, 'supabase', 'migrations', SEAM_MIGRATION), 'utf8');
+  assert.match(sql, /function\s+public\.el_can_read\s*\(/i, 'el_can_read helper missing from the seam migration');
+  assert.match(sql, /function\s+public\.el_can_write\s*\(/i, 'el_can_write helper missing from the seam migration');
+});
+
+await test('the tenancy-seam migration routes every seam-governed table through the helpers', async () => {
+  const sql = (await readFile(join(ROOT, 'supabase', 'migrations', SEAM_MIGRATION), 'utf8')).toLowerCase();
+  for (const t of SEAM_TABLES) {
+    assert.ok(
+      new RegExp(`create policy\\s+"[^"]+"\\s+on\\s+public\\.${t}\\b`).test(sql),
+      `seam migration creates no delegating policy for public.${t}`,
+    );
+  }
+});
+
+await test('no migration after the seam re-inlines auth.uid() on a seam-governed table', async () => {
+  const files = (await readdir(join(ROOT, 'supabase', 'migrations')))
+    .filter((f) => f.endsWith('.sql') && f >= SEAM_MIGRATION && f !== SEAM_MIGRATION);
+  for (const f of files) {
+    const sql = await readFile(join(ROOT, 'supabase', 'migrations', f), 'utf8');
+    // `create policy` statements are simple (no $$ bodies); split on ; is safe here.
+    const stmts = sql.split(';').filter((s) => /create\s+policy/i.test(s));
+    for (const s of stmts) {
+      const m = s.match(/on\s+public\.(\w+)/i);
+      if (!m || !SEAM_TABLES.includes(m[1].toLowerCase())) continue;
+      if (/auth\.uid\s*\(/i.test(s) && !/el_can_(read|write)/i.test(s)) {
+        assert.fail(
+          `${f}: a policy on public.${m[1]} inlines auth.uid() instead of delegating to `
+          + `el_can_read/el_can_write — this breaks the tenancy seam (see VERSIONING.md invariant #1).`,
+        );
+      }
+    }
+  }
+});
+
 console.log('\n12) Renderer pure-logic helpers');
 
 await test('normAccentless matches accented/unaccented spellings for translation scoring (#55)', async () => {

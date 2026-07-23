@@ -85,19 +85,38 @@ create index if not exists aulas_org_id_idx         on public.aulas(org_id)     
 -- equivalent policy whose USING delegates to el_can_read and whose WITH CHECK
 -- delegates to el_can_write. Role targeting (public) is preserved: anon has a
 -- null auth.uid(), so the check is false for anon exactly as before.
+-- Written out per-table (not a loop) so the RLS change is greppable/auditable
+-- and enforced by the tenancy-seam guard in tests/run-tests.mjs (§11b).
 
-do $$
-declare tbl text;
-begin
-  foreach tbl in array array['classrooms','students','student_notes','worksheets','resources','aulas']
-  loop
-    execute format('drop policy if exists "own rows" on public.%I', tbl);
-    execute format(
-      'create policy "tenant access" on public.%I for all '
-      || 'using (public.el_can_read(teacher_id, org_id)) '
-      || 'with check (public.el_can_write(teacher_id, org_id))', tbl);
-  end loop;
-end $$;
+drop policy if exists "own rows" on public.classrooms;
+create policy "tenant access" on public.classrooms for all
+  using (public.el_can_read(teacher_id, org_id))
+  with check (public.el_can_write(teacher_id, org_id));
+
+drop policy if exists "own rows" on public.students;
+create policy "tenant access" on public.students for all
+  using (public.el_can_read(teacher_id, org_id))
+  with check (public.el_can_write(teacher_id, org_id));
+
+drop policy if exists "own rows" on public.student_notes;
+create policy "tenant access" on public.student_notes for all
+  using (public.el_can_read(teacher_id, org_id))
+  with check (public.el_can_write(teacher_id, org_id));
+
+drop policy if exists "own rows" on public.worksheets;
+create policy "tenant access" on public.worksheets for all
+  using (public.el_can_read(teacher_id, org_id))
+  with check (public.el_can_write(teacher_id, org_id));
+
+drop policy if exists "own rows" on public.resources;
+create policy "tenant access" on public.resources for all
+  using (public.el_can_read(teacher_id, org_id))
+  with check (public.el_can_write(teacher_id, org_id));
+
+drop policy if exists "own rows" on public.aulas;
+create policy "tenant access" on public.aulas for all
+  using (public.el_can_read(teacher_id, org_id))
+  with check (public.el_can_write(teacher_id, org_id));
 
 -- 4. Route the aula-derived child policies through the helpers --------------
 -- aula_worksheets / enrollments / progress are scoped indirectly via the
