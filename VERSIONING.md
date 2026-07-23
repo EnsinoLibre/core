@@ -116,11 +116,21 @@ Docker) with an explicit licence boundary.
 
 ### Track 3 — Build the Organisation layer (paid)
 
-Only starts once Track 1 has landed and Track 2's config seam exists. Sits on
-the tenancy seam; see the follow-up-migration sketch in the seam doc.
+Sits on the tenancy seam, in a **separate** module (not this MIT repo):
+`../organization/` — **drafted, not applied.** Its README explains the boundary;
+`migrations/0001_org_schema.sql` is the follow-up migration and `DESIGN.md`
+records the open product decisions.
 
-- [ ] `org.organizations` + `org.org_members(role)`; the follow-up migration
-      that swaps `el_can_read`/`el_can_write` bodies and adds the `org_id` FK.
+- [x] **Draft the schema + seam swap.** `../organization/migrations/0001_org_schema.sql`:
+      `org.organizations` + `org.org_members(role)` + `org.org_invites`, an
+      `org.is_member` helper, the `CREATE OR REPLACE` of
+      `el_can_read`/`el_can_write` (signatures verified to match core exactly),
+      the reserved `org_id` FKs, and RLS on the org tables. Draft only.
+- [ ] **Validate on a Supabase branch** — apply the draft to a branch DB, insert
+      org + members + a shared row, verify by role simulation (member reads,
+      viewer can't write, non-member sees nothing). Not yet run.
+- [ ] **`org_id`-on-write** — set `org_id` at core's MCP + `store.js` insert
+      sites (the only core-side change; DESIGN.md decision 1).
 - [ ] **Org KB sharing** — resources/worksheets pooled at org scope, with the
       knowledge graph and MCP tools honouring org visibility.
 - [ ] **Admin console** — members, seats, roles, invites.
