@@ -6,6 +6,13 @@
   <title>EnsinoLibre — Teacher platform</title>
   <script>try{if(localStorage.getItem('ensinolibre.theme')==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}</script>
   <link rel="icon" href="./brand/favicon-light.svg" />
+  <!-- PWA: absolute /site/ paths so Vite leaves them untouched; correct once served under /site/app/. -->
+  <link rel="manifest" href="/site/manifest.webmanifest" />
+  <meta name="theme-color" content="#1f6f5c" />
+  <link rel="apple-touch-icon" href="/site/assets/icons/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="EnsinoLibre" />
+  <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/site/sw.js').catch(function(){});});}</script>
 </head>
 <body>
   <div id="root"></div>

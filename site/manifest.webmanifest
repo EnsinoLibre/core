@@ -1,0 +1,25 @@
+{
+  "name": "EnsinoLibre — worksheets for teachers",
+  "short_name": "EnsinoLibre",
+  "description": "Free, open worksheets: generate interactive activities from a simple form, deploy them to a class, and let students work through them on any device — online or on paper.",
+  "id": "/site/",
+  "start_url": "index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#fffdf7",
+  "theme_color": "#1f6f5c",
+  "lang": "en-GB",
+  "dir": "ltr",
+  "categories": ["education", "productivity"],
+  "icons": [
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "assets/icons/icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Create a worksheet", "short_name": "Create", "url": "index.html", "description": "Generate a new worksheet from a simple form." },
+    { "name": "Join a class", "short_name": "Join", "url": "aula.html", "description": "Enter a class code to open your assigned worksheets." },
+    { "name": "Teacher platform", "short_name": "Teach", "url": "app/", "description": "Sign in to manage classrooms, students and worksheets." }
+  ]
+}
