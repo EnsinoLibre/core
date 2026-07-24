@@ -81,6 +81,7 @@ export function Resources() {
                     {r.url && <p><a className="knw-open-link" href={r.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>{r.url} ↗</a></p>}
                     <div className="el-card__footer">
                       <span className="el-badge el-badge--neutral">🔗 {links} link{links === 1 ? '' : 's'}</span>
+                      {store.isShared(r) && <span className="el-badge el-badge--primary" title="Shared into your organisation by another teacher — read-only here">👥 Shared</span>}
                     </div>
                   </div>
                 );

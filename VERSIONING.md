@@ -148,12 +148,25 @@ what remains is org-scoped content sharing and commercial hardening.
       layer, so invariant #3 still holds). Verified: with sharing on, new content
       auto-tags `org_id` and a co-member sees it; opt-out keeps it private.
       Console has the per-member toggle.
-- [ ] **Org KB *read* surface** — the remaining half of KB sharing, and the
-      first item that genuinely needs **core** changes: the platform's resources
-      list / search / knowledge graph currently query by `teacher_id`; to *show*
-      org-shared content they must also include `org_id`. RLS already makes it
-      safe to fetch; the queries just need the org filter. (Writes already flow
-      into org scope; this makes them visible in the core UI.)
+- [x] **Org KB read surface (platform) — done & verified (2026-07-24).** Turned
+      out to be mostly free: `store.js` `hydrate()` already `select('*')`s and
+      relies on RLS, so org-shared rows appear automatically once `el_can_read`
+      returns them (behaviour-preserving in OSS, where they never do). Added:
+      ownership on resource/worksheet state (`ownerId`/`orgId`) + a
+      `store.isShared()` helper; a **"👥 Shared" badge** on shared resources and
+      worksheets; and shared worksheets hide the "Remove" action (read-only).
+      **Plus a security fix** — `20260724120000_seam_write_split.sql`: DELETE on
+      the single `ALL` policy only checked `USING`, so a viewer could delete
+      org-shared content; the six content tables now use per-command policies
+      (read = `el_can_read`, write/update/delete = `el_can_write`). Verified on
+      prod: viewer read-only, teacher-member can edit, owner unaffected, OSS
+      unchanged (guard §11b still green).
+- [ ] **Org KB read surface (agent/MCP)** — the MCP edge function reads with the
+      service role and filters `.eq('teacher_id', …)`, so an agent does NOT yet
+      see org-shared content. Needs care re: separation (core's MCP shouldn't
+      query `org.*` directly) — likely an org-layer `SECURITY DEFINER` helper
+      that returns the visible owner/org scope, or switching those reads to a
+      user-scoped token so RLS applies.
 - [ ] **Billing** — Stripe per-seat, seat count ⇄ `org_members`.
 - [ ] **SSO/SAML + provisioning** (SCIM optional, later).
 - [ ] **Org reporting** — cross-teacher progress and KB analytics.

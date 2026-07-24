@@ -60,12 +60,14 @@ export function Worksheets() {
           const inAulas = store.aulas().filter((a: any) => a.worksheetIds.includes(w.id));
           const isLive = inAulas.some((a: any) => a.status === 'live');
           const mq = moodleQuestionCount(w.doc);
+          const shared = store.isShared(w);
           return (
             <div key={w.id} className="el-card app-ws-lib-card">
               <button className="app-cardlink" onClick={() => open('worksheet:' + w.id)} title="Open worksheet & progress">
                 <h3 className="el-card__title app-ws-title">
                   <span>{w.title}</span>
                   {isLive && <span className="app-live-indicator" role="img" aria-label="Live now" title="Deployed to a live class right now" />}
+                  {shared && <span className="el-badge el-badge--primary" title="Shared into your organisation by another teacher — read-only here">👥 Shared</span>}
                 </h3>
                 <p className="app-muted">{w.subject} · {unitCount(w.doc)} activities · {mq} auto-graded</p>
               </button>
@@ -90,12 +92,13 @@ export function Worksheets() {
                   { label: '📄 PDF', onClick: () => exportAnalogPDF(w.doc) },
                   { label: `🎓 Moodle (${mq})`, onClick: () => exportMoodle(w.doc) },
                   { label: '⬇ Markdown', onClick: () => exportMarkdown(w.doc) },
-                  {
+                  // A worksheet shared into the org by someone else is read-only here.
+                  ...(shared ? [] : [{
                     label: 'Remove', danger: true, onClick: () => {
                       if (inAulas.length) { alert('This worksheet is deployed in a live class. Remove it there first.'); return; }
                       if (confirm(`Remove "${w.title}" from your library?`)) { store.removeWorksheet(w.id); rerender(); }
                     },
-                  },
+                  }]),
                 ]} />
               </div>
             </div>

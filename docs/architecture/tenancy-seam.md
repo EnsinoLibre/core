@@ -67,6 +67,16 @@ create policy "tenant access" on public.resources for all
 Splitting read from write now lets the paid layer grant a "viewer" seat
 (`el_can_read` true, `el_can_write` false) without touching policies.
 
+> [!warning] Write-split refinement (migration `20260724120000_seam_write_split`)
+> A single `ALL` policy has one gap: **DELETE only consults `USING`**, so with a
+> single `USING el_can_read` policy, any org member — including a read-only
+> viewer — could DELETE org-shared rows. The six content tables therefore use
+> **per-command** policies instead: `SELECT using el_can_read`; `INSERT`,
+> `UPDATE`, `DELETE` all gated by `el_can_write`. Behaviour is unchanged in OSS
+> (there `el_can_read == el_can_write == owner`); the split only bites once an
+> org has non-owner members. Still delegates entirely to the helpers, so the
+> §11b guard passes.
+
 ### 2. `org_id` is reserved but inert
 
 Every shared-content table gets a nullable `org_id uuid` (no FK yet — the
