@@ -43,8 +43,39 @@ async function sha256hex(s: string) {
 
 const supa = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
-interface Auth { teacherId: string; agentKeyId: string; agentLabel: string }
+interface Auth { teacherId: string; agentKeyId: string; agentLabel: string; orgIds: string[] }
 interface AuthResult { who: Auth | null; expired?: boolean }
+
+/**
+ * The organisation ids whose shared content this teacher may read. Delegated to
+ * the `el_visible_org_ids` seam function (public schema): it returns `{}` in the
+ * open-source core (so reads stay owner-only, unchanged) and the org ids the
+ * user belongs to once the commercial Organisation layer has swapped its body.
+ * Defensive `[]` on any error keeps the MCP working even if the function is
+ * absent (a core without the seam migration applied).
+ */
+async function visibleOrgIds(teacherId: string): Promise<string[]> {
+  try {
+    const { data, error } = await supa.rpc('el_visible_org_ids', { p_user: teacherId });
+    return (!error && Array.isArray(data)) ? (data as string[]) : [];
+  } catch { return []; }
+}
+
+/**
+ * Scope a resources/worksheets read to what the teacher may see: their own rows,
+ * plus rows shared into an org they belong to. Equivalent to a bare
+ * `.eq('teacher_id', …)` whenever orgIds is empty (OSS, or a teacher in no org),
+ * so single-tenant behaviour is unchanged. Writes never use this — they stay
+ * owner-scoped.
+ */
+function scopeRead(q: any, teacherId: string, orgIds: string[]) {
+  return (orgIds && orgIds.length)
+    ? q.or(`teacher_id.eq.${teacherId},org_id.in.(${orgIds.join(',')})`)
+    : q.eq('teacher_id', teacherId);
+}
+
+/** True when a row belongs to the org KB rather than this teacher (read-only for them). */
+const isSharedRow = (row: any, teacherId: string) => !!(row && row.org_id && row.teacher_id && row.teacher_id !== teacherId);
 
 /** Resolve the agent key from headers → { who, expired? } (issue #47: a key with a past expires_at is rejected distinctly from an unrecognised one, so the client can tell "generate a new key" from "check your key"). */
 async function authenticate(req: Request): Promise<AuthResult> {
@@ -56,7 +87,8 @@ async function authenticate(req: Request): Promise<AuthResult> {
   if (!data) return { who: null };
   if (data.expires_at && new Date(data.expires_at).getTime() < Date.now()) return { who: null, expired: true };
   supa.from('agent_keys').update({ last_used_at: new Date().toISOString() }).eq('id', data.id).then(() => {});
-  return { who: { teacherId: data.teacher_id, agentKeyId: data.id, agentLabel: data.label } };
+  const orgIds = await visibleOrgIds(data.teacher_id);
+  return { who: { teacherId: data.teacher_id, agentKeyId: data.id, agentLabel: data.label, orgIds } };
 }
 
 // Rate limiting (issue #47): bound the blast radius of a leaked key. Reuses
@@ -321,15 +353,16 @@ const activityCount = (doc: any) => (doc?.sections || []).reduce((n: number, s: 
 const CONTEXT_NOTE_LIMIT = 120;
 const CONTEXT_NOTE_PREVIEW_CHARS = 280;
 
-async function getWorkspaceContext(teacherId: string) {
+async function getWorkspaceContext(teacherId: string, orgIds: string[]) {
   const [prof, cls, stu, obs, resCount, res, ws, aulas] = await Promise.all([
     supa.from('profiles').select('name,school,subjects,bio').eq('id', teacherId).maybeSingle(),
     supa.from('classrooms').select('id,name,subject,level,term,description,context').eq('teacher_id', teacherId),
     supa.from('students').select('id,class_id,name,level,goals,needs').eq('teacher_id', teacherId),
     supa.from('student_notes').select('student_id,text,created_at').eq('teacher_id', teacherId).order('created_at', { ascending: false }).limit(300),
-    supa.from('resources').select('id', { count: 'exact', head: true }).eq('teacher_id', teacherId),
-    supa.from('resources').select('title,kind,subject,note,tags,links').eq('teacher_id', teacherId).order('created_at', { ascending: false }).limit(CONTEXT_NOTE_LIMIT),
-    supa.from('worksheets').select('title,subject').eq('teacher_id', teacherId),
+    // resources & worksheets include content shared into the teacher's org(s).
+    scopeRead(supa.from('resources').select('id', { count: 'exact', head: true }), teacherId, orgIds),
+    scopeRead(supa.from('resources').select('title,kind,subject,note,tags,links,teacher_id,org_id'), teacherId, orgIds).order('created_at', { ascending: false }).limit(CONTEXT_NOTE_LIMIT),
+    scopeRead(supa.from('worksheets').select('title,subject,teacher_id,org_id'), teacherId, orgIds).order('created_at', { ascending: false }),
     supa.from('aulas').select('class_id,title,code,status').eq('teacher_id', teacherId),
   ]);
   const p = prof.data;
@@ -362,7 +395,8 @@ async function getWorkspaceContext(teacherId: string) {
     const tags = r.tags?.length ? ` {${r.tags.join(', ')}}` : '';
     const links = r.links?.length ? ` → ${r.links.join(', ')}` : '';
     const preview = r.note ? String(r.note).replace(/\s+/g, ' ').slice(0, CONTEXT_NOTE_PREVIEW_CHARS) : '';
-    return `- [${r.kind}] ${r.title}${r.subject ? ` (${r.subject})` : ''}${tags}${links}${preview ? ` — ${preview}` : ''}`;
+    const shared = isSharedRow(r, teacherId) ? ' (shared, read-only)' : '';
+    return `- [${r.kind}] ${r.title}${r.subject ? ` (${r.subject})` : ''}${shared}${tags}${links}${preview ? ` — ${preview}` : ''}`;
   });
   if (notes.length) {
     const heading = total > notes.length
@@ -370,7 +404,7 @@ async function getWorkspaceContext(teacherId: string) {
       : `\n## Knowledge-base notes (${notes.length})`;
     lines.push(heading, ...notes);
   }
-  const sheets = (ws.data || []).map((w) => `- ${w.title}${w.subject ? ` (${w.subject})` : ''}`);
+  const sheets = (ws.data || []).map((w) => `- ${w.title}${w.subject ? ` (${w.subject})` : ''}${isSharedRow(w, teacherId) ? ' (shared, read-only)' : ''}`);
   if (sheets.length) lines.push(`\n## Existing worksheets (${sheets.length})`, ...sheets);
   const classNameById = new Map((cls.data || []).map((c) => [c.id, c.name]));
   const deployments = (aulas.data || []).map((a) => `- ${a.title} (code ${a.code}, ${a.status}${a.class_id ? `, class: ${classNameById.get(a.class_id) || '?'}` : ', public link'})`);
@@ -422,11 +456,11 @@ async function createWorksheet(teacherId: string, args: any, agentKeyId: string)
   return { ...text(`Created worksheet "${doc.title}" (${id}) with ${activityCount(doc)} activities. It is now in the teacher's library and can be deployed to a class.`), createdId: id };
 }
 
-async function listWorksheets(teacherId: string) {
-  const { data, error } = await supa.from('worksheets').select('id,title,subject,doc').eq('teacher_id', teacherId).order('created_at', { ascending: false });
+async function listWorksheets(teacherId: string, orgIds: string[]) {
+  const { data, error } = await scopeRead(supa.from('worksheets').select('id,title,subject,doc,teacher_id,org_id'), teacherId, orgIds).order('created_at', { ascending: false });
   if (error) return text(`Query failed: ${error.message}`, true);
   if (!data?.length) return text('The library is empty — no worksheets yet.');
-  return text(data.map((w) => `- ${w.title} (${w.subject || 'no subject'}, ${activityCount(w.doc)} activities) — id ${w.id}`).join('\n'));
+  return text(data.map((w) => `- ${w.title} (${w.subject || 'no subject'}, ${activityCount(w.doc)} activities)${isSharedRow(w, teacherId) ? ' (shared, read-only)' : ''} — id ${w.id}`).join('\n'));
 }
 
 /** Resolve entity names (classroom/student/resource/worksheet/aula) to knowledge-graph node ids, the same id shapes content.js's nameIndex() builds — { resolved: string[], unresolved: string[] }. */
@@ -537,12 +571,14 @@ async function addResource(teacherId: string, args: any, agentKeyId: string) {
   return { ...text(`Added ${kind} note "${title}" (${id}) to the knowledge base${scope ? ` (linked to ${scope})` : ''}.${unresolvedNote}${styleNote}`), createdId: id };
 }
 
-/** Resolve a resource by id or (case-insensitive) title, for the read/update/append tools. */
-async function resolveResource(teacherId: string, args: any): Promise<{ row: any } | { err: string }> {
+/** Resolve a resource by id or (case-insensitive) title. Pass orgIds (read tools
+ * only) to also resolve org-shared resources; omit it for write tools so they
+ * stay owner-scoped (a shared resource is read-only to a non-owner). */
+async function resolveResource(teacherId: string, args: any, orgIds: string[] = []): Promise<{ row: any } | { err: string }> {
   const id = args?.id ? String(args.id).trim() : '';
   const title = args?.title ? String(args.title).trim() : '';
   if (!id && !title) return { err: 'Pass "id" or "title".' };
-  let q = supa.from('resources').select('*').eq('teacher_id', teacherId);
+  let q = scopeRead(supa.from('resources').select('*'), teacherId, orgIds);
   q = id ? q.eq('id', id) : q.ilike('title', title);
   const { data, error } = await q.maybeSingle();
   if (error) return { err: `Query failed: ${error.message}` };
@@ -550,14 +586,15 @@ async function resolveResource(teacherId: string, args: any): Promise<{ row: any
   return { row: data };
 }
 
-async function getResource(teacherId: string, args: any) {
-  const r = await resolveResource(teacherId, args);
+async function getResource(teacherId: string, orgIds: string[], args: any) {
+  const r = await resolveResource(teacherId, args, orgIds);
   if ('err' in r) return text(r.err, true);
   const { row } = r;
+  const shared = isSharedRow(row, teacherId) ? ' (shared into your organisation — read-only)' : '';
   const meta = [`[${row.kind}]`, row.subject || null, row.url ? `link: ${row.url}` : null].filter(Boolean).join(' · ');
   const tags = row.tags?.length ? `Tags: ${row.tags.join(', ')}` : '';
   const links = row.links?.length ? `Links: ${row.links.join(', ')}` : '';
-  return text([`# ${row.title}`, meta, [tags, links].filter(Boolean).join(' · '), '', row.note || '(empty note)'].filter((l) => l !== '').join('\n'));
+  return text([`# ${row.title}${shared}`, meta, [tags, links].filter(Boolean).join(' · '), '', row.note || '(empty note)'].filter((l) => l !== '').join('\n'));
 }
 
 async function updateResource(teacherId: string, args: any) {
@@ -589,7 +626,7 @@ async function appendResourceNote(teacherId: string, args: any) {
   return { ...text(`Appended a dated update to "${row.title}" (${row.id}).`), createdId: row.id };
 }
 
-async function searchResources(teacherId: string, args: any) {
+async function searchResources(teacherId: string, orgIds: string[], args: any) {
   const query = args?.query ? String(args.query).trim() : '';
   const limit = Math.min(Math.max(Number(args?.limit) || 15, 1), 50);
 
@@ -606,7 +643,7 @@ async function searchResources(teacherId: string, args: any) {
     studentId = data?.id ?? null;
   }
 
-  let q = supa.from('resources').select('id,title,kind,subject,note,tags').eq('teacher_id', teacherId);
+  let q = scopeRead(supa.from('resources').select('id,title,kind,subject,note,tags,teacher_id,org_id'), teacherId, orgIds);
   if (query) q = q.textSearch('search_vector', query, { type: 'websearch', config: 'simple' });
   if (args?.kind && ['material', 'guideline', 'external', 'context'].includes(args.kind)) q = q.eq('kind', args.kind);
   if (classId) q = q.eq('class_id', classId);
@@ -617,7 +654,7 @@ async function searchResources(teacherId: string, args: any) {
   const { data, error } = await q;
   if (error) return text(`Search failed: ${error.message}`, true);
   if (!data?.length) return text('No matching resources.');
-  return text(data.map((r) => `- [${r.kind}] ${r.title}${r.subject ? ` (${r.subject})` : ''} — id ${r.id}${r.note ? `\n  ${String(r.note).replace(/\s+/g, ' ').slice(0, 200)}` : ''}`).join('\n'));
+  return text(data.map((r) => `- [${r.kind}] ${r.title}${r.subject ? ` (${r.subject})` : ''}${isSharedRow(r, teacherId) ? ' (shared, read-only)' : ''} — id ${r.id}${r.note ? `\n  ${String(r.note).replace(/\s+/g, ' ').slice(0, 200)}` : ''}`).join('\n'));
 }
 
 /** Find a classroom by name (case-insensitive) for this teacher, or null. */
@@ -864,7 +901,7 @@ async function handleMessage(msg: any, who: Auth) {
       };
       try {
         if (name === 'get_workspace_context') {
-          const out = await getWorkspaceContext(who.teacherId);
+          const out = await getWorkspaceContext(who.teacherId, who.orgIds);
           // Never log the full dump (can be very large) — a fixed short summary is enough.
           logActivity(who, name, 'teacher', 'Read workspace context', 'done');
           return rpcResult(id, text(out));
@@ -877,7 +914,7 @@ async function handleMessage(msg: any, who: Auth) {
           return rpcResult(id, logResult(await createWorksheet(who.teacherId, args, who.agentKeyId), 'worksheet'));
         }
         if (name === 'list_worksheets') {
-          const result = await listWorksheets(who.teacherId);
+          const result = await listWorksheets(who.teacherId, who.orgIds);
           logActivity(who, name, 'teacher', resultSummary(result), result.isError ? 'error' : 'done');
           return rpcResult(id, result);
         }
@@ -885,10 +922,10 @@ async function handleMessage(msg: any, who: Auth) {
           return rpcResult(id, logResult(await addResource(who.teacherId, args, who.agentKeyId), 'resource'));
         }
         if (name === 'get_resource') {
-          return rpcResult(id, logResult(await getResource(who.teacherId, args), null));
+          return rpcResult(id, logResult(await getResource(who.teacherId, who.orgIds, args), null));
         }
         if (name === 'search_resources') {
-          return rpcResult(id, logResult(await searchResources(who.teacherId, args), null));
+          return rpcResult(id, logResult(await searchResources(who.teacherId, who.orgIds, args), null));
         }
         if (name === 'update_resource') {
           return rpcResult(id, logResult(await updateResource(who.teacherId, args), 'resource'));
