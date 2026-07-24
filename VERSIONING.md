@@ -140,10 +140,20 @@ what remains is org-scoped content sharing and commercial hardening.
 - [x] **Admin console — built & verified end-to-end (2026-07-24).**
       `organization/admin/` — zero-build console (create org, roster, roles,
       seats, invites). Browser-driven against the live RPCs.
-- [ ] **`org_id`-on-write** — set `org_id` at core's MCP + `store.js` insert
-      sites (the only core-side change; DESIGN.md decision 1). **Next up.**
-- [ ] **Org KB sharing** — resources/worksheets pooled at org scope, with the
-      knowledge graph and MCP tools honouring org visibility.
+- [x] **`org_id`-on-write — applied to prod & verified (2026-07-24).**
+      `organization/migrations/0003_org_write.sql`: a `member_settings` opt-in +
+      a `BEFORE INSERT` trigger (keyed on `teacher_id`) that lands a member's new
+      resources/worksheets in the shared org KB — for **both** the platform and
+      MCP write paths, with **zero core change** (a trigger in the commercial
+      layer, so invariant #3 still holds). Verified: with sharing on, new content
+      auto-tags `org_id` and a co-member sees it; opt-out keeps it private.
+      Console has the per-member toggle.
+- [ ] **Org KB *read* surface** — the remaining half of KB sharing, and the
+      first item that genuinely needs **core** changes: the platform's resources
+      list / search / knowledge graph currently query by `teacher_id`; to *show*
+      org-shared content they must also include `org_id`. RLS already makes it
+      safe to fetch; the queries just need the org filter. (Writes already flow
+      into org scope; this makes them visible in the core UI.)
 - [ ] **Billing** — Stripe per-seat, seat count ⇄ `org_members`.
 - [ ] **SSO/SAML + provisioning** (SCIM optional, later).
 - [ ] **Org reporting** — cross-teacher progress and KB analytics.
