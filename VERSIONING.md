@@ -161,20 +161,21 @@ what remains is org-scoped content sharing and commercial hardening.
       (read = `el_can_read`, write/update/delete = `el_can_write`). Verified on
       prod: viewer read-only, teacher-member can edit, owner unaffected, OSS
       unchanged (guard §11b still green).
-- [~] **Org KB read surface (agent/MCP) — code + DB done; edge-function deploy
-      pending.** New seam function `public.el_visible_org_ids(p_user)` (core
-      migration `20260724130000`, returns `{}` in OSS; org migration `0004`
-      swaps the body to the user's org ids; `service_role`-only). The MCP edge
-      function (`supabase/functions/mcp/index.ts`) now fetches those org ids once
-      per request and ORs them into the resource/worksheet reads
-      (`get_workspace_context`, `list_worksheets`, `search_resources`,
-      `get_resource`), marking shared items "(shared, read-only)"; writes and
-      idempotency lookups stay owner-only. Both migrations applied to prod and
-      `el_visible_org_ids` verified. **Remaining: deploy the edge function** —
-      `supabase functions deploy mcp --no-verify-jwt` (needs the Supabase CLI +
-      an access token, absent from the current sandbox; not safe to reconstruct
-      108 KB of function files inline per HANDOFF §10). Until deployed, agents
-      still see own content only.
+- [x] **Org KB read surface (agent/MCP) — deployed & verified live (2026-07-26).**
+      New seam function `public.el_visible_org_ids(p_user)` (core migration
+      `20260724130000`, returns `{}` in OSS; org migration `0004` swaps the body
+      to the user's org ids; `service_role`-only). The MCP edge function
+      (`supabase/functions/mcp/index.ts`) fetches those org ids once per request
+      and ORs them into the resource/worksheet reads (`get_workspace_context`,
+      `list_worksheets`, `search_resources`, `get_resource`), marking shared
+      items "(shared, read-only)"; writes and idempotency lookups stay
+      owner-only. Deployed via `supabase functions deploy mcp --no-verify-jwt`
+      (byte-exact from disk) — all three function files verified byte-identical
+      to the repo, which also fixed a **stale-deploy drift** (the live
+      validator.js/prompt-builder.js had been missing the #61/#59 fixes).
+      End-to-end verified against the live endpoint: an agent for member B saw
+      member A's org-shared resource marked "(shared, read-only)" via
+      search_resources and get_resource; test data torn down.
 - [ ] **Billing** — Stripe per-seat, seat count ⇄ `org_members`.
 - [ ] **SSO/SAML + provisioning** (SCIM optional, later).
 - [ ] **Org reporting** — cross-teacher progress and KB analytics.
