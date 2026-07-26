@@ -176,7 +176,17 @@ what remains is org-scoped content sharing and commercial hardening.
       End-to-end verified against the live endpoint: an agent for member B saw
       member A's org-shared resource marked "(shared, read-only)" via
       search_resources and get_resource; test data torn down.
-- [ ] **Billing** — Stripe per-seat, seat count ⇄ `org_members`.
+- [x] **Billing — built, deployed, DB-verified (2026-07-26); needs Stripe
+      account config to charge.** `organization/migrations/0005_billing.sql`
+      (`stripe_subscription_id` + `service_role`-only `billing_*` RPCs, verified
+      locked down) + `organization/supabase/functions/org-billing/` (checkout &
+      portal for admins via Supabase JWT; a manual-HMAC signature-verified
+      webhook that is the **sole writer** of `plan`/`seats_purchased` on
+      `customer.subscription.*`; never removes members on cancel) + a console
+      **Billing** section. Function deployed `--no-verify-jwt` and smoke-tested
+      live (auth/route guards correct). Live charge E2E is gated on the Stripe
+      account setup (price, keys, webhook) in `organization/BILLING.md` — secrets
+      set via `supabase secrets set`, never committed.
 - [ ] **SSO/SAML + provisioning** (SCIM optional, later).
 - [ ] **Org reporting** — cross-teacher progress and KB analytics.
 
