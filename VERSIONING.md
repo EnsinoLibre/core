@@ -198,8 +198,17 @@ what remains is org-scoped content sharing and commercial hardening.
       doesn't, seat-cap skips silently, admin-gated, grants locked down.
       SAML IdP registration itself is Supabase Auth SSO (per-customer, Pro-plan
       gated) — see `organization/SSO.md`. SCIM deprovisioning is a later add.
-- [ ] **Org reporting** — cross-teacher progress and KB analytics.
-      *(The last open Track-3 item.)*
+- [x] **Org reporting — built & verified (2026-07-26).**
+      `organization/migrations/0007_reports.sql`: one admin-gated
+      `org_report(org_id)` RPC (members/roles/seats, KB stats, and
+      **aggregate-only** usage of org-shared worksheets — never individual
+      student rows) powering the console's **Overview** stat-tile dashboard.
+      Verified on prod against seeded data and live in the console.
+
+**Track 3 is feature-complete.** Schema+seam, RPCs, admin console,
+`org_id`-on-write, platform + agent KB read, billing, SSO, and reporting are all
+built and verified on prod. What's left before GA is configuration + hardening
+(below), not new capabilities.
 
 ---
 
