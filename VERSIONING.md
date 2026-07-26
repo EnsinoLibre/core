@@ -187,8 +187,19 @@ what remains is org-scoped content sharing and commercial hardening.
       live (auth/route guards correct). Live charge E2E is gated on the Stripe
       account setup (price, keys, webhook) in `organization/BILLING.md` — secrets
       set via `supabase secrets set`, never committed.
-- [ ] **SSO/SAML + provisioning** (SCIM optional, later).
+- [x] **SSO/SAML + domain auto-provisioning — built & DB-verified (2026-07-26).**
+      `organization/migrations/0006_sso.sql`: `org.org_domains` (verified email
+      domain → org + default role) and `org.provision_from_domain` — a
+      confirmed-email-only, seat-cap-respecting, **fully exception-wrapped**
+      provisioner run by an `auth.users` AFTER-INSERT trigger (it can never
+      break login) plus an `org_provision_me` reconcile; admin RPCs to manage
+      domains. Console has a "Sign in with SSO" flow + admin domains section.
+      Verified on prod: domain-match auto-adds at the default role, non-match
+      doesn't, seat-cap skips silently, admin-gated, grants locked down.
+      SAML IdP registration itself is Supabase Auth SSO (per-customer, Pro-plan
+      gated) — see `organization/SSO.md`. SCIM deprovisioning is a later add.
 - [ ] **Org reporting** — cross-teacher progress and KB analytics.
+      *(The last open Track-3 item.)*
 
 ---
 
