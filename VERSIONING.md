@@ -205,10 +205,19 @@ what remains is org-scoped content sharing and commercial hardening.
       student rows) powering the console's **Overview** stat-tile dashboard.
       Verified on prod against seeded data and live in the console.
 
+- [x] **SCIM 2.0 + shared rosters — built & verified live (2026-07-26).**
+      `organization/migrations/0014_scim.sql` + `supabase/functions/org-scim/`:
+      per-org SCIM endpoint (token auth, `/Users` lifecycle + discovery) that
+      syncs `org_members` (provision adds, deactivate/delete removes), verified
+      by simulating an IdP; and `0013_shared_rosters.sql` extends explicit
+      sharing to classrooms/students (platform badges them). See
+      `organization/SCIM.md`.
+
 **Track 3 is feature-complete.** Schema+seam, RPCs, admin console,
-`org_id`-on-write, platform + agent KB read, billing, SSO, and reporting are all
-built and verified on prod. What's left before GA is configuration + hardening
-(below), not new capabilities.
+`org_id`-on-write, platform + agent KB read, billing, SSO, reporting, SCIM, and
+shared rosters are all built and verified on prod. The remaining path to GA is
+configuration + a test/refine pass, tracked in `organization/ROADMAP.md` (§4);
+not new capabilities.
 
 ---
 
