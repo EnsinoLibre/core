@@ -54,6 +54,7 @@ export function Students() {
                       <Avatar name={s.name} size={40} />
                       <div><div className="app-student-name">{s.name}</div><div className="app-muted">{s.pronouns}</div></div>
                       <LevelBadge level={s.level} />
+                      {store.isShared(s) && <span className="el-badge el-badge--primary" title="Shared into your organisation by another teacher — read-only here">👥</span>}
                     </div>
                     <p className="el-card__body app-clamp-2">{stripMarkdown(s.goals) || 'No goals set yet.'}</p>
                   </div>

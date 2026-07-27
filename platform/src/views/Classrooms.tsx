@@ -54,6 +54,7 @@ export function Classrooms() {
               <div className="el-card__footer">
                 <span className="el-badge el-badge--neutral">{roster.length} students</span>
                 <span className="el-badge el-badge--neutral">{c.term}</span>
+                {store.isShared(c) && <span className="el-badge el-badge--primary" title="Shared into your organisation by another teacher — read-only here">👥 Shared</span>}
               </div>
             </div>
           );

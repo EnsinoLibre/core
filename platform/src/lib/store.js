@@ -108,8 +108,8 @@ export const isHydrated = () => hydrated;
 
 /* ---------------- row <-> state mappers ---------------- */
 
-const mapClassroom = (r) => ({ id: r.id, name: r.name, subject: r.subject || '', level: r.level || '', term: r.term || '', description: r.description || '', context: r.context || '', createdAt: r.created_at });
-const mapStudent = (r) => ({ id: r.id, classId: r.class_id, name: r.name, level: r.level || '', pronouns: r.pronouns || '', goals: r.goals || '', needs: r.needs || '', notes: [], createdAt: r.created_at });
+const mapClassroom = (r) => ({ id: r.id, name: r.name, subject: r.subject || '', level: r.level || '', term: r.term || '', description: r.description || '', context: r.context || '', createdAt: r.created_at, ownerId: r.teacher_id, orgId: r.org_id || null });
+const mapStudent = (r) => ({ id: r.id, classId: r.class_id, name: r.name, level: r.level || '', pronouns: r.pronouns || '', goals: r.goals || '', needs: r.needs || '', notes: [], createdAt: r.created_at, ownerId: r.teacher_id, orgId: r.org_id || null });
 const mapNote = (r) => ({ id: r.id, at: r.created_at, text: r.text });
 const mapWorksheet = (r) => ({ id: r.id, title: r.title, subject: r.subject || '', doc: r.doc, ownerId: r.teacher_id, orgId: r.org_id || null });
 const mapResource = (r) => ({ id: r.id, title: r.title, kind: r.kind || 'material', type: r.type || 'other', subject: r.subject || '', classId: r.class_id || null, studentId: r.student_id || null, url: r.url || undefined, note: r.note || '', tags: r.tags || [], links: r.links || [], createdAt: r.created_at, ownerId: r.teacher_id, orgId: r.org_id || null });
