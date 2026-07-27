@@ -13,3 +13,6 @@ site/app/
 platform/.env
 platform/.env.local
 site/assets/js/config.local.js
+
+# Supabase CLI local state
+supabase/.temp/
